@@ -263,6 +263,54 @@
   }
   .player-photo { border-radius: 6px; object-fit: cover; background: var(--panel-3); }
 
+  /* squad builder v2 (player list + live pitch) */
+  .builder-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .builder-layout { grid-template-columns: 1fr; } }
+  .builder-left { display: flex; flex-direction: column; gap: 10px; }
+  .builder-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .builder-filters select, .builder-filters input[type=text] { font-size: 12.5px; padding: 7px 9px; }
+  .builder-filters input[type=text] { flex: 1; min-width: 120px; }
+  .builder-count {
+    background: var(--emerald-dim); color: var(--emerald); font-size: 12px; font-weight: 700;
+    padding: 7px 10px; border-radius: 8px; text-align: center;
+  }
+  .builder-list { max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+  .builder-pos-head {
+    position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel-2); padding: 7px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--ink-dim); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border);
+  }
+  .builder-row {
+    display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .builder-row:last-child { border-bottom: none; }
+  .builder-row.in-squad { background: var(--gold-soft); }
+  .builder-row .b-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .builder-row .b-sub { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
+  .builder-row .b-price { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-dim); width: 44px; text-align: right; }
+  .builder-row .b-pts { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-faint); width: 34px; text-align: right; }
+  .builder-add-btn {
+    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--panel);
+    color: var(--gold-bright); font-size: 15px; line-height: 1; cursor: pointer; flex-shrink: 0;
+  }
+  .builder-add-btn.remove { color: var(--red); border-color: var(--red); }
+  .builder-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .builder-right { position: sticky; top: 78px; }
+  .builder-topbar { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .builder-pill { background: var(--emerald-dim); color: var(--emerald); font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 999px; font-family: "JetBrains Mono", monospace; }
+  .builder-pill.over { background: var(--red-soft); color: var(--red); }
+  .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
+  .view-toggle button { background: var(--panel); border: none; padding: 6px 14px; font-size: 12.5px; cursor: pointer; color: var(--ink-dim); font-family: inherit; }
+  .view-toggle button.active { background: var(--gold-soft); color: var(--gold-bright); font-weight: 700; }
+  .builder-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .builder-actions .btn-secondary {
+    background: var(--panel); border: 1px solid var(--border-strong); color: var(--ink); padding: 9px 16px;
+    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+  }
+  .squad-list-view { display: flex; flex-direction: column; gap: 4px; }
+  .squad-list-view .builder-pos-head { border-radius: 8px; }
+
   /* pitch formation view */
   .pitch {
     background: linear-gradient(180deg, #2f7d4f, #256b41);
@@ -524,6 +572,11 @@ const STAT_THEMES = {
     columns: [["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
       ["saves90", "Sv/90"], ["defensiveContribution", "DefCon"], ["defensiveContributionPer90", "DefCon/90"], ["bps", "BPS"]],
   },
+  advanced: {
+    label: "Deeper stats",
+    columns: [["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"],
+      ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
+  },
 };
 
 // How to render each possible column's cell — text + optional inline style.
@@ -549,6 +602,10 @@ const COLUMN_FORMAT = {
   xgc90: p => [p.xgc90.toFixed(2), ""],
   saves90: p => [p.saves90.toFixed(2), ""],
   bps: p => [p.bps, ""],
+  influence: p => [p.influence.toFixed(0), ""],
+  penaltiesOrder: p => [p.penaltiesOrder ?? "—", p.penaltiesOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.penaltiesOrder == null ? "color:var(--ink-faint)" : ""],
+  directFreekicksOrder: p => [p.directFreekicksOrder ?? "—", p.directFreekicksOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.directFreekicksOrder == null ? "color:var(--ink-faint)" : ""],
+  cornersOrder: p => [p.cornersOrder ?? "—", p.cornersOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.cornersOrder == null ? "color:var(--ink-faint)" : ""],
 };
 function activeColumns() { return FIXED_COLUMNS.concat(STAT_THEMES[state.statsTheme].columns); }
 
@@ -559,6 +616,7 @@ let state = {
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
+  builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" },
   fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   strengthRanges: null,
@@ -775,6 +833,8 @@ async function loadShortlistFromStorage() {
     state.shortlist = raw ? JSON.parse(raw) : [];
   } catch (e) { state.shortlist = []; }
 }
+
+// ---------- shortlist persistence ----------
 async function saveShortlist() {
   await persistSet("shortlist", JSON.stringify(state.shortlist));
 }
@@ -1177,6 +1237,10 @@ async function loadDraftsFromStorage() {
     const raw = await persistGet("drafts");
     state.drafts = raw ? JSON.parse(raw) : [];
   } catch (e) { state.drafts = []; }
+  for (const d of state.drafts) {
+    if (d.squadConfirmed === undefined) d.squadConfirmed = d.squad.length === 15;
+    if (d.builderCaptainId === undefined) d.builderCaptainId = null;
+  }
   if (state.drafts.length && !state.activeDraftId) state.activeDraftId = state.drafts[0].id;
 }
 async function saveDrafts() {
@@ -1186,12 +1250,13 @@ function getDraft(id) { return state.drafts.find(d => d.id === id); }
 
 function seedDraftFromSquad(id, name, playerIds, bankTenths) {
   const existing = getDraft(id);
-  const draft = existing || { id, name, squad: [], bank: 0, transfersLog: {}, chipsUsed: {} };
+  const draft = existing || { id, name, squad: [], bank: 0, transfersLog: {}, chipsUsed: {}, squadConfirmed: true, builderCaptainId: null };
   draft.name = name;
   draft.squad = playerIds;
   draft.bank = bankTenths;
   draft.transfersLog = draft.transfersLog || {};
   draft.chipsUsed = draft.chipsUsed || {};
+  draft.squadConfirmed = true;
   if (!existing) state.drafts.push(draft);
   saveDrafts();
 }
@@ -1310,7 +1375,7 @@ function renderPlanner() {
     return;
   }
 
-  if (draft.squad.length < 15) {
+  if (draft.squad.length < 15 || !draft.squadConfirmed) {
     renderSquadBuilder(draft);
   } else {
     renderGwSimulator(draft);
@@ -1321,83 +1386,260 @@ function squadCost(playerIds) {
   return playerIds.reduce((sum, id) => sum + (state.players.find(p => p.id === id)?.nowCost || 0), 0);
 }
 
+function clubCountsFor(playerIds) {
+  const counts = {};
+  for (const id of playerIds) {
+    const p = state.players.find(pl => pl.id === id);
+    if (p) counts[p.teamId] = (counts[p.teamId] || 0) + 1;
+  }
+  return counts;
+}
+
+// Greedily fills any remaining squad slots with the best-value affordable
+// player per position (highest total points that fits budget/position/club
+// limits), used by the "Auto Pick" button.
+function autoPickSquad(draft) {
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    let need = SQUAD_RULES[pos] - draft.squad.filter(id => state.players.find(p => p.id === id)?.position === pos).length;
+    while (need > 0) {
+      const clubCounts = clubCountsFor(draft.squad);
+      const remaining = BUDGET - squadCost(draft.squad);
+      const totalSlotsLeft = 15 - draft.squad.length;
+      // leave roughly enough budget for the other empty slots (min £4.0m each)
+      const reserve = (totalSlotsLeft - 1) * 40;
+      const candidates = state.players
+        .filter(p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3 && p.nowCost <= remaining - reserve)
+        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      if (!candidates.length) break;
+      draft.squad.push(candidates[0].id);
+      need--;
+    }
+  }
+}
+
 function renderSquadBuilder(draft) {
   const body = document.getElementById("plannerBody");
   const spent = squadCost(draft.squad);
   const remaining = BUDGET - spent;
   const total = draft.squad.length;
+  const readyToConfirm = total === 15 && remaining >= 0;
 
   body.innerHTML = `
-    <div class="card">
-      <div style="display:flex;gap:28px;margin-bottom:18px;flex-wrap:wrap">
-        <div class="stat-block"><div class="stat-label">Budget left</div><div class="stat-value mono" style="color:${remaining < 0 ? "var(--red)" : "var(--gold-bright)"}">${fmtPrice(remaining)}</div></div>
-        <div class="stat-block"><div class="stat-label">Squad</div><div class="stat-value mono">${total}/15</div></div>
+    <div class="builder-layout">
+      <div class="builder-left">
+        <div class="builder-filters">
+          <input type="text" id="builderSearch" placeholder="Search by name…" value="${state.builderFilters.q.replace(/"/g, "&quot;")}" />
+        </div>
+        <div class="builder-filters">
+          <select id="builderPosFilter"></select>
+          <select id="builderSortFilter"></select>
+          <select id="builderPriceFilter"></select>
+          <button class="dir-btn" id="builderResetFilters">Reset filters</button>
+        </div>
+        <div class="builder-count" id="builderCount"></div>
+        <div class="builder-list" id="builderList"></div>
       </div>
-      <div id="posBuilders"></div>
+      <div class="builder-right">
+        <div class="builder-topbar">
+          <span class="builder-pill">${total} / 15 players</span>
+          <span class="builder-pill ${remaining < 0 ? "over" : ""}">${fmtPrice(remaining)} in the bank</span>
+          <div class="view-toggle">
+            <button data-view="pitch" class="${state.builderView === "pitch" ? "active" : ""}">Pitch</button>
+            <button data-view="list" class="${state.builderView === "list" ? "active" : ""}">List</button>
+          </div>
+        </div>
+        <div id="builderPitchArea"></div>
+        <p class="foot-note" style="margin-top:10px">Click a starting player on the pitch to make them captain for Gameweek 1. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
+        <div class="builder-actions">
+          <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
+          <button class="btn-secondary" id="builderResetSquad">Reset</button>
+          <button class="btn" id="builderConfirm" ${readyToConfirm ? "" : "disabled"} style="margin-left:auto">
+            ${total === 15 && remaining < 0 ? "Over budget" : total === 15 ? "Confirm squad →" : `Pick ${15 - total} more`}
+          </button>
+        </div>
+      </div>
     </div>
   `;
-  const container = document.getElementById("posBuilders");
-  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    const need = SQUAD_RULES[pos];
-    const have = draft.squad.filter(id => state.players.find(p => p.id === id)?.position === pos);
-    const block = document.createElement("div");
-    block.className = "pos-builder";
-    block.innerHTML = `
-      <div class="pos-builder-head">
-        <span class="pos-pill" style="color:${POS_COLOR[pos]};border:1px solid ${POS_COLOR[pos]}">${pos}</span>
-        <span class="count ${have.length === need ? "full" : ""}">${have.length}/${need}</span>
-      </div>
-      <div class="picked-row"></div>
-      <input type="text" class="search-input" placeholder="Search ${pos} to add…" style="max-width:280px" data-pos="${pos}" />
-      <div class="search-results" data-results-for="${pos}"></div>
-    `;
-    container.appendChild(block);
-    const pickedRow = block.querySelector(".picked-row");
-    for (const id of have) {
-      const p = state.players.find(pl => pl.id === id);
-      const chip = document.createElement("div");
-      chip.className = "picked-chip";
-      chip.innerHTML = `${kitSvg(p.teamId, 18)} ${p.webName} <span class="mono" style="color:var(--ink-faint)">${fmtPrice(p.nowCost)}</span> <button title="Remove">×</button>`;
-      chip.querySelector("button").onclick = () => {
-        draft.squad = draft.squad.filter(pid => pid !== id);
-        saveDrafts(); renderPlanner();
-      };
-      pickedRow.appendChild(chip);
+
+  // --- filters ---
+  const posSel = document.getElementById("builderPosFilter");
+  posSel.innerHTML = ["ALL", "GK", "DEF", "MID", "FWD"].map(p =>
+    `<option value="${p}" ${state.builderFilters.pos === p ? "selected" : ""}>${p === "ALL" ? "All players" : p}</option>`).join("");
+  const sortSel = document.getElementById("builderSortFilter");
+  sortSel.innerHTML = SORT_OPTIONS.map(([key, label]) =>
+    `<option value="${key}" ${state.builderFilters.sort === key ? "selected" : ""}>${label}</option>`).join("");
+  const priceSel = document.getElementById("builderPriceFilter");
+  const priceBands = [["ALL", "Any price"], ["150", "≤ £15.0m"], ["100", "≤ £10.0m"], ["75", "≤ £7.5m"], ["55", "≤ £5.5m"]];
+  priceSel.innerHTML = priceBands.map(([v, label]) =>
+    `<option value="${v}" ${state.builderFilters.price === v ? "selected" : ""}>${label}</option>`).join("");
+
+  posSel.onchange = () => { state.builderFilters.pos = posSel.value; renderBuilderList(draft); };
+  sortSel.onchange = () => { state.builderFilters.sort = sortSel.value; renderBuilderList(draft); };
+  priceSel.onchange = () => { state.builderFilters.price = priceSel.value; renderBuilderList(draft); };
+  document.getElementById("builderSearch").oninput = (e) => { state.builderFilters.q = e.target.value; renderBuilderList(draft); };
+  document.getElementById("builderResetFilters").onclick = () => {
+    state.builderFilters = { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" };
+    renderSquadBuilder(draft);
+  };
+
+  document.querySelectorAll(".view-toggle button").forEach(btn => {
+    btn.onclick = () => { state.builderView = btn.dataset.view; renderSquadBuilder(draft); };
+  });
+
+  document.getElementById("builderAutoPick").onclick = () => {
+    autoPickSquad(draft);
+    saveDrafts(); renderPlanner();
+  };
+  document.getElementById("builderResetSquad").onclick = () => {
+    if (!draft.squad.length || confirm("Clear all picked players?")) {
+      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null;
+      saveDrafts(); renderPlanner();
     }
-    const searchInput = block.querySelector("input[type=text]");
-    const resultsEl = block.querySelector(".search-results");
-    searchInput.oninput = () => {
-      const q = searchInput.value.trim().toLowerCase();
-      resultsEl.innerHTML = "";
-      if (!q) return;
-      const clubCounts = {};
-      for (const id of draft.squad) {
-        const p = state.players.find(pl => pl.id === id);
-        if (p) clubCounts[p.teamId] = (clubCounts[p.teamId] || 0) + 1;
-      }
-      const matches = state.players
-        .filter(p => p.position === pos && p.webName.toLowerCase().includes(q) && !draft.squad.includes(p.id))
-        .slice(0, 8);
-      for (const p of matches) {
-        const team = state.teamsById[p.teamId];
-        const wouldExceedBudget = squadCost(draft.squad) + p.nowCost > BUDGET;
-        const wouldExceedPos = have.length >= need;
-        const wouldExceedClub = (clubCounts[p.teamId] || 0) >= 3;
-        const disabled = wouldExceedBudget || wouldExceedPos || wouldExceedClub;
-        const row = document.createElement("div");
-        row.className = "search-result-row" + (disabled ? " disabled" : "");
-        const reason = wouldExceedPos ? `${pos} full` : wouldExceedClub ? "max 3 per club" : wouldExceedBudget ? "over budget" : "";
-        row.innerHTML = `<span>${p.webName} <span style="color:var(--ink-faint)">${team ? team.short_name : ""}</span></span><span class="mono" style="color:var(--ink-dim)">${fmtPrice(p.nowCost)}${reason ? ` · ${reason}` : ""}</span>`;
-        if (!disabled) {
-          row.onclick = () => {
-            draft.squad.push(p.id);
-            saveDrafts(); renderPlanner();
-          };
-        }
-        resultsEl.appendChild(row);
-      }
-    };
+  };
+  document.getElementById("builderConfirm").onclick = () => {
+    if (draft.squad.length !== 15 || BUDGET - squadCost(draft.squad) < 0) return;
+    draft.squadConfirmed = true;
+    saveDrafts(); renderPlanner();
+  };
+
+  renderBuilderList(draft);
+  renderBuilderPitch(draft);
+}
+
+function renderBuilderList(draft) {
+  const listEl = document.getElementById("builderList");
+  const countEl = document.getElementById("builderCount");
+  if (!listEl) return;
+  const f = state.builderFilters;
+  const q = f.q.trim().toLowerCase();
+  const clubCounts = clubCountsFor(draft.squad);
+
+  let pool = state.players.filter(p => {
+    if (f.pos !== "ALL" && p.position !== f.pos) return false;
+    if (q && !p.webName.toLowerCase().includes(q)) return false;
+    if (f.price !== "ALL" && p.nowCost > Number(f.price)) return false;
+    return true;
+  }).sort((a, b) => (b[f.sort] ?? 0) - (a[f.sort] ?? 0));
+
+  countEl.textContent = `${pool.length} players shown`;
+
+  const groups = f.pos === "ALL" ? ["GK", "DEF", "MID", "FWD"] : [f.pos];
+  const posLabels = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  let html = "";
+  for (const pos of groups) {
+    const rows = pool.filter(p => p.position === pos).slice(0, 60);
+    if (!rows.length) continue;
+    html += `<div class="builder-pos-head"><span>${posLabels[pos]}</span></div>`;
+    for (const p of rows) {
+      const team = state.teamsById[p.teamId];
+      const inSquad = draft.squad.includes(p.id);
+      const needThisPos = SQUAD_RULES[pos] - draft.squad.filter(id => state.players.find(pl => pl.id === id)?.position === pos).length;
+      const wouldExceedBudget = !inSquad && (squadCost(draft.squad) + p.nowCost > BUDGET);
+      const wouldExceedPos = !inSquad && needThisPos <= 0;
+      const wouldExceedClub = !inSquad && (clubCounts[p.teamId] || 0) >= 3;
+      const disabled = !inSquad && (wouldExceedBudget || wouldExceedPos || wouldExceedClub);
+      const reason = wouldExceedPos ? "position full" : wouldExceedClub ? "max 3/club" : wouldExceedBudget ? "over budget" : "";
+      html += `
+        <div class="builder-row ${inSquad ? "in-squad" : ""}" data-player="${p.id}">
+          ${playerAvatarHtml(p, 28)}
+          <span class="b-name">${p.webName} <span class="b-sub">${team ? team.short_name : ""}${reason ? " · " + reason : ""}</span></span>
+          <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+          <span class="b-pts mono">${p.totalPoints ?? 0}</span>
+          <button class="builder-add-btn ${inSquad ? "remove" : ""}" ${disabled ? "disabled" : ""} data-action="${inSquad ? "remove" : "add"}" data-player="${p.id}">${inSquad ? "×" : "+"}</button>
+        </div>
+      `;
+    }
   }
+  listEl.innerHTML = html || `<div class="empty-state">No players match those filters.</div>`;
+  listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
+    btn.onclick = () => {
+      const id = Number(btn.dataset.player);
+      if (btn.dataset.action === "add") draft.squad.push(id);
+      else {
+        draft.squad = draft.squad.filter(pid => pid !== id);
+        if (draft.builderCaptainId === id) draft.builderCaptainId = null;
+      }
+      saveDrafts(); renderPlanner();
+    };
+  });
+}
+
+// Live pitch preview during squad building: picks the strongest valid XI
+// from whatever's been added so far (reusing the same formation logic as
+// the gameweek simulator) and shows the rest on the bench, FPL-style.
+function renderBuilderPitch(draft) {
+  const area = document.getElementById("builderPitchArea");
+  if (!area) return;
+  if (!draft.squad.length) {
+    area.innerHTML = `<div class="empty-state" style="padding:40px 20px">Add players from the list to build your squad — the pitch fills in as you go.</div>`;
+    return;
+  }
+  if (state.builderView === "list") {
+    const posLabels = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+    let html = '<div class="squad-list-view">';
+    for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+      const rows = draft.squad.map(id => state.players.find(p => p.id === id)).filter(p => p && p.position === pos);
+      if (!rows.length) continue;
+      html += `<div class="builder-pos-head"><span>${posLabels[pos]}</span></div>`;
+      html += rows.map(p => `
+        <div class="builder-row in-squad">
+          ${playerAvatarHtml(p, 28)}
+          <span class="b-name">${p.webName} ${p.id === draft.builderCaptainId ? '<span class="cap-badge" style="position:static;margin-left:6px">C</span>' : ""}</span>
+          <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+        </div>
+      `).join("");
+    }
+    html += "</div>";
+    area.innerHTML = html;
+    return;
+  }
+  const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
+  const gwId = nextEvent ? nextEvent.id : (state.events[0]?.id || 1);
+  const result = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId);
+  const byPos = { FWD: [], MID: [], DEF: [], GK: [] };
+  for (const x of result.starting) byPos[x.p.position].push(x);
+
+  function slotHtml(x, isCaptainSlot) {
+    return `
+      <div class="pitch-slot" data-player="${x.p.id}">
+        ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
+        ${playerAvatarHtml(x.p, 40)}
+        <div class="name-tag">${x.p.webName}</div>
+        <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
+      </div>
+    `;
+  }
+  const pitchRows = ["FWD", "MID", "DEF", "GK"].map(pos =>
+    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id)).join("")}</div>`
+  ).join("");
+
+  // bench, labelled the way FPL labels substitute priority: goalkeeper
+  // sub first, then outfield subs numbered in bench order by position.
+  let outfieldIdx = 0;
+  const benchHtml = result.bench.length
+    ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${result.bench.map(x => {
+        const label = x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}`;
+        return `
+          <div class="pitch-slot" data-player="${x.p.id}">
+            <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
+            ${playerAvatarHtml(x.p, 40)}
+            <div class="name-tag">${x.p.webName}</div>
+            <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
+          </div>
+        `;
+      }).join("")}</div>`
+    : "";
+  area.innerHTML = `<div class="pitch">${pitchRows}</div>${benchHtml}`;
+
+  area.querySelectorAll(".pitch-slot[data-player]").forEach(slot => {
+    slot.onclick = () => {
+      const id = Number(slot.dataset.player);
+      const isStarting = result.starting.some(x => x.p.id === id);
+      if (!isStarting) return; // captain must be a starter
+      draft.builderCaptainId = id;
+      saveDrafts(); renderBuilderPitch(draft);
+    };
+  });
 }
 
 function renderGwSimulator(draft) {
@@ -1448,7 +1690,7 @@ function renderGwSimulator(draft) {
   document.getElementById("rebuildSquadBtn").onclick = () => {
     if (confirm("Editing the squad will clear any planned transfers/chips. Continue?")) {
       draft.transfersLog = {};
-      draft.squad = draft.squad.slice(0, 14); // drop one player to re-open the builder
+      draft.squadConfirmed = false; // reopen the builder without dropping any player
       saveDrafts(); renderPlanner();
     }
   };
@@ -1470,7 +1712,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   const el = document.getElementById(`gw-body-${gwId}`);
   if (!el) return;
   const entry = timeline.find(t => t.gwId === gwId);
-  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: null });
+  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null });
   const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId);
 
   const chipsAvailable = ["WC", "FH", "BB", "TC"];
@@ -1594,7 +1836,7 @@ function setupPlannerControls() {
     const name = prompt("Name this draft:", "New draft");
     if (!name) return;
     const id = "draft_" + Date.now();
-    state.drafts.push({ id, name, squad: [], bank: BUDGET, transfersLog: {}, chipsUsed: {} });
+    state.drafts.push({ id, name, squad: [], bank: BUDGET, transfersLog: {}, chipsUsed: {}, squadConfirmed: false, builderCaptainId: null });
     state.activeDraftId = id;
     saveDrafts(); renderPlanner();
   };
