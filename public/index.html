@@ -376,6 +376,7 @@
       <button data-tab="team">My team</button>
       <button data-tab="planner">Planner</button>
       <button data-tab="table">Table</button>
+      <button data-tab="fdr">FDR</button>
       <button data-tab="rankings">Rankings</button>
     </nav>
   </div>
@@ -405,13 +406,12 @@
         <option value="HOME">Home only</option>
         <option value="AWAY">Away only</option>
       </select>
-      <select id="fixtureTier">
-        <option value="ALL">Any opponent</option>
-        <option value="TOP6">Vs top 6</option>
-        <option value="BOTTOM6">Vs bottom 6</option>
-        <option value="TOP10">Vs top 10</option>
-        <option value="BOTTOM10">Vs bottom 10</option>
-      </select>
+      <div class="spacer" style="gap:6px">
+        <span style="font-size:12px;color:var(--ink-dim)">Opponent rank</span>
+        <input type="number" id="tierRankMin" min="1" max="20" value="1" style="width:48px" />
+        <span style="color:var(--ink-dim)">–</span>
+        <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:48px" />
+      </div>
       <div class="spacer">
         <select id="sortField"></select>
         <button class="dir-btn" id="dirBtn">↓</button>
@@ -467,6 +467,17 @@
         <option value="last">2025/26 final table</option>
         <option value="current">This season (live)</option>
       </select>
+      <select id="tableVenueSelect">
+        <option value="ALL">All games</option>
+        <option value="HOME">Home only</option>
+        <option value="AWAY">Away only</option>
+      </select>
+      <select id="tableLastNSelect">
+        <option value="ALL">Whole season</option>
+        <option value="3">Last 3 gameweeks</option>
+        <option value="5">Last 5 gameweeks</option>
+        <option value="10">Last 10 gameweeks</option>
+      </select>
     </div>
 
     <div class="table-wrap">
@@ -475,11 +486,33 @@
           <tr>
             <th class="label-col">#</th>
             <th class="label-col">Club</th>
-            <th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>
+            <th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
           </tr>
         </thead>
         <tbody id="plTableBody"></tbody>
       </table>
+    </div>
+  </section>
+
+  <section id="tab-fdr" style="display:none">
+    <h1 class="page-title">Fixture difficulty</h1>
+    <p class="page-sub">Every club's next fixtures, colour-coded by difficulty (using your custom weights from the Rankings tab). Click a number of gameweeks to show, or scroll the grid.</p>
+
+    <div class="toolbar" style="margin-bottom:14px">
+      <span style="font-size:12px;color:var(--ink-dim)">Show</span>
+      <select id="fdrGwCount">
+        <option value="5">5 gameweeks</option>
+        <option value="8" selected>8 gameweeks</option>
+        <option value="10">10 gameweeks</option>
+        <option value="15">15 gameweeks</option>
+        <option value="38">Whole season</option>
+      </select>
+      <span style="font-size:12px;color:var(--ink-dim)">starting from</span>
+      <select id="fdrStartGw"></select>
+    </div>
+
+    <div class="table-wrap" style="overflow-x:auto">
+      <table id="fdrGrid"></table>
     </div>
   </section>
 
@@ -681,7 +714,7 @@ function activeColumns() { return FIXED_COLUMNS.concat(STAT_THEMES[state.statsTh
 let state = {
   teams: [], players: [], teamsById: {}, events: [], fixturesByTeam: {},
   shortlist: [], expandedId: null,
-  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc", gw: "ALL", venue: "ALL", tier: "ALL" },
+  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc", gw: "ALL", venue: "ALL", rankMin: 1, rankMax: 20 },
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
@@ -690,7 +723,7 @@ let state = {
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
-  allFixtures: [], tableSource: "auto",
+  allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL" },
 };
 
 // ---------- data fetching ----------
@@ -820,6 +853,7 @@ async function loadData() {
     renderShortlist();
     renderPlanner();
     renderPlTable();
+    renderFdrGrid();
     renderRankings();
   } catch (err) {
     setBanner(
@@ -884,22 +918,32 @@ const PL_TABLE_LAST_SEASON = [
   { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gd: -41, points: 20 },
 ];
 
-// Builds a live table from this season's finished fixtures. Returns null
-// if no matches have been played yet (e.g. preseason).
-function computeLiveTable(fixtures) {
-  const finished = (fixtures || []).filter(f => f.finished && f.team_h_score != null);
+// Builds a live table from this season's finished fixtures. opts.venue
+// restricts each team's record to only their home or away matches (a
+// "home form" / "away form" table). opts.lastN restricts to fixtures from
+// the most recent N gameweeks played. Returns null if no matches fit.
+function computeLiveTable(fixtures, opts) {
+  opts = opts || {};
+  let finished = (fixtures || []).filter(f => f.finished && f.team_h_score != null);
+  if (opts.lastN && opts.lastN !== "ALL") {
+    const maxEvent = Math.max(...finished.map(f => f.event || 0), 0);
+    finished = finished.filter(f => f.event > maxEvent - Number(opts.lastN));
+  }
   if (!finished.length) return null;
   const rows = {};
   for (const t of state.teams) rows[t.id] = { teamId: t.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
   for (const f of finished) {
-    const h = rows[f.team_h], a = rows[f.team_a];
-    if (!h || !a) continue;
-    h.played++; a.played++;
-    h.gf += f.team_h_score; h.ga += f.team_a_score;
-    a.gf += f.team_a_score; a.ga += f.team_h_score;
-    if (f.team_h_score > f.team_a_score) { h.won++; h.points += 3; a.lost++; }
-    else if (f.team_h_score < f.team_a_score) { a.won++; a.points += 3; h.lost++; }
-    else { h.drawn++; a.drawn++; h.points++; a.points++; }
+    const entries = [];
+    if (opts.venue !== "AWAY") entries.push([f.team_h, true, f.team_h_score, f.team_a_score]);
+    if (opts.venue !== "HOME") entries.push([f.team_a, false, f.team_a_score, f.team_h_score]);
+    for (const [teamId, , gf, ga] of entries) {
+      const r = rows[teamId];
+      if (!r) continue;
+      r.played++; r.gf += gf; r.ga += ga;
+      if (gf > ga) { r.won++; r.points += 3; }
+      else if (gf < ga) { r.lost++; }
+      else { r.drawn++; r.points++; }
+    }
   }
   return Object.values(rows).map(r => ({ ...r, gd: r.gf - r.ga }))
     .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
@@ -907,9 +951,11 @@ function computeLiveTable(fixtures) {
 
 // Resolves which table to actually use: an explicit user choice, or
 // "auto" — live table if any matches have been played this season,
-// otherwise falling back to last season's final table.
+// otherwise falling back to last season's final table. venue/lastN only
+// apply to the live table — last season's fallback is only ever a single
+// final aggregate, so those controls are ignored when showing it.
 function resolveActiveTable() {
-  const live = computeLiveTable(state.allFixtures);
+  const live = computeLiveTable(state.allFixtures, { venue: state.tableFilters.venue, lastN: state.tableFilters.lastN });
   if (state.tableSource === "current") return { rows: live || [], isLive: true, empty: !live };
   if (state.tableSource === "last") return { rows: lastSeasonRows(), isLive: false, empty: false };
   return live ? { rows: live, isLive: true, empty: false } : { rows: lastSeasonRows(), isLive: false, empty: false };
@@ -931,7 +977,8 @@ function toScale1to5(value, range) {
 // with no table row at all (e.g. freshly promoted, before any results)
 // are placed mid-table by default rather than excluded.
 function computeTeamTiers() {
-  const table = resolveActiveTable();
+  const live = computeLiveTable(state.allFixtures, {});
+  const table = state.tableSource === "last" ? { rows: lastSeasonRows() } : (live ? { rows: live } : { rows: lastSeasonRows() });
   const ranked = [...table.rows];
   const seen = new Set(ranked.map(r => r.teamId));
   const n = state.teams.length;
@@ -1013,19 +1060,17 @@ function toggleShortlist(id) {
 // ---------- filtering / sorting ----------
 function playerHasMatchingFixture(p) {
   const f = state.filters;
-  if (f.gw === "ALL" && f.venue === "ALL" && f.tier === "ALL") return true;
+  const rankActive = f.rankMin > 1 || f.rankMax < 20;
+  if (f.gw === "ALL" && f.venue === "ALL" && !rankActive) return true;
   const fixtures = state.fixturesByTeam[p.teamId] || [];
   const candidates = f.gw === "ALL" ? fixtures : fixtures.filter(fx => String(fx.event) === f.gw);
   return candidates.some(fx => {
     if (f.venue === "HOME" && !fx.isHome) return false;
     if (f.venue === "AWAY" && fx.isHome) return false;
-    if (f.tier !== "ALL") {
+    if (rankActive) {
       const tier = state.teamTier[fx.oppId];
       if (!tier) return false;
-      if (f.tier === "TOP6" && !tier.top6) return false;
-      if (f.tier === "BOTTOM6" && !tier.bottom6) return false;
-      if (f.tier === "TOP10" && !tier.top10) return false;
-      if (f.tier === "BOTTOM10" && !tier.bottom10) return false;
+      if (tier.rank < f.rankMin || tier.rank > f.rankMax) return false;
     }
     return true;
   });
@@ -1118,7 +1163,8 @@ function buildToolbarStatics() {
   document.getElementById("teamSelect").onchange = (e) => { state.filters.team = e.target.value; renderStats(); };
   document.getElementById("fixtureGw").onchange = (e) => { state.filters.gw = e.target.value; renderStats(); };
   document.getElementById("fixtureVenue").onchange = (e) => { state.filters.venue = e.target.value; renderStats(); };
-  document.getElementById("fixtureTier").onchange = (e) => { state.filters.tier = e.target.value; renderStats(); };
+  document.getElementById("tierRankMin").onchange = (e) => { state.filters.rankMin = Number(e.target.value) || 1; renderStats(); };
+  document.getElementById("tierRankMax").onchange = (e) => { state.filters.rankMax = Number(e.target.value) || 20; renderStats(); };
 
   let searchTimer;
   document.getElementById("search").oninput = (e) => {
@@ -2171,6 +2217,7 @@ function renderFormulaPanels() {
   renderFormulaPanel(document.getElementById("fdrFormulaPanel"), state.fdrFormula, FDR_FORMULA_FIELDS, () => {
     saveFdrFormula();
     renderStats(); // refreshes any visible fixture-dependent bits; doesn't touch this panel or the rankings list
+    renderFdrGrid();
   });
   renderFormulaPanel(document.getElementById("rankFormulaPanel"), state.rankFormula, RANK_FORMULA_FIELDS, () => {
     saveRankFormula();
@@ -2191,14 +2238,20 @@ function renderPlTable() {
   if (!state.teams.length) return;
   const sel = document.getElementById("tableSourceSelect");
   sel.value = state.tableSource;
+  const venueSel = document.getElementById("tableVenueSelect");
+  const lastNSel = document.getElementById("tableLastNSelect");
+  venueSel.value = state.tableFilters.venue;
+  lastNSel.value = state.tableFilters.lastN;
   const table = resolveActiveTable();
+  venueSel.disabled = !table.isLive;
+  lastNSel.disabled = !table.isLive;
   const note = document.getElementById("tableNote");
   if (table.empty) {
-    note.textContent = "This season hasn't kicked off yet, so there are no live results — showing last season's final table instead until real fixtures are played.";
+    note.textContent = "This season hasn't kicked off yet, so there are no live results — showing last season's final table instead until real fixtures are played. Home/away and last-N-gameweek filters need live results, so they're disabled for now.";
   } else if (table.isLive) {
     note.textContent = "Live table for the current season, built from finished fixtures.";
   } else {
-    note.textContent = "2025/26 final table — used as a stand-in for club strength until this season has results of its own. Switch the dropdown to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
+    note.textContent = "2025/26 final table — used as a stand-in until this season has results of its own. GF/GA aren't shown here since I don't have verified per-club figures for last season, only the final W/D/L/GD/Pts. Switch to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
   }
   const rows = table.empty ? lastSeasonRows() : table.rows;
   const body = document.getElementById("plTableBody");
@@ -2213,6 +2266,8 @@ function renderPlTable() {
         <td class="mono">${r.won}</td>
         <td class="mono">${r.drawn}</td>
         <td class="mono">${r.lost}</td>
+        <td class="mono">${r.gf ?? "—"}</td>
+        <td class="mono">${r.ga ?? "—"}</td>
         <td class="mono">${r.gd > 0 ? "+" : ""}${r.gd}</td>
         <td class="mono" style="font-weight:700">${r.points}</td>
       </tr>
@@ -2223,6 +2278,14 @@ function setupTableControls() {
   document.getElementById("tableSourceSelect").onchange = (e) => {
     state.tableSource = e.target.value;
     computeTeamTiers(); // tier filter on Player stats depends on this
+    renderPlTable();
+  };
+  document.getElementById("tableVenueSelect").onchange = (e) => {
+    state.tableFilters.venue = e.target.value;
+    renderPlTable();
+  };
+  document.getElementById("tableLastNSelect").onchange = (e) => {
+    state.tableFilters.lastN = e.target.value;
     renderPlTable();
   };
 }
@@ -2251,6 +2314,7 @@ function renderTeamOverrides() {
       computeTeamTiers();
       renderRankingsList();
       renderStats();
+      renderFdrGrid();
     };
   });
 }
@@ -2267,6 +2331,51 @@ function renderFixtureList() {
   `).join("");
 }
 
+// ---------- FDR grid ----------
+function populateFdrStartGw() {
+  const sel = document.getElementById("fdrStartGw");
+  if (sel.options.length) return;
+  for (const e of state.events) {
+    const opt = document.createElement("option");
+    opt.value = e.id; opt.textContent = e.name.replace("Gameweek ", "GW");
+    sel.appendChild(opt);
+  }
+  const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next) || state.events[0];
+  if (nextEvent) sel.value = nextEvent.id;
+}
+function renderFdrGrid() {
+  if (!state.teams.length) return;
+  populateFdrStartGw();
+  const count = Number(document.getElementById("fdrGwCount").value);
+  const startGw = Number(document.getElementById("fdrStartGw").value);
+  const gwIds = state.events.map(e => e.id).filter(id => id >= startGw).slice(0, count);
+
+  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th>GW${id}</th>`).join("")}</tr>`;
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  const rows = sorted.map(t => {
+    const byGw = {};
+    for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
+    const cells = gwIds.map(gwId => {
+      const fixtures = byGw[gwId] || [];
+      if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint)">–</td>`;
+      return `<td style="padding:4px">${fixtures.map(fx => {
+        const opp = state.teamsById[fx.oppId];
+        const label = (opp ? opp.short_name : "?") + (fx.isHome ? "" : "*");
+        const score = customFdr(t.id, fx.oppId, fx.isHome);
+        const rounded = Math.max(1, Math.min(5, Math.round(score)));
+        return `<div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:44px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}">${label}</div>`;
+      }).join("")}</td>`;
+    });
+    return `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}</tr>`;
+  }).join("");
+
+  document.getElementById("fdrGrid").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
+}
+function setupFdrControls() {
+  document.getElementById("fdrGwCount").onchange = renderFdrGrid;
+  document.getElementById("fdrStartGw").onchange = renderFdrGrid;
+}
+
 function setupRankingsControls() {
   document.getElementById("resetFdrBtn").onclick = () => {
     state.fdrFormula = { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 };
@@ -2277,7 +2386,7 @@ function setupRankingsControls() {
 }
 
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "rankings"];
+const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "fdr", "rankings"];
 function switchTab(name) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
@@ -2296,6 +2405,7 @@ buildToolbarStatics();
 setupTabs();
 setupPlannerControls();
 setupTableControls();
+setupFdrControls();
 setupRankingsControls();
 loadData();
 </script>
