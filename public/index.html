@@ -377,6 +377,7 @@
       <button data-tab="planner">Planner</button>
       <button data-tab="table">Table</button>
       <button data-tab="fdr">FDR</button>
+      <button data-tab="h2h">Head-to-head</button>
       <button data-tab="rankings">Rankings</button>
     </nav>
   </div>
@@ -516,6 +517,21 @@
     </div>
   </section>
 
+  <section id="tab-h2h" style="display:none">
+    <h1 class="page-title">Head-to-head</h1>
+    <p class="page-sub">
+      Pick two clubs. There's no real data source for manager philosophies or planned lineups anywhere — not FPL's API, not anywhere public — so that side is a notepad you fill in yourself and it's saved for next time. Everything else on this page (fixtures, player form, stats) is real, live FPL data for the two clubs you pick.
+    </p>
+
+    <div class="toolbar" style="margin-bottom:16px">
+      <select id="h2hTeamA"></select>
+      <span style="color:var(--ink-dim);align-self:center">vs</span>
+      <select id="h2hTeamB"></select>
+    </div>
+
+    <div id="h2hBody"></div>
+  </section>
+
   <section id="tab-rankings" style="display:none">
     <h1 class="page-title">Rankings</h1>
     <p class="page-sub">Fixture difficulty and club rankings, computed from each club's attack/defence/overall strength — FPL's own longer-run ratings by default, or your own opinion if you override a club below.</p>
@@ -541,7 +557,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Edit club strength</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Disagree with FPL's rating for a club? Nudge it here — this shifts that club's strength up or down everywhere on the site (fixture difficulty, club rankings, top-6/bottom-6 filters that fall back to strength). 0 = use FPL's own rating unchanged.
+        Disagree with FPL's rating for a club? Set it exactly — 1 (weakest) to 5 (strongest). This becomes that club's fixture-difficulty rating everywhere on the site (opponent pills, club rankings), overriding FPL's own attack/defence/overall blend for them entirely. Starts at FPL's own computed rating; hit ↺ to go back to it.
       </p>
       <div id="teamOverrideList"></div>
     </div>
@@ -562,6 +578,18 @@ const FDR_COLOR = { 1: "#3ecf8e", 2: "#8fd9ab", 3: "#d9c98a", 4: "#e39a63", 5: "
 const FDR_MULT = { 1: 1.35, 2: 1.15, 3: 1.0, 4: 0.85, 5: 0.65 };
 const SQUAD_RULES = { GK: 2, DEF: 5, MID: 5, FWD: 3 };
 const BUDGET = 1000; // £100.0m in tenths
+const XI_MIN = { GK: 1, DEF: 3, MID: 2, FWD: 1 };
+const XI_MAX = { GK: 1, DEF: 5, MID: 5, FWD: 3 };
+function isLegalXi(playerIds) {
+  if (playerIds.length !== 11) return false;
+  const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+  for (const id of playerIds) {
+    const p = state.players.find(x => x.id === id);
+    if (!p) return false;
+    counts[p.position]++;
+  }
+  return Object.keys(XI_MIN).every(pos => counts[pos] >= XI_MIN[pos] && counts[pos] <= XI_MAX[pos]);
+}
 const CHIP_LABELS = { WC: "Wildcard", FH: "Free Hit", BB: "Bench Boost", TC: "Triple Captain" };
 
 // Curated kit colors for clubs commonly in/around the Premier League. Any
@@ -718,12 +746,13 @@ let state = {
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
-  builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" },
+  builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL" },
+  h2h: { teamA: null, teamB: null }, managerNotes: {},
 };
 
 // ---------- data fetching ----------
@@ -996,21 +1025,38 @@ function computeTeamTiers() {
 // Higher = harder fixture. Uses the opponent's relevant strength stats
 // (their away numbers when you're home, home numbers when you're away),
 // blended by user-editable weights, with a small home-advantage nudge.
-function teamAdj(teamId) { return (state.teamOverrides && state.teamOverrides[teamId]) || 0; }
+function teamOverrideRating(teamId) {
+  const v = state.teamOverrides ? state.teamOverrides[teamId] : null;
+  return (v === null || v === undefined) ? null : v;
+}
+// Returns a team's default 1-5 quality rating derived from FPL's own raw
+// overall strength (no override applied) — used as the slider's starting
+// position so "exact" edits start from FPL's own view, not from 3.0.
+function defaultTeamRating(teamId) {
+  const t = state.teamsById[teamId];
+  if (!t || !state.strengthRanges) return 3;
+  const overall = (t.strength_overall_home + t.strength_overall_away) / 2;
+  return Math.round(toScale1to5(overall, state.strengthRanges.overall) * 10) / 10;
+}
 function customFdr(teamId, oppId, isHome) {
   const opp = state.teamsById[oppId];
   if (!opp || !state.strengthRanges) return 3;
-  const adj = teamAdj(oppId);
-  const oppOverall = (isHome ? opp.strength_overall_away : opp.strength_overall_home) + adj;
-  const oppAttack = (isHome ? opp.strength_attack_away : opp.strength_attack_home) + adj;
-  const oppDefence = (isHome ? opp.strength_defence_away : opp.strength_defence_home) + adj;
+  const override = teamOverrideRating(oppId);
   const f = state.fdrFormula;
-  const wSum = f.attackWeight + f.defenceWeight + f.overallWeight || 1;
-  let score = (
-    f.attackWeight * toScale1to5(oppAttack, state.strengthRanges.attack) +
-    f.defenceWeight * toScale1to5(oppDefence, state.strengthRanges.defence) +
-    f.overallWeight * toScale1to5(oppOverall, state.strengthRanges.overall)
-  ) / wSum;
+  let score;
+  if (override !== null) {
+    score = override; // exact — bypasses the attack/defence/overall blend entirely
+  } else {
+    const oppOverall = isHome ? opp.strength_overall_away : opp.strength_overall_home;
+    const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
+    const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
+    const wSum = f.attackWeight + f.defenceWeight + f.overallWeight || 1;
+    score = (
+      f.attackWeight * toScale1to5(oppAttack, state.strengthRanges.attack) +
+      f.defenceWeight * toScale1to5(oppDefence, state.strengthRanges.defence) +
+      f.overallWeight * toScale1to5(oppOverall, state.strengthRanges.overall)
+    ) / wSum;
+  }
   if (isHome) score -= f.homeAdvantage;
   return Math.max(1, Math.min(5, score));
 }
@@ -1647,16 +1693,25 @@ function autoPickSquad(draft) {
       const clubCounts = clubCountsFor(draft.squad);
       const remaining = BUDGET - squadCost(draft.squad);
       const totalSlotsLeft = 15 - draft.squad.length;
-      // leave roughly enough budget for the other empty slots (min £4.0m each)
-      const reserve = (totalSlotsLeft - 1) * 40;
-      const candidates = state.players
-        .filter(p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3 && p.nowCost <= remaining - reserve)
+      const reserve = (totalSlotsLeft - 1) * 40; // leave roughly £4.0m per other empty slot
+      const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3;
+      let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
         .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-      if (!candidates.length) break;
+      if (!candidates.length) {
+        // The reserve heuristic left no room — relax it and just take the
+        // cheapest legal option so the squad still finishes filling. This
+        // is what "autopick didn't fill the team" was: the old code just
+        // gave up here instead of falling back.
+        candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining)
+          .sort((a, b) => a.nowCost - b.nowCost);
+      }
+      if (!candidates.length) break; // genuinely impossible (e.g. budget exhausted) — nothing more to do
       draft.squad.push(candidates[0].id);
       need--;
     }
   }
+  draft.builderCaptainId = null; // recomputed fresh by computeGwResult from the new squad
+  draft.manualStarterIds = null;
 }
 
 function renderSquadBuilder(draft) {
@@ -1734,7 +1789,7 @@ function renderSquadBuilder(draft) {
   };
   document.getElementById("builderResetSquad").onclick = () => {
     if (!draft.squad.length || confirm("Clear all picked players?")) {
-      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null;
+      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null; draft.manualStarterIds = null; state.builderSelectedId = null;
       saveDrafts(); renderPlanner();
     }
   };
@@ -1806,9 +1861,44 @@ function renderBuilderList(draft) {
   });
 }
 
+// Resolves the starting XI/bench split to actually display: the strongest
+// auto-picked XI, unless the user has manually rearranged it (via pitch
+// clicks) — in which case that manual arrangement is used as long as it's
+// still a legal XI drawn from the current squad. Falls back to auto the
+// moment it stops being valid (e.g. the squad changed since).
+function getBuilderResult(draft, gwId) {
+  const auto = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId);
+  if (!draft.manualStarterIds) return auto;
+  const valid = draft.manualStarterIds.length === 11 &&
+    draft.manualStarterIds.every(id => draft.squad.includes(id)) &&
+    isLegalXi(draft.manualStarterIds);
+  if (!valid) { draft.manualStarterIds = null; return auto; }
+  const startingSet = new Set(draft.manualStarterIds);
+  const withProj = draft.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean)
+    .map(p => ({ p, proj: projectPoints(p, gwId) }));
+  const starting = withProj.filter(x => startingSet.has(x.p.id));
+  const bench = withProj.filter(x => !startingSet.has(x.p.id));
+  const captainEntry = starting.find(x => x.p.id === draft.builderCaptainId) || [...starting].sort((a, b) => b.proj - a.proj)[0];
+  return { starting, bench, captain: captainEntry?.p };
+}
+// Attempts to swap a starter out for a bench player in. Only succeeds if
+// the resulting XI is still legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD, 11
+// total) — otherwise leaves the lineup untouched and returns false.
+function attemptXiSwap(draft, currentStartingIds, outId, inId) {
+  const candidate = currentStartingIds.filter(id => id !== outId).concat([inId]);
+  if (!isLegalXi(candidate)) return false;
+  draft.manualStarterIds = candidate;
+  if (draft.builderCaptainId === outId) draft.builderCaptainId = null;
+  saveDrafts();
+  return true;
+}
+
 // Live pitch preview during squad building: picks the strongest valid XI
 // from whatever's been added so far (reusing the same formation logic as
 // the gameweek simulator) and shows the rest on the bench, FPL-style.
+// Click a player to select it, then click another to swap them between
+// starting XI and bench (rule-validated), or use the action bar to
+// captain or remove the selected player.
 function renderBuilderPitch(draft) {
   const area = document.getElementById("builderPitchArea");
   if (!area) return;
@@ -1828,6 +1918,7 @@ function renderBuilderPitch(draft) {
           ${playerAvatarHtml(p, 28)}
           <span class="b-name">${p.webName} ${p.id === draft.builderCaptainId ? '<span class="cap-badge" style="position:static;margin-left:6px">C</span>' : ""}</span>
           <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+          ${fixtureTickerHtml(p.teamId, 3)}
         </div>
       `).join("");
     }
@@ -1837,21 +1928,25 @@ function renderBuilderPitch(draft) {
   }
   const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
   const gwId = nextEvent ? nextEvent.id : (state.events[0]?.id || 1);
-  const result = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId);
-  const byPos = { FWD: [], MID: [], DEF: [], GK: [] };
+  const result = getBuilderResult(draft, gwId);
+  const startingIds = result.starting.map(x => x.p.id);
+  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const x of result.starting) byPos[x.p.position].push(x);
+  const selectedId = state.builderSelectedId;
 
   function slotHtml(x, isCaptainSlot) {
+    const selected = x.p.id === selectedId;
     return `
-      <div class="pitch-slot" data-player="${x.p.id}">
+      <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
         ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
         ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
+        ${fixtureTickerHtml(x.p.teamId, 2)}
       </div>
     `;
   }
-  const pitchRows = ["FWD", "MID", "DEF", "GK"].map(pos =>
+  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
     `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id)).join("")}</div>`
   ).join("");
 
@@ -1861,25 +1956,83 @@ function renderBuilderPitch(draft) {
   const benchHtml = result.bench.length
     ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${result.bench.map(x => {
         const label = x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}`;
+        const selected = x.p.id === selectedId;
         return `
-          <div class="pitch-slot" data-player="${x.p.id}">
+          <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
             <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
             ${playerAvatarHtml(x.p, 40)}
             <div class="name-tag">${x.p.webName}</div>
             <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
+            ${fixtureTickerHtml(x.p.teamId, 2)}
           </div>
         `;
       }).join("")}</div>`
     : "";
-  area.innerHTML = `<div class="pitch">${pitchRows}</div>${benchHtml}`;
+
+  const selectedPlayer = selectedId ? state.players.find(p => p.id === selectedId) : null;
+  const actionBarHtml = selectedPlayer ? `
+    <div class="chip-btn-row" style="margin-bottom:10px">
+      <span style="align-self:center;font-size:12px;color:var(--ink-dim)">${selectedPlayer.webName} selected —</span>
+      ${startingIds.includes(selectedId) ? `<button class="chip-btn" id="actCaptain">Make captain</button>` : `<button class="chip-btn" id="actStart">Move to starting XI</button>`}
+      <button class="chip-btn" id="actRemove">Remove from squad</button>
+      <button class="chip-btn" id="actDeselect">Cancel</button>
+    </div>
+  ` : `<p class="foot-note" style="margin-bottom:10px">Click a player to select them, then click another to swap them between the starting XI and bench — or use the menu that appears to captain or remove them.</p>`;
+
+  area.innerHTML = `${actionBarHtml}<div class="pitch">${pitchRows}</div>${benchHtml}`;
+
+  if (selectedPlayer) {
+    const capBtn = document.getElementById("actCaptain");
+    if (capBtn) capBtn.onclick = () => {
+      draft.builderCaptainId = selectedId;
+      state.builderSelectedId = null;
+      saveDrafts(); renderBuilderPitch(draft);
+    };
+    const startBtn = document.getElementById("actStart");
+    if (startBtn) startBtn.onclick = () => {
+      let done = false;
+      for (const out of [...result.starting].sort((a, b) => a.proj - b.proj)) {
+        if (attemptXiSwap(draft, startingIds, out.p.id, selectedId)) { done = true; break; }
+      }
+      if (!done) alert("Can't move them into the XI — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD).");
+      state.builderSelectedId = null;
+      renderBuilderPitch(draft);
+    };
+    document.getElementById("actRemove").onclick = () => {
+      draft.squad = draft.squad.filter(id => id !== selectedId);
+      if (draft.builderCaptainId === selectedId) draft.builderCaptainId = null;
+      if (draft.manualStarterIds) draft.manualStarterIds = draft.manualStarterIds.filter(id => id !== selectedId);
+      state.builderSelectedId = null;
+      saveDrafts(); renderPlanner();
+    };
+    document.getElementById("actDeselect").onclick = () => {
+      state.builderSelectedId = null;
+      renderBuilderPitch(draft);
+    };
+  }
 
   area.querySelectorAll(".pitch-slot[data-player]").forEach(slot => {
     slot.onclick = () => {
       const id = Number(slot.dataset.player);
-      const isStarting = result.starting.some(x => x.p.id === id);
-      if (!isStarting) return; // captain must be a starter
-      draft.builderCaptainId = id;
-      saveDrafts(); renderBuilderPitch(draft);
+      if (selectedId === null) {
+        state.builderSelectedId = id;
+        renderBuilderPitch(draft);
+      } else if (selectedId === id) {
+        state.builderSelectedId = null;
+        renderBuilderPitch(draft);
+      } else {
+        const selIsStarter = startingIds.includes(selectedId);
+        const clickedIsStarter = startingIds.includes(id);
+        if (selIsStarter !== clickedIsStarter) {
+          const outId = selIsStarter ? selectedId : id;
+          const inId = selIsStarter ? id : selectedId;
+          if (!attemptXiSwap(draft, startingIds, outId, inId)) {
+            alert("Can't make that swap — it would break squad rules (needs 1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD in the starting XI).");
+          }
+        }
+        state.builderSelectedId = null;
+        renderBuilderPitch(draft);
+      }
     };
   });
 }
@@ -1999,7 +2152,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
       </div>
     `;
   }
-  const pitchRows = ["FWD", "MID", "DEF", "GK"].map(pos =>
+  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
     `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id)).join("")}</div>`
   ).join("");
   const benchHtml = result.bench.length
@@ -2072,6 +2225,7 @@ function setupPlannerControls() {
   document.getElementById("draftSelect").onchange = (e) => {
     state.activeDraftId = e.target.value;
     state.plannerExpandedGw = null;
+    state.builderSelectedId = null;
     renderPlanner();
   };
   document.getElementById("newDraftBtn").onclick = () => {
@@ -2169,7 +2323,10 @@ function computeClubRankings() {
     const squadQuality = seasonUnderway
       ? top11.reduce((s, p) => s + p.totalPoints, 0)
       : top11.reduce((s, p) => s + p.nowCost, 0);
-    const teamStrength = (t.strength_overall_home + t.strength_overall_away) / 2 + teamAdj(t.id);
+    const override = teamOverrideRating(t.id);
+    const teamStrength = override !== null
+      ? override * (state.strengthRanges.overall.max / 5) // put the 1-5 rating on the same rough scale as raw strength values
+      : (t.strength_overall_home + t.strength_overall_away) / 2;
     return { team: t, squadQuality, teamStrength };
   });
 
@@ -2294,27 +2451,42 @@ function renderTeamOverrides() {
   const container = document.getElementById("teamOverrideList");
   const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
   container.innerHTML = sorted.map(t => {
-    const val = teamAdj(t.id);
+    const override = teamOverrideRating(t.id);
+    const shown = override !== null ? override : defaultTeamRating(t.id);
     return `
       <div class="rank-row" data-team="${t.id}">
         ${kitSvg(t.id, 22)}
         <div style="width:150px;font-weight:600;font-size:13px">${t.name}</div>
-        <input type="range" min="-30" max="30" step="1" value="${val}" data-team-adj="${t.id}" style="flex:1" />
-        <div class="rank-score" style="width:40px;text-align:right" data-team-val="${t.id}">${val > 0 ? "+" : ""}${val}</div>
+        <input type="range" min="1" max="5" step="0.1" value="${shown}" data-team-rating="${t.id}" style="flex:1" />
+        <div class="rank-score" style="width:40px;text-align:right" data-team-val="${t.id}">${shown.toFixed(1)}</div>
+        <button class="dir-btn" data-team-reset="${t.id}" style="${override === null ? "visibility:hidden" : ""}" title="Reset to FPL's own rating">↺</button>
       </div>
     `;
   }).join("");
   container.querySelectorAll("input[type=range]").forEach(input => {
     input.oninput = () => {
-      const id = Number(input.dataset.teamAdj);
+      const id = Number(input.dataset.teamRating);
       const v = Number(input.value);
       state.teamOverrides[id] = v;
-      container.querySelector(`[data-team-val="${id}"]`).textContent = (v > 0 ? "+" : "") + v;
+      container.querySelector(`[data-team-val="${id}"]`).textContent = v.toFixed(1);
+      container.querySelector(`[data-team-reset="${id}"]`).style.visibility = "visible";
       saveTeamOverrides();
       computeTeamTiers();
       renderRankingsList();
       renderStats();
       renderFdrGrid();
+    };
+  });
+  container.querySelectorAll("[data-team-reset]").forEach(btn => {
+    btn.onclick = () => {
+      const id = Number(btn.dataset.teamReset);
+      delete state.teamOverrides[id];
+      saveTeamOverrides();
+      computeTeamTiers();
+      renderRankingsList();
+      renderStats();
+      renderFdrGrid();
+      renderTeamOverrides();
     };
   });
 }
@@ -2376,6 +2548,120 @@ function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
 }
 
+// ---------- Head-to-head ----------
+async function loadManagerNotes() {
+  try {
+    const raw = await persistGet("managerNotes");
+    if (raw) state.managerNotes = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveManagerNotes() { persistSet("managerNotes", JSON.stringify(state.managerNotes)); }
+
+function populateH2hSelects() {
+  const selA = document.getElementById("h2hTeamA"), selB = document.getElementById("h2hTeamB");
+  if (selA.options.length) return;
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  for (const sel of [selA, selB]) {
+    sel.innerHTML = sorted.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  }
+  state.h2h.teamA = sorted[0]?.id;
+  state.h2h.teamB = sorted[1]?.id;
+  selA.value = state.h2h.teamA;
+  selB.value = state.h2h.teamB;
+}
+
+function clubNotesHtml(team) {
+  const notes = state.managerNotes[team.id] || { philosophy: "", lineup: "" };
+  return `
+    <div class="card" style="flex:1;min-width:280px">
+      <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name} — your notes</div>
+      <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:4px">Manager & philosophy</label>
+      <textarea data-notes-team="${team.id}" data-notes-field="philosophy" rows="3" style="width:100%;margin-bottom:10px;resize:vertical" placeholder="e.g. high press, back 4, likes to rotate in Europe...">${notes.philosophy || ""}</textarea>
+      <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:4px">Likely next XI / setup</label>
+      <textarea data-notes-team="${team.id}" data-notes-field="lineup" rows="3" style="width:100%;resize:vertical" placeholder="e.g. expect 3 changes from last week, X still injured...">${notes.lineup || ""}</textarea>
+    </div>
+  `;
+}
+
+function renderH2H() {
+  if (!state.teams.length) return;
+  populateH2hSelects();
+  const teamA = state.teamsById[state.h2h.teamA];
+  const teamB = state.teamsById[state.h2h.teamB];
+  const body = document.getElementById("h2hBody");
+  if (!teamA || !teamB) { body.innerHTML = ""; return; }
+
+  // --- real data: this season's meetings between the two clubs ---
+  const meetings = (state.allFixtures || []).filter(f =>
+    (f.team_h === teamA.id && f.team_a === teamB.id) || (f.team_h === teamB.id && f.team_a === teamA.id)
+  ).sort((a, b) => (a.event || 999) - (b.event || 999));
+  const meetingsHtml = meetings.length ? meetings.map(f => {
+    const home = state.teamsById[f.team_h], away = state.teamsById[f.team_a];
+    const played = f.finished && f.team_h_score != null;
+    return `
+      <div class="fixture-item">
+        <span style="width:60px">${f.event ? "GW" + f.event : "TBC"}</span>
+        <span>${home?.short_name || "?"} ${played ? f.team_h_score : ""} – ${played ? f.team_a_score : ""} ${away?.short_name || "?"}</span>
+        <span style="color:var(--ink-faint);margin-left:8px">${played ? "Final" : (f.kickoff_time ? new Date(f.kickoff_time).toLocaleDateString() : "Date TBC")}</span>
+      </div>
+    `;
+  }).join("") : `<p class="foot-note">No meetings between these two clubs this season yet.</p>`;
+
+  // --- real data: player matchups, each club's key players with form/threat and fixture-specific difficulty vs the other side ---
+  function topPlayersHtml(team, oppTeam) {
+    const squad = state.players.filter(p => p.teamId === team.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 6);
+    if (!squad.length) return `<p class="foot-note">No player data yet.</p>`;
+    return squad.map(p => `
+      <div class="builder-row">
+        ${playerAvatarHtml(p, 28)}
+        <span class="b-name">${p.webName} <span class="b-sub">${p.position}</span></span>
+        <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
+        <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
+      </div>
+    `).join("");
+  }
+  const aHome = customFdr(teamA.id, teamB.id, true).toFixed(1);
+  const bHome = customFdr(teamB.id, teamA.id, true).toFixed(1);
+
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">This season's meetings (real data)</div>
+      <div class="fixture-list">${meetingsHtml}</div>
+      <p class="foot-note" style="margin-top:8px">Custom FDR if hosting: ${teamA.name} ${aHome} · ${teamB.name} ${bHome} (your weights from the Rankings tab).</p>
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="card" style="flex:1;min-width:280px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamA.id, 20)}${teamA.name} — key players (real data)</div>
+        ${topPlayersHtml(teamA, teamB)}
+      </div>
+      <div class="card" style="flex:1;min-width:280px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamB.id, 20)}${teamB.name} — key players (real data)</div>
+        ${topPlayersHtml(teamB, teamA)}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      ${clubNotesHtml(teamA)}
+      ${clubNotesHtml(teamB)}
+    </div>
+  `;
+
+  body.querySelectorAll("textarea[data-notes-team]").forEach(ta => {
+    ta.onchange = () => {
+      const id = Number(ta.dataset.notesTeam);
+      const field = ta.dataset.notesField;
+      state.managerNotes[id] = state.managerNotes[id] || {};
+      state.managerNotes[id][field] = ta.value;
+      saveManagerNotes();
+    };
+  });
+}
+function setupH2hControls() {
+  document.getElementById("h2hTeamA").onchange = (e) => { state.h2h.teamA = Number(e.target.value); renderH2H(); };
+  document.getElementById("h2hTeamB").onchange = (e) => { state.h2h.teamB = Number(e.target.value); renderH2H(); };
+}
+
 function setupRankingsControls() {
   document.getElementById("resetFdrBtn").onclick = () => {
     state.fdrFormula = { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 };
@@ -2386,7 +2672,7 @@ function setupRankingsControls() {
 }
 
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "fdr", "rankings"];
+const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "fdr", "h2h", "rankings"];
 function switchTab(name) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
