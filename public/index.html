@@ -162,7 +162,7 @@
   .card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 18px; box-shadow: var(--shadow); }
 
   /* fixture ticker */
-  .fdr-ticker { display: flex; gap: 4px; }
+  .fdr-ticker { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
   .fdr-pill {
     font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", monospace;
     color: #0b1310;
@@ -375,6 +375,7 @@
       <button data-tab="shortlist">Shortlist</button>
       <button data-tab="team">My team</button>
       <button data-tab="planner">Planner</button>
+      <button data-tab="table">Table</button>
       <button data-tab="rankings">Rankings</button>
     </nav>
   </div>
@@ -456,24 +457,65 @@
     <div id="plannerBody"></div>
   </section>
 
+  <section id="tab-table" style="display:none">
+    <h1 class="page-title">Premier League table</h1>
+    <p class="page-sub" id="tableNote"></p>
+
+    <div class="toolbar" style="margin-bottom:14px">
+      <select id="tableSourceSelect">
+        <option value="auto">Auto (live once available)</option>
+        <option value="last">2025/26 final table</option>
+        <option value="current">This season (live)</option>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="label-col">#</th>
+            <th class="label-col">Club</th>
+            <th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>
+          </tr>
+        </thead>
+        <tbody id="plTableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
   <section id="tab-rankings" style="display:none">
     <h1 class="page-title">Rankings</h1>
-    <p class="page-sub">Fixture difficulty computed from each club's own attack/defence/overall strength ratings (not just FPL's built-in 1-5 number) — adjust the weights to match how you think about difficulty. Club rankings blend squad quality with those same strength ratings.</p>
+    <p class="page-sub">Fixture difficulty and club rankings, computed from each club's attack/defence/overall strength — FPL's own longer-run ratings by default, or your own opinion if you override a club below.</p>
 
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Fixture difficulty formula</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Affects the FDR pills shown next to fixtures elsewhere on the site (Player stats detail panel, squad builder) — not the club rankings list below, which has its own weights.</p>
       <div class="formula-panel" id="fdrFormulaPanel"></div>
       <button class="dir-btn" id="resetFdrBtn" style="margin-top:8px">Reset to default</button>
       <div class="foot-note" style="margin-top:10px">
-        Formula: blend of the opponent's attack / defence / overall strength (their away ratings when you're at home, home ratings when you're away), plus a small home-advantage adjustment. All weights are yours to change — this recomputes every fixture pill on the site immediately.
+        Formula: blend of the opponent's attack / defence / overall strength (their away ratings when you're at home, home ratings when you're away), plus a small home-advantage adjustment. Attack weight = how much the opponent's attacking threat counts against you; defence weight = how much their defensive solidity counts; overall weight = their general quality on top of that; home advantage = a fixed discount applied when you're playing at home. All weights are yours to change — this recomputes every fixture pill on the site immediately.
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Club rankings</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">This list (below) is controlled by these weights, not the fixture-difficulty ones above. Squad weight = how much this season's actual squad (points once underway, price before that) counts; strength weight = how much FPL's longer-run club strength rating counts.</p>
       <div class="formula-panel" id="rankFormulaPanel" style="margin-bottom:14px"></div>
       <div id="rankingsList"></div>
       <p class="foot-note" id="rankingsNote"></p>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Edit club strength</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        Disagree with FPL's rating for a club? Nudge it here — this shifts that club's strength up or down everywhere on the site (fixture difficulty, club rankings, top-6/bottom-6 filters that fall back to strength). 0 = use FPL's own rating unchanged.
+      </p>
+      <div id="teamOverrideList"></div>
+    </div>
+
+    <div class="card">
+      <div class="detail-block-title">2026/27 fixture list</div>
+      <div id="fixtureListBody"></div>
     </div>
   </section>
 </main>
@@ -548,10 +590,24 @@ function playerAvatarHtml(player, size) {
   const s = size || 34;
   const url = player ? playerPhotoUrl(player) : null;
   const initials = player ? player.webName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() : "?";
-  const fallback = `<div class="kit-fallback" style="width:${s}px;height:${s}px">${kitSvg(player?.teamId, s)}<span>${initials}</span></div>`;
-  if (!url) return fallback;
+  if (!url) return `<div class="kit-fallback" style="width:${s}px;height:${s}px">${kitSvg(player?.teamId, s)}<span>${initials}</span></div>`;
   return `<img src="${url}" width="${s}" height="${Math.round(s * 1.27)}" class="player-photo" style="width:${s}px;height:${Math.round(s * 1.27)}px"
-    onerror="this.outerHTML = ${JSON.stringify(fallback)}" />`;
+    data-fallback-team="${player?.teamId ?? ""}" data-fallback-initials="${initials}" data-fallback-size="${s}"
+    onerror="imgFallback(this)" />`;
+}
+// Called from the onerror attribute above when a player photo 404s. Builds
+// the fallback DOM directly in JS instead of injecting an HTML string into
+// an attribute, which was corrupting the page's HTML (visible "" /> and \n
+// text, misaligned rows) whenever a photo failed to load.
+function imgFallback(img) {
+  const s = Number(img.dataset.fallbackSize) || 34;
+  const teamId = img.dataset.fallbackTeam ? Number(img.dataset.fallbackTeam) : undefined;
+  const wrapper = document.createElement("div");
+  wrapper.className = "kit-fallback";
+  wrapper.style.width = s + "px";
+  wrapper.style.height = s + "px";
+  wrapper.innerHTML = kitSvg(teamId, s) + `<span>${img.dataset.fallbackInitials || "?"}</span>`;
+  img.replaceWith(wrapper);
 }
 
 const SORT_OPTIONS = [
@@ -632,7 +688,9 @@ let state = {
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" },
   fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
+  teamOverrides: {},
   strengthRanges: null,
+  allFixtures: [], tableSource: "auto",
 };
 
 // ---------- data fetching ----------
@@ -746,10 +804,11 @@ async function loadData() {
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
-    computeTeamTiers();
 
-    const fixtures = await fplGet("/fixtures/?future=1");
+    const fixtures = await fplGet("/fixtures/");
+    state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
+    computeTeamTiers();
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
@@ -760,6 +819,7 @@ async function loadData() {
     renderStats();
     renderShortlist();
     renderPlanner();
+    renderPlTable();
     renderRankings();
   } catch (err) {
     setBanner(
@@ -795,34 +855,108 @@ function precomputeStrengthRanges() {
   const range = (arr) => ({ min: Math.min(...arr), max: Math.max(...arr) });
   state.strengthRanges = { overall: range(overall), attack: range(attack), defence: range(defence) };
 }
+// 2025/26 Premier League final table, for ranking "top 6 / bottom 6" etc.
+// before this season has any results of its own. Keyed by FPL's 3-letter
+// short_name so it lines up with whichever teams are actually in the
+// league this season (relegated clubs just won't match anything and drop
+// out automatically; newly promoted clubs have no historical row and are
+// treated as mid-table until real results come in).
+const PL_TABLE_LAST_SEASON = [
+  { short: "ARS", played: 38, won: 26, drawn: 7, lost: 5, gd: 44, points: 85 },
+  { short: "MCI", played: 38, won: 23, drawn: 9, lost: 6, gd: 42, points: 78 },
+  { short: "MUN", played: 38, won: 20, drawn: 11, lost: 7, gd: 19, points: 71 },
+  { short: "AVL", played: 38, won: 19, drawn: 8, lost: 11, gd: 7, points: 65 },
+  { short: "LIV", played: 38, won: 17, drawn: 9, lost: 12, gd: 10, points: 60 },
+  { short: "BOU", played: 38, won: 13, drawn: 18, lost: 7, gd: 4, points: 57 },
+  { short: "SUN", played: 38, won: 14, drawn: 12, lost: 12, gd: -6, points: 54 },
+  { short: "BHA", played: 38, won: 14, drawn: 11, lost: 13, gd: 6, points: 53 },
+  { short: "BRE", played: 38, won: 14, drawn: 11, lost: 13, gd: 3, points: 53 },
+  { short: "CHE", played: 38, won: 14, drawn: 10, lost: 14, gd: 6, points: 52 },
+  { short: "FUL", played: 38, won: 15, drawn: 7, lost: 16, gd: 4, points: 52 },
+  { short: "NEW", played: 38, won: 14, drawn: 7, lost: 17, gd: -2, points: 49 },
+  { short: "EVE", played: 38, won: 13, drawn: 10, lost: 15, gd: -3, points: 49 },
+  { short: "LEE", played: 38, won: 11, drawn: 14, lost: 13, gd: -7, points: 47 },
+  { short: "CRY", played: 38, won: 11, drawn: 12, lost: 15, gd: -10, points: 45 },
+  { short: "NFO", played: 38, won: 11, drawn: 11, lost: 16, gd: -3, points: 44 },
+  { short: "TOT", played: 38, won: 10, drawn: 11, lost: 17, gd: -9, points: 41 },
+  { short: "WHU", played: 38, won: 10, drawn: 9, lost: 19, gd: -19, points: 39 },
+  { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gd: -37, points: 22 },
+  { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gd: -41, points: 20 },
+];
+
+// Builds a live table from this season's finished fixtures. Returns null
+// if no matches have been played yet (e.g. preseason).
+function computeLiveTable(fixtures) {
+  const finished = (fixtures || []).filter(f => f.finished && f.team_h_score != null);
+  if (!finished.length) return null;
+  const rows = {};
+  for (const t of state.teams) rows[t.id] = { teamId: t.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
+  for (const f of finished) {
+    const h = rows[f.team_h], a = rows[f.team_a];
+    if (!h || !a) continue;
+    h.played++; a.played++;
+    h.gf += f.team_h_score; h.ga += f.team_a_score;
+    a.gf += f.team_a_score; a.ga += f.team_h_score;
+    if (f.team_h_score > f.team_a_score) { h.won++; h.points += 3; a.lost++; }
+    else if (f.team_h_score < f.team_a_score) { a.won++; a.points += 3; h.lost++; }
+    else { h.drawn++; a.drawn++; h.points++; a.points++; }
+  }
+  return Object.values(rows).map(r => ({ ...r, gd: r.gf - r.ga }))
+    .sort((a, b) => b.points - a.points || b.gd - a.gd || b.gf - a.gf);
+}
+
+// Resolves which table to actually use: an explicit user choice, or
+// "auto" — live table if any matches have been played this season,
+// otherwise falling back to last season's final table.
+function resolveActiveTable() {
+  const live = computeLiveTable(state.allFixtures);
+  if (state.tableSource === "current") return { rows: live || [], isLive: true, empty: !live };
+  if (state.tableSource === "last") return { rows: lastSeasonRows(), isLive: false, empty: false };
+  return live ? { rows: live, isLive: true, empty: false } : { rows: lastSeasonRows(), isLive: false, empty: false };
+}
+function lastSeasonRows() {
+  const byShort = Object.fromEntries(state.teams.map(t => [t.short_name, t]));
+  return PL_TABLE_LAST_SEASON
+    .filter(r => byShort[r.short])
+    .map(r => ({ teamId: byShort[r.short].id, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gd: r.gd, gf: null, ga: null, points: r.points }));
+}
+
 function toScale1to5(value, range) {
   if (!range || range.max === range.min) return 3;
   return 1 + 4 * (value - range.min) / (range.max - range.min);
 }
-// Ranks teams best-to-worst by average overall strength, for the "vs top 6
-// / bottom 6 / top 10 / bottom 10" fixture filter. There's no live league
-// table to rank by until matches are actually played (e.g. in preseason),
-// so this strength-based ranking is the best available stand-in and is
-// recomputed the moment real fixture/strength data loads.
+// Ranks teams best-to-worst by real league position (live table this
+// season if any matches are played, else last season's final table) for
+// the "vs top 6 / bottom 6 / top 10 / bottom 10" fixture filter. Teams
+// with no table row at all (e.g. freshly promoted, before any results)
+// are placed mid-table by default rather than excluded.
 function computeTeamTiers() {
-  const ranked = [...state.teams].sort((a, b) =>
-    ((b.strength_overall_home + b.strength_overall_away) - (a.strength_overall_home + a.strength_overall_away))
-  );
-  const n = ranked.length;
+  const table = resolveActiveTable();
+  const ranked = [...table.rows];
+  const seen = new Set(ranked.map(r => r.teamId));
+  const n = state.teams.length;
+  const midRank = Math.ceil(n / 2);
   state.teamTier = {};
-  ranked.forEach((t, i) => {
-    state.teamTier[t.id] = { rank: i + 1, top6: i < 6, bottom6: i >= n - 6, top10: i < 10, bottom10: i >= n - 10 };
+  ranked.forEach((r, i) => {
+    state.teamTier[r.teamId] = { rank: i + 1, top6: i < 6, bottom6: i >= ranked.length - 6, top10: i < 10, bottom10: i >= ranked.length - 10 };
   });
+  for (const t of state.teams) {
+    if (!seen.has(t.id)) {
+      state.teamTier[t.id] = { rank: midRank, top6: false, bottom6: false, top10: midRank <= 10, bottom10: midRank > n - 10 };
+    }
+  }
 }
 // Higher = harder fixture. Uses the opponent's relevant strength stats
 // (their away numbers when you're home, home numbers when you're away),
 // blended by user-editable weights, with a small home-advantage nudge.
+function teamAdj(teamId) { return (state.teamOverrides && state.teamOverrides[teamId]) || 0; }
 function customFdr(teamId, oppId, isHome) {
   const opp = state.teamsById[oppId];
   if (!opp || !state.strengthRanges) return 3;
-  const oppOverall = isHome ? opp.strength_overall_away : opp.strength_overall_home;
-  const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
-  const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
+  const adj = teamAdj(oppId);
+  const oppOverall = (isHome ? opp.strength_overall_away : opp.strength_overall_home) + adj;
+  const oppAttack = (isHome ? opp.strength_attack_away : opp.strength_attack_home) + adj;
+  const oppDefence = (isHome ? opp.strength_defence_away : opp.strength_defence_home) + adj;
   const f = state.fdrFormula;
   const wSum = f.attackWeight + f.defenceWeight + f.overallWeight || 1;
   let score = (
@@ -1935,9 +2069,14 @@ async function loadFormulasFromStorage() {
     const raw = await persistGet("rankFormula");
     if (raw) state.rankFormula = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("teamOverrides");
+    if (raw) state.teamOverrides = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
+function saveTeamOverrides() { persistSet("teamOverrides", JSON.stringify(state.teamOverrides)); }
 
 const FDR_FORMULA_FIELDS = [
   { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1 },
@@ -1984,7 +2123,7 @@ function computeClubRankings() {
     const squadQuality = seasonUnderway
       ? top11.reduce((s, p) => s + p.totalPoints, 0)
       : top11.reduce((s, p) => s + p.nowCost, 0);
-    const teamStrength = (t.strength_overall_home + t.strength_overall_away) / 2;
+    const teamStrength = (t.strength_overall_home + t.strength_overall_away) / 2 + teamAdj(t.id);
     return { team: t, squadQuality, teamStrength };
   });
 
@@ -2003,20 +2142,10 @@ function computeClubRankings() {
   }).sort((a, b) => b.composite - a.composite);
 }
 
-function renderRankings() {
-  if (!state.teams.length) return;
-  renderFormulaPanel(document.getElementById("fdrFormulaPanel"), state.fdrFormula, FDR_FORMULA_FIELDS, () => {
-    saveFdrFormula();
-    renderStats(); // refreshes any visible fixture-dependent bits
-  });
-  renderFormulaPanel(document.getElementById("rankFormulaPanel"), state.rankFormula, RANK_FORMULA_FIELDS, () => {
-    saveRankFormula();
-    renderRankings();
-  });
-
+function renderRankingsList() {
   const seasonUnderway = state.players.some(p => p.totalPoints > 0);
   document.getElementById("rankingsNote").textContent = seasonUnderway
-    ? "Squad quality is based on total points so far this season; team strength comes from FPL's own longer-run ratings."
+    ? "Squad quality is based on total points so far this season; team strength comes from FPL's own longer-run ratings (plus any manual edits you've made below)."
     : "No gameweeks have been played yet this season, so squad quality is approximated from squad value (price) rather than actual points — this will sharpen once the season is underway.";
 
   const rankings = computeClubRankings();
@@ -2033,6 +2162,111 @@ function renderRankings() {
   `).join("");
 }
 
+// Builds the two weight-slider panels. Only called once per tab visit —
+// never from a slider's own onChange — because renderFormulaPanel rebuilds
+// the <input type=range> elements from scratch, which would rip the
+// element out from under an in-progress drag and make the slider feel
+// broken/unresponsive.
+function renderFormulaPanels() {
+  renderFormulaPanel(document.getElementById("fdrFormulaPanel"), state.fdrFormula, FDR_FORMULA_FIELDS, () => {
+    saveFdrFormula();
+    renderStats(); // refreshes any visible fixture-dependent bits; doesn't touch this panel or the rankings list
+  });
+  renderFormulaPanel(document.getElementById("rankFormulaPanel"), state.rankFormula, RANK_FORMULA_FIELDS, () => {
+    saveRankFormula();
+    renderRankingsList(); // list only — never rebuilds this panel's own sliders
+  });
+}
+
+function renderRankings() {
+  if (!state.teams.length) return;
+  renderFormulaPanels();
+  renderRankingsList();
+  renderTeamOverrides();
+  renderFixtureList();
+}
+
+// ---------- Premier League table ----------
+function renderPlTable() {
+  if (!state.teams.length) return;
+  const sel = document.getElementById("tableSourceSelect");
+  sel.value = state.tableSource;
+  const table = resolveActiveTable();
+  const note = document.getElementById("tableNote");
+  if (table.empty) {
+    note.textContent = "This season hasn't kicked off yet, so there are no live results — showing last season's final table instead until real fixtures are played.";
+  } else if (table.isLive) {
+    note.textContent = "Live table for the current season, built from finished fixtures.";
+  } else {
+    note.textContent = "2025/26 final table — used as a stand-in for club strength until this season has results of its own. Switch the dropdown to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
+  }
+  const rows = table.empty ? lastSeasonRows() : table.rows;
+  const body = document.getElementById("plTableBody");
+  body.innerHTML = rows.map((r, i) => {
+    const team = state.teamsById[r.teamId];
+    if (!team) return "";
+    return `
+      <tr>
+        <td class="label-col mono">${i + 1}</td>
+        <td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name}</td>
+        <td class="mono">${r.played}</td>
+        <td class="mono">${r.won}</td>
+        <td class="mono">${r.drawn}</td>
+        <td class="mono">${r.lost}</td>
+        <td class="mono">${r.gd > 0 ? "+" : ""}${r.gd}</td>
+        <td class="mono" style="font-weight:700">${r.points}</td>
+      </tr>
+    `;
+  }).join("");
+}
+function setupTableControls() {
+  document.getElementById("tableSourceSelect").onchange = (e) => {
+    state.tableSource = e.target.value;
+    computeTeamTiers(); // tier filter on Player stats depends on this
+    renderPlTable();
+  };
+}
+
+function renderTeamOverrides() {
+  const container = document.getElementById("teamOverrideList");
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  container.innerHTML = sorted.map(t => {
+    const val = teamAdj(t.id);
+    return `
+      <div class="rank-row" data-team="${t.id}">
+        ${kitSvg(t.id, 22)}
+        <div style="width:150px;font-weight:600;font-size:13px">${t.name}</div>
+        <input type="range" min="-30" max="30" step="1" value="${val}" data-team-adj="${t.id}" style="flex:1" />
+        <div class="rank-score" style="width:40px;text-align:right" data-team-val="${t.id}">${val > 0 ? "+" : ""}${val}</div>
+      </div>
+    `;
+  }).join("");
+  container.querySelectorAll("input[type=range]").forEach(input => {
+    input.oninput = () => {
+      const id = Number(input.dataset.teamAdj);
+      const v = Number(input.value);
+      state.teamOverrides[id] = v;
+      container.querySelector(`[data-team-val="${id}"]`).textContent = (v > 0 ? "+" : "") + v;
+      saveTeamOverrides();
+      computeTeamTiers();
+      renderRankingsList();
+      renderStats();
+    };
+  });
+}
+
+function renderFixtureList() {
+  const container = document.getElementById("fixtureListBody");
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  container.innerHTML = sorted.map(t => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)">
+      ${kitSvg(t.id, 22)}
+      <div style="width:150px;font-weight:600;font-size:13px;flex-shrink:0">${t.name}</div>
+      ${fixtureTickerHtml(t.id, 38)}
+    </div>
+  `).join("");
+}
+
 function setupRankingsControls() {
   document.getElementById("resetFdrBtn").onclick = () => {
     state.fdrFormula = { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 };
@@ -2043,7 +2277,7 @@ function setupRankingsControls() {
 }
 
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "shortlist", "team", "planner", "rankings"];
+const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "rankings"];
 function switchTab(name) {
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
@@ -2061,6 +2295,7 @@ function setupTabs() {
 buildToolbarStatics();
 setupTabs();
 setupPlannerControls();
+setupTableControls();
 setupRankingsControls();
 loadData();
 </script>
