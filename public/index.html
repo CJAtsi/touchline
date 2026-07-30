@@ -398,6 +398,19 @@
         £ <input type="number" step="0.5" id="minPrice" placeholder="min" /> – <input type="number" step="0.5" id="maxPrice" placeholder="max" />
       </div>
       <input type="text" id="search" class="search-input" placeholder="Search player…" />
+      <select id="fixtureGw"><option value="ALL">Any gameweek</option></select>
+      <select id="fixtureVenue">
+        <option value="ALL">Home + Away</option>
+        <option value="HOME">Home only</option>
+        <option value="AWAY">Away only</option>
+      </select>
+      <select id="fixtureTier">
+        <option value="ALL">Any opponent</option>
+        <option value="TOP6">Vs top 6</option>
+        <option value="BOTTOM6">Vs bottom 6</option>
+        <option value="TOP10">Vs top 10</option>
+        <option value="BOTTOM10">Vs bottom 10</option>
+      </select>
       <div class="spacer">
         <select id="sortField"></select>
         <button class="dir-btn" id="dirBtn">↓</button>
@@ -529,7 +542,7 @@ function kitSvg(teamId, size) {
 // broken-image icon — this is a best-effort extra, not load-bearing.
 function playerPhotoUrl(player) {
   if (!player || !player.code) return null;
-  return `https://resources.premierleague.com/premierleague26/photos/players/110x140/${player.code}.png`;
+  return `https://resources.premierleague.com/premierleague25/photos/players/110x140/${player.code}.png`;
 }
 function playerAvatarHtml(player, size) {
   const s = size || 34;
@@ -612,7 +625,7 @@ function activeColumns() { return FIXED_COLUMNS.concat(STAT_THEMES[state.statsTh
 let state = {
   teams: [], players: [], teamsById: {}, events: [], fixturesByTeam: {},
   shortlist: [], expandedId: null,
-  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc" },
+  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc", gw: "ALL", venue: "ALL", tier: "ALL" },
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
@@ -733,6 +746,7 @@ async function loadData() {
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
+    computeTeamTiers();
 
     const fixtures = await fplGet("/fixtures/?future=1");
     buildFixtureTicker(fixtures);
@@ -784,6 +798,21 @@ function precomputeStrengthRanges() {
 function toScale1to5(value, range) {
   if (!range || range.max === range.min) return 3;
   return 1 + 4 * (value - range.min) / (range.max - range.min);
+}
+// Ranks teams best-to-worst by average overall strength, for the "vs top 6
+// / bottom 6 / top 10 / bottom 10" fixture filter. There's no live league
+// table to rank by until matches are actually played (e.g. in preseason),
+// so this strength-based ranking is the best available stand-in and is
+// recomputed the moment real fixture/strength data loads.
+function computeTeamTiers() {
+  const ranked = [...state.teams].sort((a, b) =>
+    ((b.strength_overall_home + b.strength_overall_away) - (a.strength_overall_home + a.strength_overall_away))
+  );
+  const n = ranked.length;
+  state.teamTier = {};
+  ranked.forEach((t, i) => {
+    state.teamTier[t.id] = { rank: i + 1, top6: i < 6, bottom6: i >= n - 6, top10: i < 10, bottom10: i >= n - 10 };
+  });
 }
 // Higher = harder fixture. Uses the opponent's relevant strength stats
 // (their away numbers when you're home, home numbers when you're away),
@@ -848,6 +877,26 @@ function toggleShortlist(id) {
 }
 
 // ---------- filtering / sorting ----------
+function playerHasMatchingFixture(p) {
+  const f = state.filters;
+  if (f.gw === "ALL" && f.venue === "ALL" && f.tier === "ALL") return true;
+  const fixtures = state.fixturesByTeam[p.teamId] || [];
+  const candidates = f.gw === "ALL" ? fixtures : fixtures.filter(fx => String(fx.event) === f.gw);
+  return candidates.some(fx => {
+    if (f.venue === "HOME" && !fx.isHome) return false;
+    if (f.venue === "AWAY" && fx.isHome) return false;
+    if (f.tier !== "ALL") {
+      const tier = state.teamTier[fx.oppId];
+      if (!tier) return false;
+      if (f.tier === "TOP6" && !tier.top6) return false;
+      if (f.tier === "BOTTOM6" && !tier.bottom6) return false;
+      if (f.tier === "TOP10" && !tier.top10) return false;
+      if (f.tier === "BOTTOM10" && !tier.bottom10) return false;
+    }
+    return true;
+  });
+}
+
 function getFiltered() {
   const f = state.filters;
   let list = state.players.filter(p => {
@@ -859,6 +908,7 @@ function getFiltered() {
       const s = f.search.toLowerCase();
       if (!p.webName.toLowerCase().includes(s) && !p.secondName.toLowerCase().includes(s) && !p.firstName.toLowerCase().includes(s)) return false;
     }
+    if (!playerHasMatchingFixture(p)) return false;
     return true;
   });
   list.sort((a, b) => (a[f.sort] - b[f.sort]) * (f.dir === "asc" ? 1 : -1));
@@ -900,6 +950,12 @@ function populateTeamSelect() {
     opt.value = t.id; opt.textContent = t.name;
     sel.appendChild(opt);
   }
+  const gwSel = document.getElementById("fixtureGw");
+  for (const e of state.events) {
+    const opt = document.createElement("option");
+    opt.value = e.id; opt.textContent = e.name.replace("Gameweek ", "GW");
+    gwSel.appendChild(opt);
+  }
 }
 
 function buildToolbarStatics() {
@@ -926,6 +982,9 @@ function buildToolbarStatics() {
     renderStats();
   };
   document.getElementById("teamSelect").onchange = (e) => { state.filters.team = e.target.value; renderStats(); };
+  document.getElementById("fixtureGw").onchange = (e) => { state.filters.gw = e.target.value; renderStats(); };
+  document.getElementById("fixtureVenue").onchange = (e) => { state.filters.venue = e.target.value; renderStats(); };
+  document.getElementById("fixtureTier").onchange = (e) => { state.filters.tier = e.target.value; renderStats(); };
 
   let searchTimer;
   document.getElementById("search").oninput = (e) => {
@@ -955,7 +1014,10 @@ function buildToolbarStatics() {
   });
 
   const headRow = document.getElementById("headRow");
-  [["Player", "label-col"], ["Team", "label-col"], ["Pos", "label-col"], ["", "label-col"]].forEach(([label, cls]) => {
+  [
+    ["Player", "label-col"], ["Team", "label-col"], ["Pos", "label-col"], ["", "label-col"],
+    ["Total pts", ""], ["Form", ""], ["Next GW", ""], ["Price", ""],
+  ].forEach(([label, cls]) => {
     const th = document.createElement("th");
     th.className = cls; th.textContent = label;
     headRow.appendChild(th);
@@ -995,7 +1057,7 @@ function fixtureTickerHtml(teamId, count) {
 function renderStats() {
   const list = getFiltered();
   const cols = activeColumns();
-  const totalCols = 4 + cols.length;
+  const totalCols = 8 + cols.length;
   document.querySelectorAll("#headRow th[data-key]").forEach(th => {
     th.classList.toggle("sorted", th.dataset.key === state.filters.sort);
   });
