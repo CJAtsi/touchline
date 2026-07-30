@@ -334,6 +334,9 @@
     font-size: 10px; font-weight: 800; line-height: 1;
     background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
   }
+  .pitch-slot.placeholder-slot { opacity: 0.55; }
+  .pitch-slot.placeholder-slot:hover { opacity: 0.9; }
+  .pitch-slot.placeholder-slot .kit-fallback { outline: 1px dashed rgba(255,255,255,0.6); outline-offset: 2px; border-radius: 6px; }
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
     border-radius: 10px; background: var(--panel-2); flex-wrap: wrap;
@@ -1756,6 +1759,10 @@ function renderSquadBuilder(draft) {
           <span class="builder-pill">${total} / 15 players</span>
           <span class="builder-pill ${remaining < 0 ? "over" : ""}">${fmtPrice(remaining)} in the bank</span>
           <select id="builderGwSelect" style="margin-left:8px"></select>
+          <div class="view-toggle" style="margin-left:0">
+            <button id="builderGwPrev" title="Previous gameweek">←</button>
+            <button id="builderGwNext" title="Next gameweek">→</button>
+          </div>
           <div class="view-toggle">
             <button data-view="pitch" class="${state.builderView === "pitch" ? "active" : ""}">Pitch</button>
             <button data-view="list" class="${state.builderView === "list" ? "active" : ""}">List</button>
@@ -1807,6 +1814,16 @@ function renderSquadBuilder(draft) {
   gwSel.innerHTML = state.events.map(e =>
     `<option value="${e.id}" ${e.id === state.builderGwId ? "selected" : ""}>${e.name.replace("Gameweek ", "GW ")}${e.is_current ? " (current)" : ""}</option>`).join("");
   gwSel.onchange = () => { state.builderGwId = Number(gwSel.value); renderBuilderPitch(draft); };
+
+  const gwIdsSorted = state.events.map(e => e.id).sort((a, b) => a - b);
+  document.getElementById("builderGwPrev").onclick = () => {
+    const idx = gwIdsSorted.indexOf(state.builderGwId);
+    if (idx > 0) { state.builderGwId = gwIdsSorted[idx - 1]; renderSquadBuilder(draft); }
+  };
+  document.getElementById("builderGwNext").onclick = () => {
+    const idx = gwIdsSorted.indexOf(state.builderGwId);
+    if (idx !== -1 && idx < gwIdsSorted.length - 1) { state.builderGwId = gwIdsSorted[idx + 1]; renderSquadBuilder(draft); }
+  };
 
   document.getElementById("builderAutoPick").onclick = () => {
     autoPickSquad(draft);
@@ -1924,13 +1941,22 @@ function attemptXiSwap(draft, currentStartingIds, outId, inId) {
 // Click a player to select it, then click another to swap them between
 // starting XI and bench (rule-validated), or use the action bar to
 // captain or remove the selected player.
+// Fixed 3-4-3 display formation used to lay out placeholder ("Trialist")
+// slots while a squad is still being built — 11 starters + 4 bench,
+// matching FPL's own default squad-builder layout. Once all 15 quota
+// slots for a position are filled, real players slot in the same way;
+// the dynamic strongest-XI logic in getBuilderResult takes back over
+// once the squad is complete and legal.
+const DISPLAY_FORMATION = {
+  GK: { start: 1, bench: 1 },
+  DEF: { start: 3, bench: 2 },
+  MID: { start: 4, bench: 1 },
+  FWD: { start: 3, bench: 0 },
+};
+
 function renderBuilderPitch(draft) {
   const area = document.getElementById("builderPitchArea");
   if (!area) return;
-  if (!draft.squad.length) {
-    area.innerHTML = `<div class="empty-state" style="padding:40px 20px">Add players from the list to build your squad — the pitch fills in as you go.</div>`;
-    return;
-  }
   if (state.builderView === "list") {
     const posLabels = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
     let html = '<div class="squad-list-view">';
@@ -1956,13 +1982,47 @@ function renderBuilderPitch(draft) {
     state.builderGwId = defaultEvent ? defaultEvent.id : (state.events[0]?.id || 1);
   }
   const gwId = state.builderGwId;
-  const result = getBuilderResult(draft, gwId);
-  const startingIds = result.starting.map(x => x.p.id);
-  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
-  for (const x of result.starting) byPos[x.p.position].push(x);
+  const squadComplete = draft.squad.length === 15;
   const selectedId = state.builderSelectedId;
+  let byPos, benchEntries, startingIds, captainId;
 
-  function slotHtml(x, isCaptainSlot) {
+  if (squadComplete) {
+    const result = getBuilderResult(draft, gwId);
+    startingIds = result.starting.map(x => x.p.id);
+    captainId = result.captain?.id ?? null;
+    byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+    for (const x of result.starting) byPos[x.p.position].push(x);
+    benchEntries = result.bench.map(x => ({ x, pos: x.p.position }));
+  } else {
+    // Squad still being built: lay real players into a fixed 3-4-3
+    // template alongside placeholder ("Trialist") slots for whatever's
+    // left to pick — mirrors FPL's own default squad-builder view.
+    startingIds = [];
+    captainId = null;
+    byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+    benchEntries = [];
+    for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+      const players = draft.squad.map(id => state.players.find(p => p.id === id)).filter(p => p && p.position === pos)
+        .map(p => ({ p, proj: projectPoints(p, gwId) }));
+      const { start, bench } = DISPLAY_FORMATION[pos];
+      for (let i = 0; i < start; i++) {
+        const x = players[i] || null;
+        if (x) startingIds.push(x.p.id);
+        byPos[pos].push(x);
+      }
+      for (let i = 0; i < bench; i++) benchEntries.push({ x: players[start + i] || null, pos });
+    }
+  }
+
+  function slotHtml(x, isCaptainSlot, posHint) {
+    if (!x) {
+      return `
+        <div class="pitch-slot placeholder-slot" data-placeholder-pos="${posHint}" title="Click to add a ${posHint}">
+          ${playerAvatarHtml(null, 40)}
+          <div class="name-tag" style="opacity:0.7">Trialist</div>
+        </div>
+      `;
+    }
     const selected = x.p.id === selectedId;
     return `
       <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
@@ -1975,14 +2035,24 @@ function renderBuilderPitch(draft) {
     `;
   }
   const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id)).join("")}</div>`
+    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, !!x && captainId === x.p.id, pos)).join("")}</div>`
   ).join("");
 
   // bench, labelled the way FPL labels substitute priority: goalkeeper
   // sub first, then outfield subs numbered in bench order by position.
   let outfieldIdx = 0;
-  const benchHtml = result.bench.length
-    ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${result.bench.map(x => {
+  const benchHtml = benchEntries.length
+    ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${benchEntries.map(({ x, pos }) => {
+        if (!x) {
+          const label = pos === "GK" ? "GKP" : `${++outfieldIdx}. ${pos}`;
+          return `
+            <div class="pitch-slot placeholder-slot" data-placeholder-pos="${pos}" title="Click to add a ${pos}">
+              <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
+              ${playerAvatarHtml(null, 40)}
+              <div class="name-tag" style="opacity:0.7">Trialist</div>
+            </div>
+          `;
+        }
         const label = x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}`;
         const selected = x.p.id === selectedId;
         return `
@@ -1998,14 +2068,17 @@ function renderBuilderPitch(draft) {
     : "";
 
   const selectedPlayer = selectedId ? state.players.find(p => p.id === selectedId) : null;
+  const remaining = 15 - draft.squad.length;
   const actionBarHtml = selectedPlayer ? `
     <div class="chip-btn-row" style="margin-bottom:10px">
       <span style="align-self:center;font-size:12px;color:var(--ink-dim)">${selectedPlayer.webName} selected —</span>
-      ${startingIds.includes(selectedId) ? `<button class="chip-btn" id="actCaptain">Make captain</button>` : `<button class="chip-btn" id="actStart">Move to starting XI</button>`}
+      ${squadComplete ? (startingIds.includes(selectedId) ? `<button class="chip-btn" id="actCaptain">Make captain</button>` : `<button class="chip-btn" id="actStart">Move to starting XI</button>`) : ""}
       <button class="chip-btn" id="actRemove">Remove from squad</button>
       <button class="chip-btn" id="actDeselect">Cancel</button>
     </div>
-  ` : `<p class="foot-note" style="margin-bottom:10px">Click a player to select them, then click another to swap them between the starting XI and bench — or use the menu that appears to captain or remove them.</p>`;
+  ` : squadComplete
+    ? `<p class="foot-note" style="margin-bottom:10px">Click a player to select them, then click another to swap them between the starting XI and bench — or use the menu that appears to captain or remove them.</p>`
+    : `<p class="foot-note" style="margin-bottom:10px">Click a "Trialist" slot to add a player for that position (${remaining} more to pick), or click a player already in your squad to remove them.</p>`;
 
   area.innerHTML = `${actionBarHtml}<div class="pitch">${pitchRows}</div>${benchHtml}`;
 
@@ -2019,7 +2092,7 @@ function renderBuilderPitch(draft) {
     const startBtn = document.getElementById("actStart");
     if (startBtn) startBtn.onclick = () => {
       let done = false;
-      for (const out of [...result.starting].sort((a, b) => a.proj - b.proj)) {
+      for (const out of [...(byPos.GK.concat(byPos.DEF, byPos.MID, byPos.FWD).filter(Boolean))].sort((a, b) => a.proj - b.proj)) {
         if (attemptXiSwap(draft, startingIds, out.p.id, selectedId)) { done = true; break; }
       }
       if (!done) alert("Can't move them into the XI — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD).");
@@ -2039,9 +2112,27 @@ function renderBuilderPitch(draft) {
     };
   }
 
+  area.querySelectorAll(".placeholder-slot").forEach(slot => {
+    slot.onclick = () => {
+      const pos = slot.dataset.placeholderPos;
+      state.builderFilters.pos = pos;
+      state.builderSelectedId = null;
+      renderSquadBuilder(draft);
+      const listEl = document.getElementById("builderList");
+      if (listEl) listEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      const searchEl = document.getElementById("builderSearch");
+      if (searchEl) searchEl.focus();
+    };
+  });
+
   area.querySelectorAll(".pitch-slot[data-player]").forEach(slot => {
     slot.onclick = () => {
       const id = Number(slot.dataset.player);
+      if (!squadComplete) {
+        state.builderSelectedId = selectedId === id ? null : id;
+        renderBuilderPitch(draft);
+        return;
+      }
       if (selectedId === null) {
         state.builderSelectedId = id;
         renderBuilderPitch(draft);
