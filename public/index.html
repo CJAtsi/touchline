@@ -331,8 +331,8 @@
   }
   .pitch-slot .pts-tag { font-size: 9.5px; color: rgba(255,255,255,0.85); font-family: "JetBrains Mono", monospace; }
   .pitch-slot .cap-mark {
-    position: absolute; margin-top: -38px; margin-left: 26px; font-size: 10px; font-weight: 800;
-    background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 0 4px;
+    font-size: 10px; font-weight: 800; line-height: 1;
+    background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
   }
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
@@ -1280,6 +1280,21 @@ function fixtureTickerHtml(teamId, count) {
   }).join("") + '</div>';
 }
 
+// Single-gameweek fixture display for the Planner pitch — shows only the
+// selected GW's fixture(s) for a team (none if blank, two if a double),
+// rather than the multi-GW-ahead ticker fixtureTickerHtml uses elsewhere.
+function gwFixtureHtml(teamId, gwId) {
+  const fx = (state.fixturesByTeam[teamId] || []).filter(f => f.event === gwId);
+  if (fx.length === 0) return '<div class="fdr-ticker"><span style="color:var(--ink-faint);font-size:10px">No fixture</span></div>';
+  return '<div class="fdr-ticker">' + fx.map(f => {
+    const opp = state.teamsById[f.oppId];
+    const label = (opp ? opp.short_name : "?") + (f.isHome ? "(H)" : "(A)");
+    const score = customFdr(teamId, f.oppId, f.isHome);
+    const rounded = Math.max(1, Math.min(5, Math.round(score)));
+    return `<span class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
+  }).join("") + '</div>';
+}
+
 function renderStats() {
   const list = getFiltered();
   const cols = activeColumns();
@@ -1740,13 +1755,14 @@ function renderSquadBuilder(draft) {
         <div class="builder-topbar">
           <span class="builder-pill">${total} / 15 players</span>
           <span class="builder-pill ${remaining < 0 ? "over" : ""}">${fmtPrice(remaining)} in the bank</span>
+          <select id="builderGwSelect" style="margin-left:8px"></select>
           <div class="view-toggle">
             <button data-view="pitch" class="${state.builderView === "pitch" ? "active" : ""}">Pitch</button>
             <button data-view="list" class="${state.builderView === "list" ? "active" : ""}">List</button>
           </div>
         </div>
         <div id="builderPitchArea"></div>
-        <p class="foot-note" style="margin-top:10px">Click a starting player on the pitch to make them captain for Gameweek 1. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
+        <p class="foot-note" style="margin-top:10px">Step through gameweeks with the dropdown above to see each one's fixture and lineup. Click a starting player on the pitch to make them captain for that gameweek. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
         <div class="builder-actions">
           <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
           <button class="btn-secondary" id="builderResetSquad">Reset</button>
@@ -1782,6 +1798,15 @@ function renderSquadBuilder(draft) {
   document.querySelectorAll(".view-toggle button").forEach(btn => {
     btn.onclick = () => { state.builderView = btn.dataset.view; renderSquadBuilder(draft); };
   });
+
+  const gwSel = document.getElementById("builderGwSelect");
+  if (state.builderGwId == null) {
+    const defaultEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
+    state.builderGwId = defaultEvent ? defaultEvent.id : (state.events[0]?.id || 1);
+  }
+  gwSel.innerHTML = state.events.map(e =>
+    `<option value="${e.id}" ${e.id === state.builderGwId ? "selected" : ""}>${e.name.replace("Gameweek ", "GW ")}${e.is_current ? " (current)" : ""}</option>`).join("");
+  gwSel.onchange = () => { state.builderGwId = Number(gwSel.value); renderBuilderPitch(draft); };
 
   document.getElementById("builderAutoPick").onclick = () => {
     autoPickSquad(draft);
@@ -1926,8 +1951,11 @@ function renderBuilderPitch(draft) {
     area.innerHTML = html;
     return;
   }
-  const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
-  const gwId = nextEvent ? nextEvent.id : (state.events[0]?.id || 1);
+  if (state.builderGwId == null) {
+    const defaultEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
+    state.builderGwId = defaultEvent ? defaultEvent.id : (state.events[0]?.id || 1);
+  }
+  const gwId = state.builderGwId;
   const result = getBuilderResult(draft, gwId);
   const startingIds = result.starting.map(x => x.p.id);
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
@@ -1942,7 +1970,7 @@ function renderBuilderPitch(draft) {
         ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
-        ${fixtureTickerHtml(x.p.teamId, 2)}
+        ${gwFixtureHtml(x.p.teamId, gwId)}
       </div>
     `;
   }
@@ -1963,7 +1991,7 @@ function renderBuilderPitch(draft) {
             ${playerAvatarHtml(x.p, 40)}
             <div class="name-tag">${x.p.webName}</div>
             <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
-            ${fixtureTickerHtml(x.p.teamId, 2)}
+            ${gwFixtureHtml(x.p.teamId, gwId)}
           </div>
         `;
       }).join("")}</div>`
