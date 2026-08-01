@@ -313,9 +313,12 @@
 
   /* pitch formation view */
   .pitch {
-    background: linear-gradient(180deg, #2f7d4f, #256b41);
+    background-color: #2f7d4f;
     background-image:
-      repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 40px, transparent 40px, transparent 80px);
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 40px, transparent 40px, transparent 80px),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 640' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='624'/%3E%3Cline x1='8' y1='320' x2='392' y2='320'/%3E%3Ccircle cx='200' cy='320' r='55'/%3E%3Ccircle cx='200' cy='320' r='3' fill='rgba(255,255,255,0.35)'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3Crect x='90' y='537' width='220' height='95'/%3E%3Crect x='150' y='597' width='100' height='35'/%3E%3Cpath d='M 150 537 A 55 55 0 0 1 250 537' /%3E%3C/g%3E%3C/svg%3E");
+    background-size: 100% 100%, 100% 100%;
+    background-repeat: no-repeat, no-repeat;
     border-radius: 14px; padding: 20px 12px; box-shadow: var(--shadow);
     display: flex; flex-direction: column; gap: 18px; margin-bottom: 14px;
   }
@@ -429,9 +432,11 @@
       <div class="spacer">
         <select id="sortField"></select>
         <button class="dir-btn" id="dirBtn">↓</button>
+        <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
       </div>
     </div>
     <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
+    <div id="scoutPanel" style="display:none;margin-bottom:16px"></div>
 
     <div class="table-wrap">
       <table>
@@ -440,6 +445,7 @@
       </table>
     </div>
     <div class="foot-note" id="rowCount"></div>
+    <div class="foot-note" id="deeperStatsNote" style="display:none;color:var(--warn,#c77);margin-top:4px"></div>
   </section>
 
   <section id="tab-shortlist" style="display:none">
@@ -801,6 +807,7 @@ let state = {
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   rangePoints: null, rangeLabel: null,
+  gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false,
 };
 
 // ---------- data fetching ----------
@@ -831,6 +838,93 @@ async function fetchRangePoints(fromGw, toGw) {
     }
   }
   return totals;
+}
+
+async function fetchGwLive(gw) {
+  if (state.gwLiveCache[gw]) return state.gwLiveCache[gw];
+  const data = await fplGet(`/event/${gw}/live/`);
+  const map = {};
+  for (const el of data.elements || []) map[el.id] = el.stats || {};
+  state.gwLiveCache[gw] = map;
+  return map;
+}
+
+// When a specific gameweek or a home/away venue filter is active on Player
+// stats, this aggregates real per-GW data (from FPL's live endpoint) across
+// just the matching gameweeks, instead of showing season-long totals for a
+// filtered-down set of players. Returns null when neither filter is active
+// (season totals apply as normal), or a map of playerId -> summed raw stats.
+async function computeScopedStats() {
+  const gwFilter = state.filters.gw;
+  const venueFilter = state.filters.venue;
+  if (gwFilter === "ALL" && venueFilter === "ALL") return null;
+  let eventsToFetch;
+  if (gwFilter !== "ALL") {
+    eventsToFetch = [Number(gwFilter)];
+  } else {
+    eventsToFetch = state.events.filter(e => e.finished).map(e => e.id);
+  }
+  if (!eventsToFetch.length) return {};
+  const maps = await Promise.all(eventsToFetch.map(fetchGwLive));
+  const FIELDS = ["minutes", "goals_scored", "assists", "clean_sheets", "goals_conceded", "saves", "bonus", "bps",
+    "influence", "creativity", "threat", "expected_goals", "expected_assists", "expected_goal_involvements",
+    "expected_goals_conceded", "defensive_contribution", "total_points"];
+  const agg = {};
+  eventsToFetch.forEach((gw, i) => {
+    const liveMap = maps[i];
+    for (const p of state.players) {
+      if (gwFilter === "ALL" && venueFilter !== "ALL") {
+        const fx = (state.fixturesByTeam[p.teamId] || []).find(f => f.event === gw);
+        if (!fx) continue;
+        if (venueFilter === "HOME" && !fx.isHome) continue;
+        if (venueFilter === "AWAY" && fx.isHome) continue;
+      }
+      const stats = liveMap[p.id];
+      if (!stats) continue;
+      const bucket = agg[p.id] || (agg[p.id] = Object.fromEntries(FIELDS.map(k => [k, 0])));
+      for (const k of FIELDS) bucket[k] += Number(stats[k] || 0);
+    }
+  });
+  return agg;
+}
+
+// Returns a shallow-cloned player with season-long fields swapped for the
+// active gameweek/venue scope, so every existing column formatter (which
+// just reads p.totalPoints, p.goalsScored, etc.) works unmodified.
+function scopedPlayer(p) {
+  if (!state.scopedStats) return p;
+  const s = state.scopedStats[p.id];
+  const mins = s ? s.minutes : 0;
+  const per90 = (total) => (mins > 0 ? (total / mins) * 90 : 0);
+  return Object.assign({}, p, {
+    minutes: mins,
+    goalsScored: s ? s.goals_scored : 0, assists: s ? s.assists : 0, cleanSheets: s ? s.clean_sheets : 0,
+    goalsConceded: s ? s.goals_conceded : 0, saves: s ? s.saves : 0, bonus: s ? s.bonus : 0, bps: s ? s.bps : 0,
+    influence: s ? s.influence : 0, creativity: s ? s.creativity : 0, threat: s ? s.threat : 0,
+    expectedGoals: s ? s.expected_goals : 0, expectedAssists: s ? s.expected_assists : 0,
+    expectedGoalInvolvements: s ? s.expected_goal_involvements : 0, expectedGoalsConceded: s ? s.expected_goals_conceded : 0,
+    defensiveContribution: s ? s.defensive_contribution : 0, totalPoints: s ? s.total_points : 0,
+    ppm: s && p.nowCost > 0 ? s.total_points / (p.nowCost / 10) : 0,
+    xg90: per90(s ? s.expected_goals : 0), xa90: per90(s ? s.expected_assists : 0),
+    xgi90: per90(s ? s.expected_goal_involvements : 0), xgc90: per90(s ? s.expected_goals_conceded : 0),
+    saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
+    goalsConcededPer90: per90(s ? s.goals_conceded : 0),
+  });
+}
+
+async function applyStatsScope() {
+  const needsScope = state.filters.gw !== "ALL" || state.filters.venue !== "ALL";
+  if (!needsScope) { state.scopedStats = null; renderStats(); return; }
+  state.scopedStatsLoading = true;
+  renderStats();
+  try {
+    state.scopedStats = await computeScopedStats();
+  } catch (e) {
+    state.scopedStats = {};
+    console.error("Couldn't load gameweek-scoped stats:", e.message);
+  }
+  state.scopedStatsLoading = false;
+  renderStats();
 }
 
 async function fplGet(path) {
@@ -1003,6 +1097,7 @@ async function loadData() {
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
     await loadFormulasFromStorage();
+    await loadManagerNotes();
     setBanner(null);
     populateTeamSelect();
     renderDash();
@@ -1012,6 +1107,7 @@ async function loadData() {
     renderPlTable();
     renderFdrGrid();
     renderRankings();
+    renderH2H();
   } catch (err) {
     setBanner(
       `Couldn't reach the FPL API through any available route (${err.message}). Free CORS proxies are occasionally down or rate-limited — this is a known limitation of the browser-only version.`,
@@ -1260,7 +1356,10 @@ function getFiltered() {
     if (f.team !== "ALL" && String(p.teamId) !== f.team) return false;
     if (f.minPrice && p.nowCost < Number(f.minPrice) * 10) return false;
     if (f.maxPrice && p.nowCost > Number(f.maxPrice) * 10) return false;
-    if (f.minMinutes && p.minutes < Number(f.minMinutes)) return false;
+    if (f.minMinutes) {
+      const mins = state.scopedStats ? scopedPlayer(p).minutes : p.minutes;
+      if (mins < Number(f.minMinutes)) return false;
+    }
     if (f.search) {
       const s = f.search.toLowerCase();
       if (!p.webName.toLowerCase().includes(s) && !p.secondName.toLowerCase().includes(s) && !p.firstName.toLowerCase().includes(s)) return false;
@@ -1268,7 +1367,11 @@ function getFiltered() {
     if (!playerHasMatchingFixture(p)) return false;
     return true;
   });
-  list.sort((a, b) => (a[f.sort] - b[f.sort]) * (f.dir === "asc" ? 1 : -1));
+  list.sort((a, b) => {
+    const av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
+    const bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
+    return ((av ?? 0) - (bv ?? 0)) * (f.dir === "asc" ? 1 : -1);
+  });
   return list.slice(0, 200);
 }
 
@@ -1339,8 +1442,8 @@ function buildToolbarStatics() {
     renderStats();
   };
   document.getElementById("teamSelect").onchange = (e) => { state.filters.team = e.target.value; renderStats(); };
-  document.getElementById("fixtureGw").onchange = (e) => { state.filters.gw = e.target.value; renderStats(); };
-  document.getElementById("fixtureVenue").onchange = (e) => { state.filters.venue = e.target.value; renderStats(); };
+  document.getElementById("fixtureGw").onchange = (e) => { state.filters.gw = e.target.value; applyStatsScope(); };
+  document.getElementById("fixtureVenue").onchange = (e) => { state.filters.venue = e.target.value; applyStatsScope(); };
   document.getElementById("applyRangeBtn").onclick = async () => {
     const from = Number(document.getElementById("rangeFromGw").value);
     const to = Number(document.getElementById("rangeToGw").value);
@@ -1372,6 +1475,12 @@ function buildToolbarStatics() {
       panel.innerHTML = "Rank 1 = top of the table (hardest opponent), rank " + ranked.length + " = bottom (easiest opponent):<br>" +
         ranked.map(t => `${state.teamTier?.[t.id]?.rank ?? "—"}. ${t.short_name}`).join(" &nbsp; ");
     }
+  };
+
+  document.getElementById("scoutToggle").onclick = () => {
+    const panel = document.getElementById("scoutPanel");
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+    renderScoutPanel();
   };
 
   let minMinTimer;
@@ -1463,6 +1572,48 @@ function gwFixtureHtml(teamId, gwId) {
   }).join("") + '</div>';
 }
 
+// "Players of importance" scouting: ranks attackers/midfielders on a
+// composite of key attacking metrics against others in their own position,
+// so standouts you might not already know surface to the top.
+function scoutMetricsFor() {
+  const metrics = [["xgi90", "xGI/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["threat", "Threat"], ["creativity", "Creativity"]];
+  if (state.players.some(p => p.dsShots != null)) metrics.push(["dsShots", "Shots"]);
+  return metrics;
+}
+function computeScoutList(pos) {
+  const minMinutes = 300;
+  const pool = state.players.filter(p => p.position === pos && p.minutes >= minMinutes);
+  const metrics = scoutMetricsFor();
+  const maxes = {};
+  for (const [key] of metrics) maxes[key] = Math.max(1, ...pool.map(p => Number(p[key]) || 0));
+  return pool.map(p => {
+    const parts = metrics.map(([key]) => (Number(p[key]) || 0) / maxes[key]);
+    return { p, score: parts.reduce((a, b) => a + b, 0) / parts.length };
+  }).sort((a, b) => b.score - a.score).slice(0, 8);
+}
+function renderScoutPanel() {
+  const panel = document.getElementById("scoutPanel");
+  if (panel.style.display === "none") return;
+  const anyData = state.players.some(p => p.minutes >= 300);
+  if (!anyData) {
+    panel.innerHTML = `<div class="card"><p class="foot-note">Not enough minutes played yet this season (need 300+) to scout standouts reliably — check back once a few gameweeks are in.</p></div>`;
+    return;
+  }
+  const metricLabels = scoutMetricsFor().map(([, label]) => label).join(", ");
+  panel.innerHTML = ["FWD", "MID"].map(pos => `
+    <div class="card" style="margin-bottom:12px">
+      <div class="detail-block-title">Standout ${pos === "FWD" ? "forwards" : "midfielders"} — ranked on ${metricLabels} vs others in their position</div>
+      ${computeScoutList(pos).map(({ p, score }) => `
+        <div class="builder-row">
+          ${playerAvatarHtml(p, 28)}
+          <span class="b-name">${p.webName} <span class="b-sub">${state.teamsById[p.teamId]?.short_name || ""}${p.selectedByPercent < 10 ? " · 🔍 under the radar" : ""}</span></span>
+          <span class="b-pts mono" title="Composite score vs position (xGI/90, xG, xA, threat, creativity)">${(score * 100).toFixed(0)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `).join("");
+}
+
 function renderStats() {
   const list = getFiltered();
   const cols = activeColumns();
@@ -1475,7 +1626,8 @@ function renderStats() {
   if (list.length === 0) {
     body.innerHTML = `<tr><td colspan="${totalCols}" class="empty-state">No players match these filters.</td></tr>`;
   } else {
-    for (const p of list) {
+    for (const p0 of list) {
+      const p = scopedPlayer(p0);
       const team = state.teamsById[p.teamId];
       const statusInfo = STATUS_LABEL[p.status];
       const tr = document.createElement("tr");
@@ -1496,14 +1648,14 @@ function renderStats() {
         <td class="label-col"><span class="pos-pill" style="color:${POS_COLOR[p.position]};border:1px solid ${POS_COLOR[p.position]}">${p.position}</span></td>
         <td class="label-col"><button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-id="${p.id}">★</button></td>
         <td class="mono" style="font-weight:700">${p.totalPoints}</td>
-        <td class="mono" style="color:${p.form >= 5 ? "var(--emerald)" : "var(--ink)"}">${p.form.toFixed(1)}</td>
-        <td class="mono" style="color:var(--gold-bright)">${p.epNext.toFixed(1)}</td>
+        <td class="mono" style="color:${p0.form >= 5 ? "var(--emerald)" : "var(--ink)"}">${p0.form.toFixed(1)}</td>
+        <td class="mono" style="color:var(--gold-bright)">${p0.epNext.toFixed(1)}</td>
         <td class="mono" style="color:var(--gold-bright)">${fmtPrice(p.nowCost)}</td>
         ${themeCells}
       `;
       tr.onclick = (e) => {
         if (e.target.classList.contains("star-btn")) return;
-        state.expandedId = state.expandedId === p.id ? null : p.id;
+        state.expandedId = state.expandedId === p0.id ? null : p0.id;
         renderStats();
       };
       body.appendChild(tr);
@@ -1546,7 +1698,28 @@ function renderStats() {
       btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
     });
   }
-  document.getElementById("rowCount").textContent = `Showing ${list.length} player${list.length === 1 ? "" : "s"} (max 200) · click a row to expand, a column header to sort · theme: ${STAT_THEMES[state.statsTheme].label}`;
+  const scopeLabel = state.filters.gw !== "ALL" ? `GW${state.filters.gw}` : state.filters.venue !== "ALL" ? (state.filters.venue === "HOME" ? "home games only" : "away games only") : null;
+  document.getElementById("rowCount").textContent = state.scopedStatsLoading
+    ? `Loading real per-gameweek data for ${scopeLabel}…`
+    : `Showing ${list.length} player${list.length === 1 ? "" : "s"} (max 200) · click a row to expand, a column header to sort · theme: ${STAT_THEMES[state.statsTheme].label}` +
+      (scopeLabel ? ` · stats scoped to ${scopeLabel} (real per-GW data, not season totals)` : "");
+
+  const dsNote = document.getElementById("deeperStatsNote");
+  if (state.statsTheme === "creativity" || state.statsTheme === "cbit") {
+    const anyMatched = state.players.some(p => p.dsShots != null || p.dsTackles != null);
+    if (!anyMatched) {
+      const diag = state.diagnostics.find(d => d.path === "/deeperstats/all");
+      dsNote.style.display = "block";
+      dsNote.textContent = diag && !diag.ok
+        ? `Couldn't load this from your Worker (${diag.error}). Make sure touchline-proxy.js (with the /deeperstats/ route) is deployed to your Worker, then reload.`
+        : `No players matched yet — this comes from your Worker's Understat/FBref scrape, which needs touchline-proxy.js deployed with the /deeperstats/ route. Reload to retry.`;
+    } else {
+      dsNote.style.display = "none";
+    }
+  } else {
+    dsNote.style.display = "none";
+  }
+  renderScoutPanel();
 }
 
 // ---------- rendering: shortlist ----------
@@ -3120,6 +3293,7 @@ setupPlannerControls();
 setupTableControls();
 setupFdrControls();
 setupRankingsControls();
+setupH2hControls();
 loadData();
 </script>
 </body>
