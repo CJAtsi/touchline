@@ -316,11 +316,11 @@
     background-color: #2f7d4f;
     background-image:
       repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 40px, transparent 40px, transparent 80px),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 640' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='624'/%3E%3Cline x1='8' y1='320' x2='392' y2='320'/%3E%3Ccircle cx='200' cy='320' r='55'/%3E%3Ccircle cx='200' cy='320' r='3' fill='rgba(255,255,255,0.35)'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3Crect x='90' y='537' width='220' height='95'/%3E%3Crect x='150' y='597' width='100' height='35'/%3E%3Cpath d='M 150 537 A 55 55 0 0 1 250 537' /%3E%3C/g%3E%3C/svg%3E");
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 340' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='324'/%3E%3Ccircle cx='200' cy='332' r='55'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3C/g%3E%3C/svg%3E");
     background-size: 100% 100%, 100% 100%;
     background-repeat: no-repeat, no-repeat;
-    border-radius: 14px; padding: 20px 12px; box-shadow: var(--shadow);
-    display: flex; flex-direction: column; gap: 18px; margin-bottom: 14px;
+    border-radius: 14px; padding: 18px 12px 14px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px;
   }
   .pitch-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .pitch-slot {
@@ -340,6 +340,15 @@
   .pitch-slot.placeholder-slot { opacity: 0.55; }
   .pitch-slot.placeholder-slot:hover { opacity: 0.9; }
   .pitch-slot.placeholder-slot .kit-fallback { outline: 1px dashed rgba(255,255,255,0.6); outline-offset: 2px; border-radius: 6px; }
+  .pitch-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(7,15,12,0.6); z-index: 200;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .pitch-modal-card {
+    background: var(--panel, #fff); border-radius: 14px; padding: 18px; width: 100%; max-width: 320px;
+    box-shadow: var(--shadow); max-height: 80vh; overflow-y: auto;
+  }
+  .pitch-modal-card .chip-btn { width: 100%; text-align: left; padding: 10px 12px; }
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
     border-radius: 10px; background: var(--panel-2); flex-wrap: wrap;
@@ -386,6 +395,9 @@
       <button data-tab="h2h">Head-to-head</button>
       <button data-tab="rankings">Rankings</button>
     </nav>
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);white-space:nowrap;margin-left:12px">
+      <input type="checkbox" id="preferKitsToggle" /> Show kits instead of photos
+    </label>
   </div>
 </header>
 
@@ -399,6 +411,7 @@
     <div class="dash-row" id="dashRow"></div>
 
     <div class="theme-seg" id="statsThemeSeg"></div>
+    <div id="statsBudgetNote" class="foot-note" style="margin-bottom:10px"></div>
 
     <div class="toolbar">
       <div class="seg" id="posSeg"></div>
@@ -676,8 +689,8 @@ function playerPhotoUrl(player) {
 }
 function playerAvatarHtml(player, size) {
   const s = size || 34;
-  const url = player ? playerPhotoUrl(player) : null;
   const initials = player ? player.webName.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() : "?";
+  const url = (player && !state.preferKits) ? playerPhotoUrl(player) : null;
   if (!url) return `<div class="kit-fallback" style="width:${s}px;height:${s}px">${kitSvg(player?.teamId, s)}<span>${initials}</span></div>`;
   return `<img src="${url}" width="${s}" height="${Math.round(s * 1.27)}" class="player-photo" style="width:${s}px;height:${Math.round(s * 1.27)}px"
     data-fallback-team="${player?.teamId ?? ""}" data-fallback-initials="${initials}" data-fallback-size="${s}"
@@ -809,7 +822,7 @@ let state = {
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false,
-  expandedShortlistId: null,
+  expandedShortlistId: null, preferKits: false,
 };
 
 // ---------- data fetching ----------
@@ -966,6 +979,10 @@ async function fplGet(path) {
     }
   }
   throw lastErr || new Error("all sources failed");
+}
+
+function foldAccents(s) {
+  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 function num(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
@@ -1363,8 +1380,8 @@ function getFiltered() {
       if (mins < Number(f.minMinutes)) return false;
     }
     if (f.search) {
-      const s = f.search.toLowerCase();
-      if (!p.webName.toLowerCase().includes(s) && !p.secondName.toLowerCase().includes(s) && !p.firstName.toLowerCase().includes(s)) return false;
+      const s = foldAccents(f.search);
+      if (!foldAccents(p.webName).includes(s) && !foldAccents(p.secondName).includes(s) && !foldAccents(p.firstName).includes(s)) return false;
     }
     if (!playerHasMatchingFixture(p)) return false;
     return true;
@@ -1536,6 +1553,7 @@ function buildToolbarStatics() {
   FIXED_SORTABLE.forEach(([label, cls, key, defaultDir]) => {
     const th = document.createElement("th");
     th.className = cls; th.textContent = label;
+    th.dataset.fixed = "1";
     if (key) {
       th.dataset.key = key;
       th.style.cursor = "pointer";
@@ -1554,7 +1572,7 @@ function buildToolbarStatics() {
 
 function buildStatsHeader() {
   const headRow = document.getElementById("headRow");
-  headRow.querySelectorAll("th[data-key]").forEach(th => th.remove());
+  headRow.querySelectorAll("th[data-key]:not([data-fixed])").forEach(th => th.remove());
   activeColumns().forEach(([key, label]) => {
     const th = document.createElement("th");
     th.textContent = label; th.dataset.key = key;
@@ -1596,23 +1614,47 @@ function gwFixtureHtml(teamId, gwId) {
   }).join("") + '</div>';
 }
 
-// "Players of importance" scouting: ranks attackers/midfielders on a
-// composite of key attacking metrics against others in their own position,
-// so standouts you might not already know surface to the top.
-function scoutMetricsFor() {
-  const metrics = [["xgi90", "xGI/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["threat", "Threat"], ["creativity", "Creativity"]];
-  if (state.players.some(p => p.dsShots != null)) metrics.push(["dsShots", "Shots"]);
-  return metrics;
+// "Players of importance" scouting: ranks players on a composite of
+// position-appropriate metrics against others in their own position, so
+// standouts you might not already know surface to the top. dir:1 means
+// higher is better, dir:-1 means lower is better (e.g. goals conceded/90).
+function scoutMetricsFor(pos) {
+  if (pos === "GK") {
+    return [["saves90", "Saves/90", 1], ["cleanSheets", "CS", 1], ["bps", "BPS", 1], ["goalsConcededPer90", "GC/90", -1]];
+  }
+  if (pos === "DEF") {
+    const m = [["cleanSheets", "CS", 1], ["defensiveContributionPer90", "DefCon/90", 1], ["xgi90", "xGI/90", 1], ["goalsConcededPer90", "GC/90", -1]];
+    if (state.players.some(p => p.dsTackles != null)) m.push(["cbit", "CBIT", 1]);
+    return m;
+  }
+  const m = [["xgi90", "xGI/90", 1], ["expectedGoals", "xG", 1], ["expectedAssists", "xA", 1], ["threat", "Threat", 1], ["creativity", "Creativity", 1]];
+  if (state.players.some(p => p.dsShots != null)) m.push(["dsShots", "Shots", 1]);
+  return m;
+}
+function scoutMetricValue(p, key) {
+  if (key === "cbit") return (p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0);
+  return Number(p[key]) || 0;
 }
 function computeScoutList(pos) {
   const minMinutes = 300;
   const pool = state.players.filter(p => p.position === pos && p.minutes >= minMinutes);
-  const metrics = scoutMetricsFor();
-  const maxes = {};
-  for (const [key] of metrics) maxes[key] = Math.max(1, ...pool.map(p => Number(p[key]) || 0));
+  const metrics = scoutMetricsFor(pos);
+  const maxes = {}, mins = {};
+  for (const [key] of metrics) {
+    const vals = pool.map(p => scoutMetricValue(p, key));
+    maxes[key] = Math.max(1, ...vals);
+    mins[key] = Math.min(...vals, 0);
+  }
   return pool.map(p => {
-    const parts = metrics.map(([key]) => (Number(p[key]) || 0) / maxes[key]);
-    return { p, score: parts.reduce((a, b) => a + b, 0) / parts.length };
+    const parts = metrics.map(([key, label, dir]) => {
+      const v = scoutMetricValue(p, key);
+      const norm = dir > 0 ? v / maxes[key] : (maxes[key] - mins[key] > 0 ? 1 - (v - mins[key]) / (maxes[key] - mins[key]) : 0);
+      return { key, label, v, norm };
+    });
+    const score = parts.reduce((a, b) => a + b.norm, 0) / parts.length;
+    const reasons = [...parts].sort((a, b) => b.norm - a.norm).slice(0, 2)
+      .map(part => `${part.label} ${Number.isInteger(part.v) ? part.v : part.v.toFixed(2)}`);
+    return { p, score, reasons };
   }).sort((a, b) => b.score - a.score).slice(0, 8);
 }
 function renderScoutPanel() {
@@ -1623,19 +1665,26 @@ function renderScoutPanel() {
     panel.innerHTML = `<div class="card"><p class="foot-note">Not enough minutes played yet this season (need 300+) to scout standouts reliably — check back once a few gameweeks are in.</p></div>`;
     return;
   }
-  const metricLabels = scoutMetricsFor().map(([, label]) => label).join(", ");
-  panel.innerHTML = ["FWD", "MID"].map(pos => `
+  const POS_LABEL = { GK: "goalkeepers", DEF: "defenders", MID: "midfielders", FWD: "forwards" };
+  panel.innerHTML = ["GK", "DEF", "MID", "FWD"].map(pos => {
+    const metricLabels = scoutMetricsFor(pos).map(([, label]) => label).join(", ");
+    return `
     <div class="card" style="margin-bottom:12px">
-      <div class="detail-block-title">Standout ${pos === "FWD" ? "forwards" : "midfielders"} — ranked on ${metricLabels} vs others in their position</div>
-      ${computeScoutList(pos).map(({ p, score }) => `
+      <div class="detail-block-title">Standout ${POS_LABEL[pos]} — ranked on ${metricLabels} vs others in their position</div>
+      ${computeScoutList(pos).map(({ p, score, reasons }) => `
         <div class="builder-row">
           ${playerAvatarHtml(p, 28)}
-          <span class="b-name">${p.webName} <span class="b-sub">${state.teamsById[p.teamId]?.short_name || ""}${p.selectedByPercent < 10 ? " · 🔍 under the radar" : ""}</span></span>
-          <span class="b-pts mono" title="Composite score vs position (xGI/90, xG, xA, threat, creativity)">${(score * 100).toFixed(0)}</span>
+          <span class="b-name">${p.webName} <span class="b-sub">${state.teamsById[p.teamId]?.short_name || ""}${p.selectedByPercent < 10 ? " · 🔍 under the radar" : ""} · ${reasons.join(", ")}</span></span>
+          <span class="b-pts mono" title="Composite score vs position">${(score * 100).toFixed(0)}</span>
+          <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-scout-star="${p.id}" title="${isShortlisted(p.id) ? "Remove from shortlist" : "Add to shortlist"}">★</button>
         </div>
       `).join("")}
     </div>
-  `).join("");
+  `;
+  }).join("");
+  panel.querySelectorAll("[data-scout-star]").forEach(btn => {
+    btn.onclick = () => { toggleShortlist(Number(btn.dataset.scoutStar)); renderScoutPanel(); };
+  });
 }
 
 function renderStats() {
@@ -1722,6 +1771,15 @@ function renderStats() {
       btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
     });
   }
+  const budgetNote = document.getElementById("statsBudgetNote");
+  const activeDraft = state.drafts.find(d => d.id === state.activeDraftId);
+  if (activeDraft) {
+    const remaining = BUDGET - squadCost(activeDraft.squad);
+    budgetNote.innerHTML = `<strong>${activeDraft.name}:</strong> <span class="mono" style="color:${remaining < 0 ? "var(--rose,#e05d5d)" : "var(--gold-bright)"}">${fmtPrice(remaining)}</span> remaining of £100.0m (${activeDraft.squad.length}/15 players)${remaining < 0 ? " ⚠️ over budget" : ""}`;
+  } else {
+    budgetNote.textContent = "No active squad draft yet — start one in the Planner tab to track remaining budget here.";
+  }
+
   const scopeLabel = state.filters.gw !== "ALL" ? `GW${state.filters.gw}` : state.filters.venue !== "ALL" ? (state.filters.venue === "HOME" ? "home games only" : "away games only") : null;
   document.getElementById("rowCount").textContent = state.scopedStatsLoading
     ? `Loading real per-gameweek data for ${scopeLabel}…`
@@ -2087,8 +2145,9 @@ function clubCountsFor(playerIds) {
 // player per position (highest total points that fits budget/position/club
 // limits), used by the "Auto Pick" button.
 function autoPickSquad(draft) {
+  draft.squad = [];
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    let need = SQUAD_RULES[pos] - draft.squad.filter(id => state.players.find(p => p.id === id)?.position === pos).length;
+    let need = SQUAD_RULES[pos];
     while (need > 0) {
       const clubCounts = clubCountsFor(draft.squad);
       const remaining = BUDGET - squadCost(draft.squad);
@@ -2099,14 +2158,16 @@ function autoPickSquad(draft) {
         .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
       if (!candidates.length) {
         // The reserve heuristic left no room — relax it and just take the
-        // cheapest legal option so the squad still finishes filling. This
-        // is what "autopick didn't fill the team" was: the old code just
-        // gave up here instead of falling back.
+        // cheapest legal option so the squad still finishes filling.
         candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining)
           .sort((a, b) => a.nowCost - b.nowCost);
       }
       if (!candidates.length) break; // genuinely impossible (e.g. budget exhausted) — nothing more to do
-      draft.squad.push(candidates[0].id);
+      // Randomised pick from a small pool of the best eligible options, so
+      // clicking Auto Pick again gives a different (still strong) squad.
+      const poolSize = Math.min(candidates.length, 6);
+      const pick = candidates[Math.floor(Math.random() * poolSize)];
+      draft.squad.push(pick.id);
       need--;
     }
   }
@@ -2139,7 +2200,7 @@ function renderSquadBuilder(draft) {
       <div class="builder-right">
         <div class="builder-topbar">
           <span class="builder-pill">${total} / 15 players</span>
-          <span class="builder-pill ${remaining < 0 ? "over" : ""}">${fmtPrice(remaining)} in the bank</span>
+          <span class="builder-pill ${remaining < 0 ? "over" : ""}">${remaining < 0 ? "⚠️ " : ""}${fmtPrice(remaining)} in the bank</span>
           <select id="builderGwSelect" style="margin-left:8px"></select>
           <div class="view-toggle" style="margin-left:0">
             <button id="builderGwPrev" title="Previous gameweek">←</button>
@@ -2208,6 +2269,7 @@ function renderSquadBuilder(draft) {
   };
 
   document.getElementById("builderAutoPick").onclick = () => {
+    if (draft.squad.length && !confirm("Auto Pick will replace your current squad with a new random one. Continue?")) return;
     autoPickSquad(draft);
     saveDrafts(); renderPlanner();
   };
@@ -2232,12 +2294,12 @@ function renderBuilderList(draft) {
   const countEl = document.getElementById("builderCount");
   if (!listEl) return;
   const f = state.builderFilters;
-  const q = f.q.trim().toLowerCase();
+  const q = foldAccents(f.q.trim());
   const clubCounts = clubCountsFor(draft.squad);
 
   let pool = state.players.filter(p => {
     if (f.pos !== "ALL" && p.position !== f.pos) return false;
-    if (q && !p.webName.toLowerCase().includes(q)) return false;
+    if (q && !foldAccents(p.webName).includes(q)) return false;
     if (f.price !== "ALL" && p.nowCost > Number(f.price)) return false;
     return true;
   }).sort((a, b) => (b[f.sort] ?? 0) - (a[f.sort] ?? 0));
@@ -2258,12 +2320,12 @@ function renderBuilderList(draft) {
       const wouldExceedBudget = !inSquad && (squadCost(draft.squad) + p.nowCost > BUDGET);
       const wouldExceedPos = !inSquad && needThisPos <= 0;
       const wouldExceedClub = !inSquad && (clubCounts[p.teamId] || 0) >= 3;
-      const disabled = !inSquad && (wouldExceedBudget || wouldExceedPos || wouldExceedClub);
-      const reason = wouldExceedPos ? "position full" : wouldExceedClub ? "max 3/club" : wouldExceedBudget ? "over budget" : "";
+      const disabled = !inSquad && (wouldExceedPos || wouldExceedClub);
+      const reason = wouldExceedPos ? "position full" : wouldExceedClub ? "max 3/club" : wouldExceedBudget ? "⚠️ over budget" : "";
       html += `
         <div class="builder-row ${inSquad ? "in-squad" : ""}" data-player="${p.id}">
           ${playerAvatarHtml(p, 28)}
-          <span class="b-name">${p.webName} <span class="b-sub">${team ? team.short_name : ""}${reason ? " · " + reason : ""}</span></span>
+          <span class="b-name">${p.webName} <span class="b-sub" style="${wouldExceedBudget ? "color:var(--rose,#e05d5d)" : ""}">${team ? team.short_name : ""}${reason ? " · " + reason : ""}</span></span>
           <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
           <span class="b-pts mono">${p.totalPoints ?? 0}</span>
           <button class="builder-add-btn ${inSquad ? "remove" : ""}" ${disabled ? "disabled" : ""} data-action="${inSquad ? "remove" : "add"}" data-player="${p.id}">${inSquad ? "×" : "+"}</button>
@@ -2335,6 +2397,11 @@ const DISPLAY_FORMATION = {
   MID: { start: 4, bench: 1 },
   FWD: { start: 3, bench: 0 },
 };
+
+function closePitchModal() {
+  const el = document.getElementById("pitchActionModal");
+  if (el) el.remove();
+}
 
 function renderBuilderPitch(draft) {
   const area = document.getElementById("builderPitchArea");
@@ -2451,47 +2518,86 @@ function renderBuilderPitch(draft) {
 
   const selectedPlayer = selectedId ? state.players.find(p => p.id === selectedId) : null;
   const remaining = 15 - draft.squad.length;
-  const actionBarHtml = selectedPlayer ? `
+  const armedHtml = selectedPlayer ? `
     <div class="chip-btn-row" style="margin-bottom:10px">
-      <span style="align-self:center;font-size:12px;color:var(--ink-dim)">${selectedPlayer.webName} selected —</span>
-      ${squadComplete ? (startingIds.includes(selectedId) ? `<button class="chip-btn" id="actCaptain">Make captain</button>` : `<button class="chip-btn" id="actStart">Move to starting XI</button>`) : ""}
-      <button class="chip-btn" id="actRemove">Remove from squad</button>
-      <button class="chip-btn" id="actDeselect">Cancel</button>
+      <span style="align-self:center;font-size:12px;color:var(--ink-dim)">Substituting ${selectedPlayer.webName} — click another player on the pitch to swap with them.</span>
+      <button class="chip-btn" id="actCancelSub">Cancel</button>
     </div>
   ` : squadComplete
-    ? `<p class="foot-note" style="margin-bottom:10px">Click a player to select them, then click another to swap them between the starting XI and bench — or use the menu that appears to captain or remove them.</p>`
-    : `<p class="foot-note" style="margin-bottom:10px">Click a "Trialist" slot to add a player for that position (${remaining} more to pick), or click a player already in your squad to remove them.</p>`;
+    ? `<p class="foot-note" style="margin-bottom:10px">Click any player to captain, substitute, shortlist, or remove them.</p>`
+    : `<p class="foot-note" style="margin-bottom:10px">Click a "Trialist" slot to add a player for that position (${remaining} more to pick), or click a player already in your squad for options.</p>`;
 
-  area.innerHTML = `${actionBarHtml}<div class="pitch">${pitchRows}</div>${benchHtml}`;
+  area.innerHTML = `${armedHtml}<div class="pitch">${pitchRows}</div>${benchHtml}`;
 
   if (selectedPlayer) {
-    const capBtn = document.getElementById("actCaptain");
-    if (capBtn) capBtn.onclick = () => {
-      draft.builderCaptainId = selectedId;
+    document.getElementById("actCancelSub").onclick = () => {
       state.builderSelectedId = null;
+      renderBuilderPitch(draft);
+    };
+  }
+
+  const allEntries = byPos.GK.concat(byPos.DEF, byPos.MID, byPos.FWD).filter(Boolean);
+  function openPitchModal(playerId) {
+    closePitchModal();
+    const p = state.players.find(pl => pl.id === playerId);
+    if (!p) return;
+    const isStarter = startingIds.includes(playerId);
+    const team = state.teamsById[p.teamId];
+    const modal = document.createElement("div");
+    modal.id = "pitchActionModal";
+    modal.className = "pitch-modal-backdrop";
+    modal.innerHTML = `
+      <div class="pitch-modal-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          ${playerAvatarHtml(p, 36)}
+          <div>
+            <div style="font-weight:700">${p.webName}</div>
+            <div style="font-size:12px;color:var(--ink-dim)">${team ? team.short_name : ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${squadComplete ? (isStarter ? `<button class="chip-btn" id="modalCaptain">👑 Make captain</button>` : `<button class="chip-btn" id="modalStart">⬆️ Move to starting XI</button>`) : ""}
+          ${squadComplete ? `<button class="chip-btn" id="modalSub">🔁 Substitute (swap with another player)</button>` : ""}
+          <button class="chip-btn" id="modalShortlist">${isShortlisted(playerId) ? "★ Remove from shortlist" : "☆ Add to shortlist"}</button>
+          <button class="chip-btn" id="modalRemove">🗑 Remove from squad</button>
+          <button class="chip-btn" id="modalCancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    modal.onclick = (e) => { if (e.target === modal) closePitchModal(); };
+    document.body.appendChild(modal);
+
+    const capBtn = document.getElementById("modalCaptain");
+    if (capBtn) capBtn.onclick = () => {
+      draft.builderCaptainId = playerId;
+      closePitchModal();
       saveDrafts(); renderBuilderPitch(draft);
     };
-    const startBtn = document.getElementById("actStart");
+    const startBtn = document.getElementById("modalStart");
     if (startBtn) startBtn.onclick = () => {
       let done = false;
-      for (const out of [...(byPos.GK.concat(byPos.DEF, byPos.MID, byPos.FWD).filter(Boolean))].sort((a, b) => a.proj - b.proj)) {
-        if (attemptXiSwap(draft, startingIds, out.p.id, selectedId)) { done = true; break; }
+      for (const out of [...allEntries].sort((a, b) => a.proj - b.proj)) {
+        if (attemptXiSwap(draft, startingIds, out.p.id, playerId)) { done = true; break; }
       }
+      closePitchModal();
       if (!done) alert("Can't move them into the XI — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD).");
-      state.builderSelectedId = null;
       renderBuilderPitch(draft);
     };
-    document.getElementById("actRemove").onclick = () => {
-      draft.squad = draft.squad.filter(id => id !== selectedId);
-      if (draft.builderCaptainId === selectedId) draft.builderCaptainId = null;
-      if (draft.manualStarterIds) draft.manualStarterIds = draft.manualStarterIds.filter(id => id !== selectedId);
-      state.builderSelectedId = null;
+    const subBtn = document.getElementById("modalSub");
+    if (subBtn) subBtn.onclick = () => {
+      state.builderSelectedId = playerId;
+      closePitchModal();
+      renderBuilderPitch(draft);
+    };
+    document.getElementById("modalShortlist").onclick = () => { toggleShortlist(playerId); openPitchModal(playerId); };
+    document.getElementById("modalRemove").onclick = () => {
+      draft.squad = draft.squad.filter(id => id !== playerId);
+      if (draft.builderCaptainId === playerId) draft.builderCaptainId = null;
+      if (draft.manualStarterIds) draft.manualStarterIds = draft.manualStarterIds.filter(id => id !== playerId);
+      closePitchModal();
       saveDrafts(); renderPlanner();
     };
-    document.getElementById("actDeselect").onclick = () => {
-      state.builderSelectedId = null;
-      renderBuilderPitch(draft);
-    };
+    document.getElementById("modalCancel").onclick = closePitchModal;
   }
 
   area.querySelectorAll(".placeholder-slot").forEach(slot => {
@@ -2511,13 +2617,12 @@ function renderBuilderPitch(draft) {
     slot.onclick = () => {
       const id = Number(slot.dataset.player);
       if (!squadComplete) {
-        state.builderSelectedId = selectedId === id ? null : id;
-        renderBuilderPitch(draft);
+        if (selectedId === id) { state.builderSelectedId = null; renderBuilderPitch(draft); }
+        else openPitchModal(id);
         return;
       }
       if (selectedId === null) {
-        state.builderSelectedId = id;
-        renderBuilderPitch(draft);
+        openPitchModal(id);
       } else if (selectedId === id) {
         state.builderSelectedId = null;
         renderBuilderPitch(draft);
@@ -2525,11 +2630,11 @@ function renderBuilderPitch(draft) {
         const selIsStarter = startingIds.includes(selectedId);
         const clickedIsStarter = startingIds.includes(id);
         if (selIsStarter !== clickedIsStarter) {
-          const outId = selIsStarter ? selectedId : id;
-          const inId = selIsStarter ? id : selectedId;
-          if (!attemptXiSwap(draft, startingIds, outId, inId)) {
+          if (!attemptXiSwap(draft, startingIds, selIsStarter ? selectedId : id, selIsStarter ? id : selectedId)) {
             alert("Can't make that swap — it would break squad rules (needs 1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD in the starting XI).");
           }
+        } else {
+          alert("Pick one starter and one bench player to substitute between them.");
         }
         state.builderSelectedId = null;
         renderBuilderPitch(draft);
@@ -3333,6 +3438,16 @@ function setupTabs() {
 
 buildToolbarStatics();
 setupTabs();
+(async () => {
+  const saved = await persistGet("preferKits");
+  state.preferKits = saved === "1";
+  document.getElementById("preferKitsToggle").checked = state.preferKits;
+})();
+document.getElementById("preferKitsToggle").onchange = (e) => {
+  state.preferKits = e.target.checked;
+  persistSet("preferKits", state.preferKits ? "1" : "0");
+  renderStats(); renderShortlist(); renderPlanner(); renderH2H();
+};
 setupPlannerControls();
 setupTableControls();
 setupFdrControls();
