@@ -522,15 +522,22 @@
         <input type="number" id="tableRangeTo" min="1" max="38" placeholder="to" style="width:52px" />
         <button class="dir-btn" id="tableRangeApply" type="button">Apply</button>
       </span>
+      <select id="tableOpponentTierSelect">
+        <option value="ALL">Vs anyone</option>
+        <option value="top6">Vs top 6 only</option>
+        <option value="bottom6">Vs bottom 6 only</option>
+        <option value="top10">Vs top 10 only</option>
+        <option value="bottom10">Vs bottom 10 only</option>
+      </select>
     </div>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr>
+          <tr id="plTableHeadRow">
             <th class="label-col">#</th>
-            <th class="label-col">Club</th>
-            <th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
+            <th class="label-col" data-sort="name" style="cursor:pointer">Club</th>
+            <th data-sort="played" style="cursor:pointer">P</th><th data-sort="won" style="cursor:pointer">W</th><th data-sort="drawn" style="cursor:pointer">D</th><th data-sort="lost" style="cursor:pointer">L</th><th data-sort="gf" style="cursor:pointer">GF</th><th data-sort="ga" style="cursor:pointer">GA</th><th data-sort="gd" style="cursor:pointer">GD</th><th data-sort="points" style="cursor:pointer">Pts</th>
           </tr>
         </thead>
         <tbody id="plTableBody"></tbody>
@@ -549,9 +556,9 @@
       <select id="fdrEndGw"></select>
       <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">Sort</span>
       <select id="fdrSortBy">
-        <option value="alpha">Alphabetical</option>
-        <option value="easiest">Easiest run first</option>
+        <option value="easiest" selected>Easiest run first</option>
         <option value="hardest">Hardest run first</option>
+        <option value="alpha">Alphabetical</option>
       </select>
     </div>
     <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate. The current gameweek's column is highlighted.</p>
@@ -625,6 +632,26 @@ const POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 const POS_COLOR = { GK: "var(--gold-bright)", DEF: "var(--emerald)", MID: "var(--blue)", FWD: "var(--red)" };
 const STATUS_LABEL = { d: ["Doubtful", "var(--gold-bright)"], i: ["Injured", "var(--red)"], s: ["Suspended", "var(--red)"], u: ["Unavailable", "var(--red)"] };
 const FDR_COLOR = { 1: "#3ecf8e", 2: "#8fd9ab", 3: "#d9c98a", 4: "#e39a63", 5: "#e2604f" };
+// Continuous green -> amber -> red gradient keyed to the exact 1.0-5.0
+// score (not just the rounded bucket), so a 4.8 reads visibly harder/redder
+// than a 4.1 even though both round to the same FDR_COLOR step.
+const FDR_GRADIENT_STOPS = [
+  { at: 1, rgb: [62, 207, 142] },
+  { at: 3, rgb: [217, 201, 138] },
+  { at: 5, rgb: [226, 96, 79] },
+];
+function fdrGradientColor(score) {
+  const s = Math.max(1, Math.min(5, score));
+  let lo = FDR_GRADIENT_STOPS[0], hi = FDR_GRADIENT_STOPS[FDR_GRADIENT_STOPS.length - 1];
+  for (let i = 0; i < FDR_GRADIENT_STOPS.length - 1; i++) {
+    if (s >= FDR_GRADIENT_STOPS[i].at && s <= FDR_GRADIENT_STOPS[i + 1].at) {
+      lo = FDR_GRADIENT_STOPS[i]; hi = FDR_GRADIENT_STOPS[i + 1]; break;
+    }
+  }
+  const t = hi.at === lo.at ? 0 : (s - lo.at) / (hi.at - lo.at);
+  const rgb = lo.rgb.map((c, i) => Math.round(c + (hi.rgb[i] - c) * t));
+  return `rgb(${rgb.join(",")})`;
+}
 const FDR_MULT = { 1: 1.35, 2: 1.15, 3: 1.0, 4: 0.85, 5: 0.65 };
 const SQUAD_RULES = { GK: 2, DEF: 5, MID: 5, FWD: 3 };
 const BUDGET = 1000; // £100.0m in tenths
@@ -828,7 +855,8 @@ let state = {
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
-  allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "" },
+  allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
+  tableSort: { key: "points", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false,
@@ -1217,13 +1245,18 @@ function computeLiveTable(fixtures, opts) {
   if (!finished.length) return null;
   const rows = {};
   for (const t of state.teams) rows[t.id] = { teamId: t.id, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, gd: 0, points: 0 };
+  const tierOk = (oppId) => {
+    if (!opts.opponentTier || opts.opponentTier === "ALL") return true;
+    const tier = state.teamTier && state.teamTier[oppId];
+    return tier ? !!tier[opts.opponentTier] : false;
+  };
   for (const f of finished) {
     const entries = [];
-    if (opts.venue !== "AWAY") entries.push([f.team_h, true, f.team_h_score, f.team_a_score]);
-    if (opts.venue !== "HOME") entries.push([f.team_a, false, f.team_a_score, f.team_h_score]);
-    for (const [teamId, , gf, ga] of entries) {
+    if (opts.venue !== "AWAY") entries.push([f.team_h, true, f.team_h_score, f.team_a_score, f.team_a]);
+    if (opts.venue !== "HOME") entries.push([f.team_a, false, f.team_a_score, f.team_h_score, f.team_h]);
+    for (const [teamId, , gf, ga, oppId] of entries) {
       const r = rows[teamId];
-      if (!r) continue;
+      if (!r || !tierOk(oppId)) continue;
       r.played++; r.gf += gf; r.ga += ga;
       if (gf > ga) { r.won++; r.points += 3; }
       else if (gf < ga) { r.lost++; }
@@ -1240,7 +1273,7 @@ function computeLiveTable(fixtures, opts) {
 // apply to the live table — last season's fallback is only ever a single
 // final aggregate, so those controls are ignored when showing it.
 function resolveActiveTable() {
-  const live = computeLiveTable(state.allFixtures, { venue: state.tableFilters.venue, lastN: state.tableFilters.lastN, gwFrom: state.tableFilters.gwFrom, gwTo: state.tableFilters.gwTo });
+  const live = computeLiveTable(state.allFixtures, { venue: state.tableFilters.venue, lastN: state.tableFilters.lastN, gwFrom: state.tableFilters.gwFrom, gwTo: state.tableFilters.gwTo, opponentTier: state.tableFilters.opponentTier });
   if (state.tableSource === "current") return { rows: live || [], isLive: true, empty: !live };
   if (state.tableSource === "last") return { rows: lastSeasonRows(), isLive: false, empty: false };
   return live ? { rows: live, isLive: true, empty: false } : { rows: lastSeasonRows(), isLive: false, empty: false };
@@ -1605,7 +1638,7 @@ function fixtureTickerHtml(teamId, count) {
     const label = f.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
     const score = customFdr(teamId, f.oppId, f.isHome);
     const rounded = Math.max(1, Math.min(5, Math.round(score)));
-    return `<span class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
+    return `<span class="fdr-pill" style="background:${fdrGradientColor(score)}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
   }).join("") + '</div>';
 }
 
@@ -1620,7 +1653,7 @@ function gwFixtureHtml(teamId, gwId) {
     const label = f.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
     const score = customFdr(teamId, f.oppId, f.isHome);
     const rounded = Math.max(1, Math.min(5, Math.round(score)));
-    return `<span class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
+    return `<span class="fdr-pill" style="background:${fdrGradientColor(score)}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
   }).join("") + '</div>';
 }
 
@@ -2944,7 +2977,7 @@ function renderFdrFormulaExample() {
     const rounded = Math.max(1, Math.min(5, Math.round(score)));
     return `<div class="fdr-example-row">
       <div class="fdr-example-label">${label} (${opp.name})</div>
-      <div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};width:64px;font-size:10px">${opp.short_name} (H)</div>
+      <div class="fdr-pill" style="background:${fdrGradientColor(score)};width:64px;font-size:10px">${opp.short_name} (H)</div>
       <div class="mono" style="font-size:12px;color:var(--ink-dim);width:34px;text-align:right">${score.toFixed(1)}</div>
     </div>`;
   }).join("");
@@ -3049,6 +3082,7 @@ function renderPlTable() {
   rangeInputs.style.display = state.tableFilters.lastN === "RANGE" ? "inline-flex" : "none";
   document.getElementById("tableRangeFrom").value = state.tableFilters.gwFrom;
   document.getElementById("tableRangeTo").value = state.tableFilters.gwTo;
+  document.getElementById("tableOpponentTierSelect").value = state.tableFilters.opponentTier;
   const table = resolveActiveTable();
   venueSel.disabled = !table.isLive;
   lastNSel.disabled = !table.isLive;
@@ -3064,7 +3098,18 @@ function renderPlTable() {
   } else {
     note.textContent = "2025/26 final table — used as a stand-in until this season has results of its own. Switch to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
   }
-  const rows = table.empty ? lastSeasonRows() : table.rows;
+  let rows = table.empty ? lastSeasonRows() : table.rows;
+  const { key, dir } = state.tableSort;
+  const sortVal = (r) => key === "name" ? (state.teamsById[r.teamId]?.name || "") : (r[key] ?? 0);
+  rows = [...rows].sort((a, b) => {
+    const av = sortVal(a), bv = sortVal(b);
+    const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+    return dir === "asc" ? cmp : -cmp;
+  });
+  document.querySelectorAll("#plTableHeadRow th[data-sort]").forEach(th => {
+    th.textContent = th.textContent.replace(/ [▲▼]$/, "");
+    if (th.dataset.sort === key) th.textContent += dir === "asc" ? " ▲" : " ▼";
+  });
   const body = document.getElementById("plTableBody");
   body.innerHTML = rows.map((r, i) => {
     const team = state.teamsById[r.teamId];
@@ -3104,6 +3149,21 @@ function setupTableControls() {
     state.tableFilters.gwTo = document.getElementById("tableRangeTo").value;
     renderPlTable();
   };
+  document.getElementById("tableOpponentTierSelect").onchange = (e) => {
+    state.tableFilters.opponentTier = e.target.value;
+    renderPlTable();
+  };
+  document.querySelectorAll("#plTableHeadRow th[data-sort]").forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.sort;
+      if (state.tableSort.key === key) {
+        state.tableSort.dir = state.tableSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.tableSort = { key, dir: key === "name" ? "asc" : "desc" };
+      }
+      renderPlTable();
+    };
+  });
 }
 
 function renderTeamOverrides() {
@@ -3242,7 +3302,7 @@ function renderFdrGrid() {
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         scoresInRange.push(score);
         const rounded = Math.max(1, Math.min(5, Math.round(score)));
-        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}. Click for a scoreline estimate.">${label}</div>`;
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}. Click for a scoreline estimate.">${label}</div>`;
       }).join("")}</td>`;
     });
     const avg = scoresInRange.length ? scoresInRange.reduce((a, b) => a + b, 0) / scoresInRange.length : null;
