@@ -539,23 +539,31 @@
     <h1 class="page-title">Fixture difficulty</h1>
     <p class="page-sub">Every club's next fixtures, colour-coded by difficulty (using your custom weights from the Rankings tab). Click a number of gameweeks to show, or scroll the grid.</p>
 
-    <div class="toolbar" style="margin-bottom:14px">
-      <span style="font-size:12px;color:var(--ink-dim)">Show</span>
-      <select id="fdrGwCount">
-        <option value="5">5 gameweeks</option>
-        <option value="8" selected>8 gameweeks</option>
-        <option value="10">10 gameweeks</option>
-        <option value="15">15 gameweeks</option>
-        <option value="38">Whole season</option>
-      </select>
-      <span style="font-size:12px;color:var(--ink-dim)">starting from</span>
+    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--ink-dim)">From</span>
       <select id="fdrStartGw"></select>
+      <span style="font-size:12px;color:var(--ink-dim)">to</span>
+      <select id="fdrEndGw"></select>
+      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">Sort</span>
+      <select id="fdrSortBy">
+        <option value="alpha">Alphabetical</option>
+        <option value="easiest">Easiest run first</option>
+        <option value="hardest">Hardest run first</option>
+      </select>
     </div>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate. The current gameweek's column is highlighted.</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
     </div>
   </section>
+
+  <div id="fdrPredictModal" class="pitch-modal-backdrop" style="display:none">
+    <div class="pitch-modal-card" style="max-width:320px">
+      <div id="fdrPredictBody"></div>
+      <button class="chip-btn" id="fdrPredictClose" style="margin-top:10px">Close</button>
+    </div>
+  </div>
 
   <section id="tab-h2h" style="display:none">
     <h1 class="page-title">Head-to-head</h1>
@@ -3123,48 +3131,109 @@ function renderFixtureList() {
 }
 
 // ---------- FDR grid ----------
+function currentEventId() {
+  const cur = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
+  return cur ? cur.id : null;
+}
 function populateFdrStartGw() {
-  const sel = document.getElementById("fdrStartGw");
-  if (sel.options.length) return;
+  const selStart = document.getElementById("fdrStartGw");
+  const selEnd = document.getElementById("fdrEndGw");
+  if (selStart.options.length) return;
   for (const e of state.events) {
-    const opt = document.createElement("option");
-    opt.value = e.id; opt.textContent = e.name.replace("Gameweek ", "GW");
-    sel.appendChild(opt);
+    const label = e.name.replace("Gameweek ", "GW");
+    const optS = document.createElement("option"); optS.value = e.id; optS.textContent = label;
+    selStart.appendChild(optS);
+    const optE = document.createElement("option"); optE.value = e.id; optE.textContent = label;
+    selEnd.appendChild(optE);
   }
   const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next) || state.events[0];
-  if (nextEvent) sel.value = nextEvent.id;
+  const startId = nextEvent ? nextEvent.id : state.events[0]?.id;
+  selStart.value = startId;
+  const endEvent = state.events.find(e => e.id === startId + 7) || state.events[state.events.length - 1];
+  selEnd.value = endEvent ? endEvent.id : startId;
+}
+// Rough, clearly-labelled scoreline estimate — not a real prediction, just
+// a fun translation of each side's attack/defence strength (already used
+// for the FDR pills) into an expected-goals-style guess.
+function estimateScoreline(teamId, oppId, isHome) {
+  const team = state.teamsById[teamId], opp = state.teamsById[oppId];
+  if (!team || !opp || !state.strengthRanges) return null;
+  const teamAttack = isHome ? team.strength_attack_home : team.strength_attack_away;
+  const teamDefence = isHome ? team.strength_defence_home : team.strength_defence_away;
+  const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
+  const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
+  const a5 = toScale1to5(teamAttack, state.strengthRanges.attack);
+  const d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
+  const oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
+  const od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
+  const teamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
+  const oppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
+  return { teamGoals: Math.max(0, Math.round(teamXg)), oppGoals: Math.max(0, Math.round(oppXg)) };
+}
+function openFdrPredictModal(teamId, oppId, isHome, gwId) {
+  const team = state.teamsById[teamId], opp = state.teamsById[oppId];
+  const est = estimateScoreline(teamId, oppId, isHome);
+  const score = customFdr(teamId, oppId, isHome);
+  const home = isHome ? team : opp, away = isHome ? opp : team;
+  const homeGoals = isHome ? est.teamGoals : est.oppGoals;
+  const awayGoals = isHome ? est.oppGoals : est.teamGoals;
+  document.getElementById("fdrPredictBody").innerHTML = `
+    <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
+    <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
+    <p class="foot-note" style="margin-top:0">Rough estimate from each club's attack/defence strength — not a real prediction. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
+  `;
+  document.getElementById("fdrPredictModal").style.display = "flex";
 }
 function renderFdrGrid() {
   if (!state.teams.length) return;
   populateFdrStartGw();
-  const count = Number(document.getElementById("fdrGwCount").value);
   const startGw = Number(document.getElementById("fdrStartGw").value);
-  const gwIds = state.events.map(e => e.id).filter(id => id >= startGw).slice(0, count);
+  let endGw = Number(document.getElementById("fdrEndGw").value);
+  if (endGw < startGw) endGw = startGw;
+  const gwIds = state.events.map(e => e.id).filter(id => id >= startGw && id <= endGw);
+  const curId = currentEventId();
+  const sortBy = document.getElementById("fdrSortBy").value;
 
-  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th>GW${id}</th>`).join("")}</tr>`;
-  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
-  const rows = sorted.map(t => {
+  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${sortBy !== "alpha" ? '<th>Avg</th>' : ""}</tr>`;
+
+  let list = state.teams.map(t => {
     const byGw = {};
     for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
+    const scoresInRange = [];
     const cells = gwIds.map(gwId => {
       const fixtures = byGw[gwId] || [];
-      if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint)">–</td>`;
-      return `<td style="padding:4px">${fixtures.map(fx => {
+      const bg = gwId === curId ? "background:var(--panel-2)" : "";
+      if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint);${bg}">–</td>`;
+      return `<td style="padding:4px;${bg}">${fixtures.map(fx => {
         const opp = state.teamsById[fx.oppId];
         const label = fx.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
         const score = customFdr(t.id, fx.oppId, fx.isHome);
+        scoresInRange.push(score);
         const rounded = Math.max(1, Math.min(5, Math.round(score)));
-        return `<div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}">${label}</div>`;
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}. Click for a scoreline estimate.">${label}</div>`;
       }).join("")}</td>`;
     });
-    return `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}</tr>`;
-  }).join("");
+    const avg = scoresInRange.length ? scoresInRange.reduce((a, b) => a + b, 0) / scoresInRange.length : null;
+    return { t, cells, avg };
+  });
+
+  if (sortBy === "easiest") list.sort((a, b) => (a.avg ?? 99) - (b.avg ?? 99));
+  else if (sortBy === "hardest") list.sort((a, b) => (b.avg ?? -99) - (a.avg ?? -99));
+  else list.sort((a, b) => a.t.name.localeCompare(b.t.name));
+
+  const rows = list.map(({ t, cells, avg }) => `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}${sortBy !== "alpha" ? `<td class="mono" style="font-size:12px">${avg !== null ? avg.toFixed(1) : "–"}</td>` : ""}</tr>`).join("");
 
   document.getElementById("fdrGrid").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
+  document.getElementById("fdrGrid").querySelectorAll(".fdr-pill").forEach(pill => {
+    pill.onclick = () => openFdrPredictModal(Number(pill.dataset.team), Number(pill.dataset.opp), pill.dataset.home === "true", Number(pill.dataset.gw));
+  });
 }
 function setupFdrControls() {
-  document.getElementById("fdrGwCount").onchange = renderFdrGrid;
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
+  document.getElementById("fdrEndGw").onchange = renderFdrGrid;
+  document.getElementById("fdrSortBy").onchange = renderFdrGrid;
+  document.getElementById("fdrPredictClose").onclick = () => { document.getElementById("fdrPredictModal").style.display = "none"; };
+  document.getElementById("fdrPredictModal").onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
 }
 
 // ---------- Head-to-head ----------
