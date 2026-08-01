@@ -404,6 +404,7 @@
         £ <input type="number" step="0.5" id="minPrice" placeholder="min" /> – <input type="number" step="0.5" id="maxPrice" placeholder="max" />
       </div>
       <input type="text" id="search" class="search-input" placeholder="Search player…" />
+      <input type="number" id="minMinutes" placeholder="Min mins" title="Hide players with fewer minutes played than this" style="width:78px" />
       <select id="fixtureGw"><option value="ALL">Any gameweek</option></select>
       <select id="fixtureVenue">
         <option value="ALL">Home + Away</option>
@@ -415,12 +416,22 @@
         <input type="number" id="tierRankMin" min="1" max="20" value="1" style="width:48px" />
         <span style="color:var(--ink-dim)">–</span>
         <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:48px" />
+        <button class="dir-btn" id="rankLegendToggle" type="button" title="Show which teams are which rank">?</button>
+      </div>
+      <div class="spacer" style="gap:6px">
+        <span style="font-size:12px;color:var(--ink-dim)">Points in GW range</span>
+        <input type="number" id="rangeFromGw" min="1" max="38" placeholder="from" style="width:52px" />
+        <span style="color:var(--ink-dim)">–</span>
+        <input type="number" id="rangeToGw" min="1" max="38" placeholder="to" style="width:52px" />
+        <button class="dir-btn" id="applyRangeBtn" type="button">Apply</button>
+        <span id="rangeStatus" style="font-size:11px;color:var(--ink-faint)"></span>
       </div>
       <div class="spacer">
         <select id="sortField"></select>
         <button class="dir-btn" id="dirBtn">↓</button>
       </div>
     </div>
+    <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
 
     <div class="table-wrap">
       <table>
@@ -481,7 +492,14 @@
         <option value="3">Last 3 gameweeks</option>
         <option value="5">Last 5 gameweeks</option>
         <option value="10">Last 10 gameweeks</option>
+        <option value="RANGE">Custom GW range…</option>
       </select>
+      <span id="tableRangeInputs" style="display:none;align-items:center;gap:6px">
+        <input type="number" id="tableRangeFrom" min="1" max="38" placeholder="from" style="width:52px" />
+        <span style="color:var(--ink-dim)">–</span>
+        <input type="number" id="tableRangeTo" min="1" max="38" placeholder="to" style="width:52px" />
+        <button class="dir-btn" id="tableRangeApply" type="button">Apply</button>
+      </span>
     </div>
 
     <div class="table-wrap">
@@ -693,7 +711,7 @@ const STAT_THEMES = {
   overview: {
     label: "Overview",
     columns: [["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
-      ["cleanSheets", "CS"], ["xgi90", "xGI/90"], ["defensiveContribution", "DefCon"], ["bonus", "Bon"]],
+      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["ppm", "Pts/£m"], ["bonus", "Bon"]],
   },
   attacking: {
     label: "Attacking",
@@ -709,6 +727,14 @@ const STAT_THEMES = {
     label: "Deeper stats",
     columns: [["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
+  },
+  creativity: {
+    label: "Shots & creativity",
+    columns: [["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
+  },
+  cbit: {
+    label: "CBIT (defensive)",
+    columns: [["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
   },
 };
 
@@ -739,13 +765,31 @@ const COLUMN_FORMAT = {
   penaltiesOrder: p => [p.penaltiesOrder ?? "—", p.penaltiesOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.penaltiesOrder == null ? "color:var(--ink-faint)" : ""],
   directFreekicksOrder: p => [p.directFreekicksOrder ?? "—", p.directFreekicksOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.directFreekicksOrder == null ? "color:var(--ink-faint)" : ""],
   cornersOrder: p => [p.cornersOrder ?? "—", p.cornersOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.cornersOrder == null ? "color:var(--ink-faint)" : ""],
+  expectedGoalInvolvements: p => [p.expectedGoalInvolvements.toFixed(2), ""],
+  minutes: p => [p.minutes, ""],
+  ppm: p => [p.ppm.toFixed(1), ""],
+  dsShots: p => [p.dsShots ?? "—", p.dsShots == null ? "color:var(--ink-faint)" : ""],
+  dsKeyPasses: p => [p.dsKeyPasses ?? "—", p.dsKeyPasses == null ? "color:var(--ink-faint)" : ""],
+  dsXGChain: p => [p.dsXGChain != null ? p.dsXGChain.toFixed(2) : "—", p.dsXGChain == null ? "color:var(--ink-faint)" : ""],
+  dsXGBuildup: p => [p.dsXGBuildup != null ? p.dsXGBuildup.toFixed(2) : "—", p.dsXGBuildup == null ? "color:var(--ink-faint)" : ""],
+  dsTackles: p => [p.dsTackles ?? "—", p.dsTackles == null ? "color:var(--ink-faint)" : ""],
+  dsInterceptions: p => [p.dsInterceptions ?? "—", p.dsInterceptions == null ? "color:var(--ink-faint)" : ""],
+  dsBlocks: p => [p.dsBlocks ?? "—", p.dsBlocks == null ? "color:var(--ink-faint)" : ""],
+  dsClearances: p => [p.dsClearances ?? "—", p.dsClearances == null ? "color:var(--ink-faint)" : ""],
+  dsAerialsWon: p => [p.dsAerialsWon ?? "—", p.dsAerialsWon == null ? "color:var(--ink-faint)" : ""],
+  dsAerialWinPct: p => [p.dsAerialWinPct != null ? p.dsAerialWinPct.toFixed(0) + "%" : "—", p.dsAerialWinPct == null ? "color:var(--ink-faint)" : ""],
+  rangePts: p => [state.rangePoints && state.rangePoints[p.id] != null ? state.rangePoints[p.id] : "—", ""],
 };
-function activeColumns() { return FIXED_COLUMNS.concat(STAT_THEMES[state.statsTheme].columns); }
+function activeColumns() {
+  const cols = STAT_THEMES[state.statsTheme].columns.slice();
+  if (state.rangePoints) cols.push(["rangePts", state.rangeLabel || "Range pts"]);
+  return cols;
+}
 
 let state = {
   teams: [], players: [], teamsById: {}, events: [], fixturesByTeam: {},
   shortlist: [], expandedId: null,
-  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc", gw: "ALL", venue: "ALL", rankMin: 1, rankMax: 20 },
+  filters: { position: "ALL", team: "ALL", minPrice: "", maxPrice: "", search: "", sort: "totalPoints", dir: "desc", gw: "ALL", venue: "ALL", rankMin: 1, rankMax: 20, minMinutes: "" },
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
@@ -754,8 +798,9 @@ let state = {
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
-  allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL" },
+  allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
+  rangePoints: null, rangeLabel: null,
 };
 
 // ---------- data fetching ----------
@@ -771,6 +816,22 @@ const PROXIES = [
   { name: "corsproxy.io", wrap: (url) => "https://corsproxy.io/?url=" + encodeURIComponent(url) },
   { name: "codetabs", wrap: (url) => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(url) },
 ];
+
+// Sums each player's total_points across a custom gameweek range using
+// FPL's official per-gameweek "live" endpoint (one fetch per GW in the
+// range) — this is real historical data, not an estimate.
+async function fetchRangePoints(fromGw, toGw) {
+  const totals = {};
+  const gws = [];
+  for (let gw = fromGw; gw <= toGw; gw++) gws.push(gw);
+  const results = await Promise.all(gws.map(gw => fplGet(`/event/${gw}/live/`).catch(e => { throw new Error(`GW${gw}: ${e.message}`); })));
+  for (const data of results) {
+    for (const el of data.elements || []) {
+      totals[el.id] = (totals[el.id] || 0) + (el.stats?.total_points || 0);
+    }
+  }
+  return totals;
+}
 
 async function fplGet(path) {
   const url = FPL_BASE + path;
@@ -813,6 +874,68 @@ async function fplGet(path) {
 
 function num(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
 
+// Deeper stats (shots, chances created, xGChain/xGBuildup from Understat;
+// tackles/interceptions/blocks/clearances/aerials from FBref) come only
+// from your own Worker's /deeperstats/all route — the public CORS proxies
+// don't proxy that path, so this is skipped entirely if WORKER_PROXY_URL
+// isn't set or the fetch fails, rather than blocking the rest of the app.
+async function fetchDeeperStats() {
+  if (!WORKER_PROXY_URL) return null;
+  try {
+    const res = await fetch(WORKER_PROXY_URL + "/deeperstats/all", { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      state.diagnostics.push({ path: "/deeperstats/all", source: "your Worker", ok: false, error: data.warnings.join("; ") });
+    } else {
+      state.diagnostics.push({ path: "/deeperstats/all", source: "your Worker", ok: true, ms: 0 });
+    }
+    return data;
+  } catch (e) {
+    state.diagnostics.push({ path: "/deeperstats/all", source: "your Worker", ok: false, error: e.message });
+    return null;
+  }
+}
+
+// Understat/FBref have no shared player ID with the FPL API, so matching
+// is done by normalized name + club. This catches most players but isn't
+// perfect — different spellings of the same name across the three sites
+// (accents, nicknames, "Jr"/suffixes) can miss a match, in which case the
+// deeper-stats columns just show "—" for that player.
+function normName(s) {
+  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+}
+const CLUB_NAME_ALIASES = {
+  "manchester utd": "manchester united", "newcastle utd": "newcastle united",
+  "nottham forest": "nottingham forest", "spurs": "tottenham hotspur",
+  "wolves": "wolverhampton wanderers",
+};
+function normTeam(s) {
+  const base = (s || "").toLowerCase().trim();
+  return normName(CLUB_NAME_ALIASES[base] || base);
+}
+function attachDeeperStats(data) {
+  if (!data) return;
+  const byKey = (rows) => {
+    const map = {};
+    for (const r of rows || []) map[normTeam(r.team) + "|" + normName(r.name)] = r;
+    return map;
+  };
+  const understatByKey = byKey(data.understat);
+  const fbrefByKey = byKey(data.fbref);
+  for (const p of state.players) {
+    const team = state.teamsById[p.teamId];
+    if (!team) continue;
+    const tKey = normTeam(team.name);
+    const fullKey = tKey + "|" + normName(p.firstName + " " + p.secondName);
+    const webKey = tKey + "|" + normName(p.webName);
+    const u = understatByKey[fullKey] || understatByKey[webKey];
+    const f = fbrefByKey[fullKey] || fbrefByKey[webKey];
+    if (u) { p.dsShots = u.shots; p.dsKeyPasses = u.keyPasses; p.dsXGChain = u.xGChain; p.dsXGBuildup = u.xGBuildup; }
+    if (f) { p.dsTackles = f.tackles; p.dsInterceptions = f.interceptions; p.dsBlocks = f.blocks; p.dsClearances = f.clearances; p.dsAerialsWon = f.aerialsWon; p.dsAerialWinPct = f.aerialWinPct; }
+  }
+}
+
 function transformPlayer(e) {
   return {
     id: e.id, code: e.code, webName: e.web_name, firstName: e.first_name, secondName: e.second_name,
@@ -838,6 +961,7 @@ function transformPlayer(e) {
     costChangeEvent: e.cost_change_event ?? 0, valueSeasonRaw: e.value_season,
     inDreamteam: !!e.in_dreamteam, dreamteamCount: e.dreamteam_count ?? 0,
     starts: e.starts ?? 0,
+    ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
   };
 }
 
@@ -870,10 +994,11 @@ async function loadData() {
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
 
-    const fixtures = await fplGet("/fixtures/");
+    const [fixtures, deeper] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats()]);
     state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
     computeTeamTiers();
+    attachDeeperStats(deeper);
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
@@ -928,26 +1053,26 @@ function precomputeStrengthRanges() {
 // out automatically; newly promoted clubs have no historical row and are
 // treated as mid-table until real results come in).
 const PL_TABLE_LAST_SEASON = [
-  { short: "ARS", played: 38, won: 26, drawn: 7, lost: 5, gd: 44, points: 85 },
-  { short: "MCI", played: 38, won: 23, drawn: 9, lost: 6, gd: 42, points: 78 },
-  { short: "MUN", played: 38, won: 20, drawn: 11, lost: 7, gd: 19, points: 71 },
-  { short: "AVL", played: 38, won: 19, drawn: 8, lost: 11, gd: 7, points: 65 },
-  { short: "LIV", played: 38, won: 17, drawn: 9, lost: 12, gd: 10, points: 60 },
-  { short: "BOU", played: 38, won: 13, drawn: 18, lost: 7, gd: 4, points: 57 },
-  { short: "SUN", played: 38, won: 14, drawn: 12, lost: 12, gd: -6, points: 54 },
-  { short: "BHA", played: 38, won: 14, drawn: 11, lost: 13, gd: 6, points: 53 },
-  { short: "BRE", played: 38, won: 14, drawn: 11, lost: 13, gd: 3, points: 53 },
-  { short: "CHE", played: 38, won: 14, drawn: 10, lost: 14, gd: 6, points: 52 },
-  { short: "FUL", played: 38, won: 15, drawn: 7, lost: 16, gd: 4, points: 52 },
-  { short: "NEW", played: 38, won: 14, drawn: 7, lost: 17, gd: -2, points: 49 },
-  { short: "EVE", played: 38, won: 13, drawn: 10, lost: 15, gd: -3, points: 49 },
-  { short: "LEE", played: 38, won: 11, drawn: 14, lost: 13, gd: -7, points: 47 },
-  { short: "CRY", played: 38, won: 11, drawn: 12, lost: 15, gd: -10, points: 45 },
-  { short: "NFO", played: 38, won: 11, drawn: 11, lost: 16, gd: -3, points: 44 },
-  { short: "TOT", played: 38, won: 10, drawn: 11, lost: 17, gd: -9, points: 41 },
-  { short: "WHU", played: 38, won: 10, drawn: 9, lost: 19, gd: -19, points: 39 },
-  { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gd: -37, points: 22 },
-  { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gd: -41, points: 20 },
+  { short: "ARS", played: 38, won: 26, drawn: 7, lost: 5, gf: 71, ga: 27, gd: 44, points: 85 },
+  { short: "MCI", played: 38, won: 23, drawn: 9, lost: 6, gf: 77, ga: 35, gd: 42, points: 78 },
+  { short: "MUN", played: 38, won: 20, drawn: 11, lost: 7, gf: 69, ga: 50, gd: 19, points: 71 },
+  { short: "AVL", played: 38, won: 19, drawn: 8, lost: 11, gf: 56, ga: 49, gd: 7, points: 65 },
+  { short: "LIV", played: 38, won: 17, drawn: 9, lost: 12, gf: 63, ga: 53, gd: 10, points: 60 },
+  { short: "BOU", played: 38, won: 13, drawn: 18, lost: 7, gf: 58, ga: 54, gd: 4, points: 57 },
+  { short: "SUN", played: 38, won: 14, drawn: 12, lost: 12, gf: 42, ga: 48, gd: -6, points: 54 },
+  { short: "BHA", played: 38, won: 14, drawn: 11, lost: 13, gf: 52, ga: 46, gd: 6, points: 53 },
+  { short: "BRE", played: 38, won: 14, drawn: 11, lost: 13, gf: 55, ga: 52, gd: 3, points: 53 },
+  { short: "CHE", played: 38, won: 14, drawn: 10, lost: 14, gf: 58, ga: 52, gd: 6, points: 52 },
+  { short: "FUL", played: 38, won: 15, drawn: 7, lost: 16, gf: 47, ga: 51, gd: -4, points: 52 },
+  { short: "NEW", played: 38, won: 14, drawn: 7, lost: 17, gf: 53, ga: 55, gd: -2, points: 49 },
+  { short: "EVE", played: 38, won: 13, drawn: 10, lost: 15, gf: 47, ga: 50, gd: -3, points: 49 },
+  { short: "LEE", played: 38, won: 11, drawn: 14, lost: 13, gf: 49, ga: 56, gd: -7, points: 47 },
+  { short: "CRY", played: 38, won: 11, drawn: 12, lost: 15, gf: 41, ga: 51, gd: -10, points: 45 },
+  { short: "NFO", played: 38, won: 11, drawn: 11, lost: 16, gf: 48, ga: 51, gd: -3, points: 44 },
+  { short: "TOT", played: 38, won: 10, drawn: 11, lost: 17, gf: 48, ga: 57, gd: -9, points: 41 },
+  { short: "WHU", played: 38, won: 10, drawn: 9, lost: 19, gf: 46, ga: 65, gd: -19, points: 39 },
+  { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gf: 38, ga: 75, gd: -37, points: 22 },
+  { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gf: 27, ga: 68, gd: -41, points: 20 },
 ];
 
 // Builds a live table from this season's finished fixtures. opts.venue
@@ -957,9 +1082,12 @@ const PL_TABLE_LAST_SEASON = [
 function computeLiveTable(fixtures, opts) {
   opts = opts || {};
   let finished = (fixtures || []).filter(f => f.finished && f.team_h_score != null);
-  if (opts.lastN && opts.lastN !== "ALL") {
+  if (opts.lastN && opts.lastN !== "ALL" && opts.lastN !== "RANGE") {
     const maxEvent = Math.max(...finished.map(f => f.event || 0), 0);
     finished = finished.filter(f => f.event > maxEvent - Number(opts.lastN));
+  }
+  if (opts.lastN === "RANGE" && opts.gwFrom && opts.gwTo) {
+    finished = finished.filter(f => f.event >= Number(opts.gwFrom) && f.event <= Number(opts.gwTo));
   }
   if (!finished.length) return null;
   const rows = {};
@@ -987,7 +1115,7 @@ function computeLiveTable(fixtures, opts) {
 // apply to the live table — last season's fallback is only ever a single
 // final aggregate, so those controls are ignored when showing it.
 function resolveActiveTable() {
-  const live = computeLiveTable(state.allFixtures, { venue: state.tableFilters.venue, lastN: state.tableFilters.lastN });
+  const live = computeLiveTable(state.allFixtures, { venue: state.tableFilters.venue, lastN: state.tableFilters.lastN, gwFrom: state.tableFilters.gwFrom, gwTo: state.tableFilters.gwTo });
   if (state.tableSource === "current") return { rows: live || [], isLive: true, empty: !live };
   if (state.tableSource === "last") return { rows: lastSeasonRows(), isLive: false, empty: false };
   return live ? { rows: live, isLive: true, empty: false } : { rows: lastSeasonRows(), isLive: false, empty: false };
@@ -996,7 +1124,7 @@ function lastSeasonRows() {
   const byShort = Object.fromEntries(state.teams.map(t => [t.short_name, t]));
   return PL_TABLE_LAST_SEASON
     .filter(r => byShort[r.short])
-    .map(r => ({ teamId: byShort[r.short].id, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gd: r.gd, gf: null, ga: null, points: r.points }));
+    .map(r => ({ teamId: byShort[r.short].id, played: r.played, won: r.won, drawn: r.drawn, lost: r.lost, gd: r.gd, gf: r.gf, ga: r.ga, points: r.points }));
 }
 
 function toScale1to5(value, range) {
@@ -1132,6 +1260,7 @@ function getFiltered() {
     if (f.team !== "ALL" && String(p.teamId) !== f.team) return false;
     if (f.minPrice && p.nowCost < Number(f.minPrice) * 10) return false;
     if (f.maxPrice && p.nowCost > Number(f.maxPrice) * 10) return false;
+    if (f.minMinutes && p.minutes < Number(f.minMinutes)) return false;
     if (f.search) {
       const s = f.search.toLowerCase();
       if (!p.webName.toLowerCase().includes(s) && !p.secondName.toLowerCase().includes(s) && !p.firstName.toLowerCase().includes(s)) return false;
@@ -1212,8 +1341,44 @@ function buildToolbarStatics() {
   document.getElementById("teamSelect").onchange = (e) => { state.filters.team = e.target.value; renderStats(); };
   document.getElementById("fixtureGw").onchange = (e) => { state.filters.gw = e.target.value; renderStats(); };
   document.getElementById("fixtureVenue").onchange = (e) => { state.filters.venue = e.target.value; renderStats(); };
+  document.getElementById("applyRangeBtn").onclick = async () => {
+    const from = Number(document.getElementById("rangeFromGw").value);
+    const to = Number(document.getElementById("rangeToGw").value);
+    const statusEl = document.getElementById("rangeStatus");
+    if (!from || !to || from < 1 || to > 38 || from > to) {
+      statusEl.textContent = "Enter a valid GW range (e.g. 1–5).";
+      return;
+    }
+    statusEl.textContent = "Loading…";
+    try {
+      state.rangePoints = await fetchRangePoints(from, to);
+      state.rangeLabel = `Pts GW${from}-${to}`;
+      state.filters.sort = "rangePts";
+      statusEl.textContent = `Showing points for GW${from}-${to}.`;
+      renderStats();
+    } catch (e) {
+      statusEl.textContent = "Couldn't load that range: " + e.message;
+    }
+  };
+
   document.getElementById("tierRankMin").onchange = (e) => { state.filters.rankMin = Number(e.target.value) || 1; renderStats(); };
   document.getElementById("tierRankMax").onchange = (e) => { state.filters.rankMax = Number(e.target.value) || 20; renderStats(); };
+  document.getElementById("rankLegendToggle").onclick = () => {
+    const panel = document.getElementById("rankLegendPanel");
+    const show = panel.style.display === "none";
+    panel.style.display = show ? "block" : "none";
+    if (show) {
+      const ranked = [...state.teams].sort((a, b) => (state.teamTier?.[a.id]?.rank ?? 99) - (state.teamTier?.[b.id]?.rank ?? 99));
+      panel.innerHTML = "Rank 1 = top of the table (hardest opponent), rank " + ranked.length + " = bottom (easiest opponent):<br>" +
+        ranked.map(t => `${state.teamTier?.[t.id]?.rank ?? "—"}. ${t.short_name}`).join(" &nbsp; ");
+    }
+  };
+
+  let minMinTimer;
+  document.getElementById("minMinutes").oninput = (e) => {
+    clearTimeout(minMinTimer);
+    minMinTimer = setTimeout(() => { state.filters.minMinutes = e.target.value; renderStats(); }, 250);
+  };
 
   let searchTimer;
   document.getElementById("search").oninput = (e) => {
@@ -1276,7 +1441,7 @@ function fixtureTickerHtml(teamId, count) {
   if (fx.length === 0) return '<span style="color:var(--ink-faint);font-size:11px">No upcoming fixtures</span>';
   return '<div class="fdr-ticker">' + fx.map(f => {
     const opp = state.teamsById[f.oppId];
-    const label = (opp ? opp.short_name : "?") + (f.isHome ? "(H)" : "(A)");
+    const label = f.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
     const score = customFdr(teamId, f.oppId, f.isHome);
     const rounded = Math.max(1, Math.min(5, Math.round(score)));
     return `<span class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
@@ -1291,7 +1456,7 @@ function gwFixtureHtml(teamId, gwId) {
   if (fx.length === 0) return '<div class="fdr-ticker"><span style="color:var(--ink-faint);font-size:10px">No fixture</span></div>';
   return '<div class="fdr-ticker">' + fx.map(f => {
     const opp = state.teamsById[f.oppId];
-    const label = (opp ? opp.short_name : "?") + (f.isHome ? "(H)" : "(A)");
+    const label = f.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
     const score = customFdr(teamId, f.oppId, f.isHome);
     const rounded = Math.max(1, Math.min(5, Math.round(score)));
     return `<span class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"}" title="Custom FDR ${score.toFixed(1)}">${label}</span>`;
@@ -2518,16 +2683,24 @@ function renderPlTable() {
   const lastNSel = document.getElementById("tableLastNSelect");
   venueSel.value = state.tableFilters.venue;
   lastNSel.value = state.tableFilters.lastN;
+  const rangeInputs = document.getElementById("tableRangeInputs");
+  rangeInputs.style.display = state.tableFilters.lastN === "RANGE" ? "inline-flex" : "none";
+  document.getElementById("tableRangeFrom").value = state.tableFilters.gwFrom;
+  document.getElementById("tableRangeTo").value = state.tableFilters.gwTo;
   const table = resolveActiveTable();
   venueSel.disabled = !table.isLive;
   lastNSel.disabled = !table.isLive;
   const note = document.getElementById("tableNote");
   if (table.empty) {
-    note.textContent = "This season hasn't kicked off yet, so there are no live results — showing last season's final table instead until real fixtures are played. Home/away and last-N-gameweek filters need live results, so they're disabled for now.";
+    note.textContent = state.tableFilters.lastN === "RANGE" && state.tableFilters.gwFrom
+      ? `No finished matches in GW${state.tableFilters.gwFrom}-${state.tableFilters.gwTo} yet — showing last season's final table instead.`
+      : "This season hasn't kicked off yet, so there are no live results — showing last season's final table instead until real fixtures are played. Home/away and last-N-gameweek filters need live results, so they're disabled for now.";
   } else if (table.isLive) {
-    note.textContent = "Live table for the current season, built from finished fixtures.";
+    note.textContent = state.tableFilters.lastN === "RANGE" && state.tableFilters.gwFrom
+      ? `Table for GW${state.tableFilters.gwFrom}-${state.tableFilters.gwTo} only, built from finished fixtures in that range.`
+      : "Live table for the current season, built from finished fixtures.";
   } else {
-    note.textContent = "2025/26 final table — used as a stand-in until this season has results of its own. GF/GA aren't shown here since I don't have verified per-club figures for last season, only the final W/D/L/GD/Pts. Switch to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
+    note.textContent = "2025/26 final table — used as a stand-in until this season has results of its own. Switch to \"This season (live)\" any time, or it'll switch itself automatically once matches are played.";
   }
   const rows = table.empty ? lastSeasonRows() : table.rows;
   const body = document.getElementById("plTableBody");
@@ -2562,6 +2735,11 @@ function setupTableControls() {
   };
   document.getElementById("tableLastNSelect").onchange = (e) => {
     state.tableFilters.lastN = e.target.value;
+    renderPlTable();
+  };
+  document.getElementById("tableRangeApply").onclick = () => {
+    state.tableFilters.gwFrom = document.getElementById("tableRangeFrom").value;
+    state.tableFilters.gwTo = document.getElementById("tableRangeTo").value;
     renderPlTable();
   };
 }
@@ -2651,10 +2829,10 @@ function renderFdrGrid() {
       if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint)">–</td>`;
       return `<td style="padding:4px">${fixtures.map(fx => {
         const opp = state.teamsById[fx.oppId];
-        const label = (opp ? opp.short_name : "?") + (fx.isHome ? "" : "*");
+        const label = fx.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         const rounded = Math.max(1, Math.min(5, Math.round(score)));
-        return `<div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:44px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}">${label}</div>`;
+        return `<div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}">${label}</div>`;
       }).join("")}</td>`;
     });
     return `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}</tr>`;
@@ -2689,17 +2867,128 @@ function populateH2hSelects() {
   selB.value = state.h2h.teamB;
 }
 
+// Current 2026/27 managers, sourced July 2026 — this will go stale as jobs
+// change; update the "name"/"since" fields here if a club makes a change.
+const MANAGER_BY_SHORT = {
+  ARS: { name: "Mikel Arteta", since: "Dec 2019" },
+  AVL: { name: "Unai Emery", since: "Oct 2022" },
+  BOU: { name: "Marco Rose", since: "Jul 2026" },
+  BRE: { name: "Keith Andrews", since: "Jun 2025" },
+  BHA: { name: "Fabian Hürzeler", since: "Jun 2024" },
+  CHE: { name: "Xabi Alonso", since: "Jul 2026" },
+  COV: { name: "Frank Lampard", since: "Nov 2024" },
+  CRY: { name: "Pierre Sage", since: "Jun 2026" },
+  EVE: { name: "David Moyes", since: "Jan 2025" },
+  FUL: { name: "Alvaro Arbeloa", since: "Jul 2026" },
+  HUL: { name: "Sergej Jakirović", since: "Summer 2025" },
+  IPS: { name: "Gary O'Neil", since: "Jun 2026" },
+  LEE: { name: "Daniel Farke", since: "Jul 2023" },
+  LIV: { name: "Andoni Iraola", since: "Jun 2026" },
+  MCI: { name: "Enzo Maresca", since: "Jul 2026" },
+  MUN: { name: "Michael Carrick", since: "Jan 2026" },
+  NEW: { name: "Eddie Howe", since: "Nov 2021" },
+  NFO: { name: "Oliver Glasner", since: "Jul 2026" },
+  SUN: { name: "Régis Le Bris", since: "Jun 2024" },
+  TOT: { name: "Roberto De Zerbi", since: "May 2026" },
+};
+
+// Brief, well-established tactical identity — only filled in for managers
+// with enough of a track record to describe with confidence. Left blank
+// for brand-new appointments rather than guessing; use the notes field for those.
+const PLAYSTYLE_BY_SHORT = {
+  ARS: "Possession-based build-up, high defensive line, strong on set pieces.",
+  AVL: "Organised mid-block, quick transitions, makes heavy use of wing overloads.",
+  BHA: "Possession-heavy positional play with an aggressive, high-energy press.",
+  BOU: "High-energy gegenpressing and aggressive counter-press, in the Salzburg/Dortmund coaching lineage.",
+  BRE: "Set-piece-driven, direct passing; promoted internally to continue the club's data-led approach.",
+  CHE: "Possession-based build-up with a flexible back three and patient progression — the identity that won an unbeaten domestic double at Leverkusen.",
+  COV: "Attacking, front-foot approach built around quick vertical transitions.",
+  EVE: "Pragmatic and well-organised defensively, direct on the counter.",
+  HUL: "Compact, disciplined low block with quick transitions, built promotion-winning sides in Croatia and Turkey.",
+  IPS: "Pragmatic and adaptable, favours a mid-block with quick transitions based on his Bournemouth/Wolves spells.",
+  LEE: "Patient possession-based build-up play, prefers control over transition.",
+  LIV: "High-intensity pressing with quick vertical transitions — the aggressive approach that took Bournemouth into Europe.",
+  MCI: "Possession-based positional play with patient, structured build-up.",
+  MUN: "Balanced possession with a disciplined shape, favours patient build-up over high-risk pressing.",
+  NEW: "High press with direct, vertical transitions into the final third.",
+  NFO: "Aggressive high press with a back three — the approach that won the FA Cup and Conference League at Palace.",
+  SUN: "Possession-oriented, patient build-up from the back.",
+  TOT: "Possession-heavy positional play with high-risk build-up from the back, prioritising control over directness.",
+};
+
+// Last N results (most recent last), e.g. "LWDWW". Null if nothing played yet.
+function teamRecentForm(teamId, n) {
+  const fx = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null && (f.team_h === teamId || f.team_a === teamId))
+    .sort((a, b) => (b.event || 0) - (a.event || 0)).slice(0, n || 5);
+  if (!fx.length) return null;
+  return fx.reverse().map(f => {
+    const isHome = f.team_h === teamId;
+    const gf = isHome ? f.team_h_score : f.team_a_score;
+    const ga = isHome ? f.team_a_score : f.team_h_score;
+    return gf > ga ? "W" : gf < ga ? "L" : "D";
+  }).join("");
+}
+// This team's record restricted to just home or just away fixtures this season.
+function teamVenueRecord(teamId, venue) {
+  const table = computeLiveTable(state.allFixtures, { venue });
+  if (!table) return null;
+  return table.find(r => r.teamId === teamId) || null;
+}
+function fmtRecord(r) {
+  if (!r) return "No matches played yet";
+  return `${r.won}W ${r.drawn}D ${r.lost}L · ${r.gf}:${r.ga} · ${r.points}pts`;
+}
+function formBreakdownHtml(team) {
+  const overall = computeLiveTable(state.allFixtures, {})?.find(r => r.teamId === team.id) || null;
+  const home = teamVenueRecord(team.id, "HOME");
+  const away = teamVenueRecord(team.id, "AWAY");
+  return `
+    <p class="foot-note" style="margin-bottom:2px"><strong>Season form:</strong> ${fmtRecord(overall)}</p>
+    <p class="foot-note" style="margin-bottom:2px"><strong>Home form:</strong> ${fmtRecord(home)}</p>
+    <p class="foot-note"><strong>Away form:</strong> ${fmtRecord(away)}</p>
+  `;
+}
+function clubProfileHtml(team) {
+  const mgr = MANAGER_BY_SHORT[team.short_name];
+  const style = PLAYSTYLE_BY_SHORT[team.short_name];
+  const form = teamRecentForm(team.id, 5);
+  return `
+    <div class="card" style="flex:1;min-width:280px">
+      <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name} — profile (gathered)</div>
+      <p class="foot-note" style="margin-bottom:4px"><strong>Manager:</strong> ${mgr ? `${mgr.name} (since ${mgr.since})` : "Not on file — add in notes below"}</p>
+      <p class="foot-note" style="margin-bottom:4px"><strong>Known playstyle:</strong> ${style || "No established track record yet at this club — add your own read in the notes below"}</p>
+      <p class="foot-note"><strong>Form (last 5):</strong> ${form || "No matches played yet this season"}</p>
+    </div>
+  `;
+}
 function clubNotesHtml(team) {
   const notes = state.managerNotes[team.id] || { philosophy: "", lineup: "" };
   return `
     <div class="card" style="flex:1;min-width:280px">
-      <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name} — your notes</div>
-      <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:4px">Manager & philosophy</label>
-      <textarea data-notes-team="${team.id}" data-notes-field="philosophy" rows="3" style="width:100%;margin-bottom:10px;resize:vertical" placeholder="e.g. high press, back 4, likes to rotate in Europe...">${notes.philosophy || ""}</textarea>
+      <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name} — your own notes</div>
+      <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:4px">Anything beyond what's gathered above</label>
+      <textarea data-notes-team="${team.id}" data-notes-field="philosophy" rows="3" style="width:100%;margin-bottom:10px;resize:vertical" placeholder="e.g. rotates heavily in cup competitions, weak vs low blocks...">${notes.philosophy || ""}</textarea>
       <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:4px">Likely next XI / setup</label>
       <textarea data-notes-team="${team.id}" data-notes-field="lineup" rows="3" style="width:100%;resize:vertical" placeholder="e.g. expect 3 changes from last week, X still injured...">${notes.lineup || ""}</textarea>
     </div>
   `;
+}
+
+// Well-known rivalries — not a full multi-season head-to-head record (the
+// FPL API only exposes this season's fixtures, so true historical H2H
+// isn't available), but flags recognisable derbies so the context isn't lost.
+const KNOWN_RIVALRIES = {
+  "ARS|TOT": "North London Derby",
+  "LIV|EVE": "Merseyside Derby",
+  "MCI|MUN": "Manchester Derby",
+  "NEW|SUN": "Tyne–Wear Derby",
+  "ARS|CHE": "West London/North London rivalry",
+  "CHE|TOT": "London rivalry",
+  "AVL|BRE": null,
+};
+function rivalryName(teamA, teamB) {
+  const key1 = teamA.short_name + "|" + teamB.short_name, key2 = teamB.short_name + "|" + teamA.short_name;
+  return KNOWN_RIVALRIES[key1] || KNOWN_RIVALRIES[key2] || null;
 }
 
 function renderH2H() {
@@ -2741,12 +3030,31 @@ function renderH2H() {
   }
   const aHome = customFdr(teamA.id, teamB.id, true).toFixed(1);
   const bHome = customFdr(teamB.id, teamA.id, true).toFixed(1);
+  const rivalry = rivalryName(teamA, teamB);
 
   body.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">This season's meetings (real data)</div>
+      ${rivalry ? `<p class="foot-note" style="margin-bottom:6px">🔥 ${rivalry}</p>` : ""}
       <div class="fixture-list">${meetingsHtml}</div>
       <p class="foot-note" style="margin-top:8px">Custom FDR if hosting: ${teamA.name} ${aHome} · ${teamB.name} ${bHome} (your weights from the Rankings tab).</p>
+      <p class="foot-note" style="margin-top:4px;color:var(--ink-faint)">Multi-season head-to-head history isn't exposed by the FPL API, so only this season's meetings are shown above as real data.</p>
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      ${clubProfileHtml(teamA)}
+      ${clubProfileHtml(teamB)}
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="card" style="flex:1;min-width:280px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamA.id, 20)}${teamA.name} — form (real data)</div>
+        ${formBreakdownHtml(teamA)}
+      </div>
+      <div class="card" style="flex:1;min-width:280px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamB.id, 20)}${teamB.name} — form (real data)</div>
+        ${formBreakdownHtml(teamB)}
+      </div>
     </div>
 
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
