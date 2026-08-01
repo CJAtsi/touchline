@@ -360,6 +360,9 @@
   .formula-field label { font-size: 11px; color: var(--ink-faint); display: block; margin-bottom: 4px; }
   .formula-field input[type=range] { width: 100%; }
   .formula-field .val { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--gold-bright); float: right; }
+  .formula-field .field-desc { font-size: 10.5px; color: var(--ink-faint); margin-top: 3px; line-height: 1.3; }
+  .fdr-example-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .fdr-example-row .fdr-example-label { font-size: 12px; color: var(--ink-dim); flex: 1; }
 
   /* club rankings */
   .rank-row {
@@ -582,21 +585,20 @@
 
   <section id="tab-rankings" style="display:none">
     <h1 class="page-title">Rankings</h1>
-    <p class="page-sub">Fixture difficulty and club rankings, computed from each club's attack/defence/overall strength — FPL's own longer-run ratings by default, or your own opinion if you override a club below.</p>
+    <p class="page-sub">Two separate, independent systems live on this page — they don't affect each other. <strong>Fixture difficulty</strong> (below) colours individual fixtures. <strong>Club rankings</strong> (further down) is a single best-to-worst list of all 20 clubs.</p>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="detail-block-title">Fixture difficulty formula</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Affects the FDR pills shown next to fixtures elsewhere on the site (Player stats detail panel, squad builder) — not the club rankings list below, which has its own weights.</p>
+      <div class="detail-block-title">1. Fixture difficulty formula</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Controls the colour-coded FDR pills shown next to fixtures everywhere on the site (this tab's fixture list, Player stats detail panel, squad builder, the FDR tab). Each slider is how much one trait of your <em>opponent</em> counts against you when judging how hard a fixture is — higher = that trait matters more.</p>
       <div class="formula-panel" id="fdrFormulaPanel"></div>
       <button class="dir-btn" id="resetFdrBtn" style="margin-top:8px">Reset to default</button>
-      <div class="foot-note" style="margin-top:10px">
-        Formula: blend of the opponent's attack / defence / overall strength (their away ratings when you're at home, home ratings when you're away), plus a small home-advantage adjustment. Attack weight = how much the opponent's attacking threat counts against you; defence weight = how much their defensive solidity counts; overall weight = their general quality on top of that; home advantage = a fixed discount applied when you're playing at home. All weights are yours to change — this recomputes every fixture pill on the site immediately.
-      </div>
+      <div class="detail-block-title" style="margin-top:16px;font-size:12px">Try it: two example fixtures</div>
+      <div id="fdrFormulaExample"></div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
-      <div class="detail-block-title">Club rankings</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">This list (below) is controlled by these weights, not the fixture-difficulty ones above. Squad weight = how much this season's actual squad (points once underway, price before that) counts; strength weight = how much FPL's longer-run club strength rating counts.</p>
+      <div class="detail-block-title">2. Club rankings</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">A single ranked list of all 20 clubs (below), best to worst — separate from the fixture-difficulty formula above and not used by it. Each slider is how much one signal counts toward a club's overall rank.</p>
       <div class="formula-panel" id="rankFormulaPanel" style="margin-bottom:14px"></div>
       <div id="rankingsList"></div>
       <p class="foot-note" id="rankingsNote"></p>
@@ -2893,14 +2895,14 @@ function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rank
 function saveTeamOverrides() { persistSet("teamOverrides", JSON.stringify(state.teamOverrides)); }
 
 const FDR_FORMULA_FIELDS = [
-  { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1 },
-  { key: "defenceWeight", label: "Opponent defence weight", min: 0, max: 3, step: 0.1 },
-  { key: "overallWeight", label: "Opponent overall weight", min: 0, max: 3, step: 0.1 },
-  { key: "homeAdvantage", label: "Home advantage nudge", min: 0, max: 1, step: 0.05 },
+  { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1, desc: "How much their goal-scoring threat counts against you." },
+  { key: "defenceWeight", label: "Opponent defence weight", min: 0, max: 3, step: 0.1, desc: "How much their solidity at the back counts against you." },
+  { key: "overallWeight", label: "Opponent overall weight", min: 0, max: 3, step: 0.1, desc: "A catch-all for their general quality — squad depth and form — beyond just attack/defence." },
+  { key: "homeAdvantage", label: "Home advantage nudge", min: 0, max: 1, step: 0.05, desc: "Knocked off the difficulty score when you're playing at home." },
 ];
 const RANK_FORMULA_FIELDS = [
-  { key: "squadWeight", label: "Squad quality weight", min: 0, max: 3, step: 0.1 },
-  { key: "strengthWeight", label: "Team strength weight", min: 0, max: 3, step: 0.1 },
+  { key: "squadWeight", label: "Squad quality weight", min: 0, max: 3, step: 0.1, desc: "This season's actual squad — total points once the season's underway, squad value before that." },
+  { key: "strengthWeight", label: "Team strength weight", min: 0, max: 3, step: 0.1, desc: "FPL's own longer-run club rating, independent of this season's results so far." },
 ];
 
 function renderFormulaPanel(containerEl, formulaObj, fields, onChange) {
@@ -2908,6 +2910,7 @@ function renderFormulaPanel(containerEl, formulaObj, fields, onChange) {
     <div class="formula-field">
       <label>${f.label} <span class="val" data-val="${f.key}">${formulaObj[f.key].toFixed(2)}</span></label>
       <input type="range" min="${f.min}" max="${f.max}" step="${f.step}" value="${formulaObj[f.key]}" data-key="${f.key}" />
+      ${f.desc ? `<div class="field-desc">${f.desc}</div>` : ""}
     </div>
   `).join("");
   containerEl.querySelectorAll("input[type=range]").forEach(input => {
@@ -2918,6 +2921,33 @@ function renderFormulaPanel(containerEl, formulaObj, fields, onChange) {
       onChange();
     };
   });
+}
+
+// Two concrete example fixtures (vs the currently strongest and weakest
+// club by FPL's overall rating) so a slider move has an immediate,
+// readable payoff instead of just a number changing.
+function renderFdrFormulaExample() {
+  const el = document.getElementById("fdrFormulaExample");
+  if (!el || !state.teams.length || !state.strengthRanges) return;
+  const byOverall = [...state.teams].sort((a, b) =>
+    ((b.strength_overall_home + b.strength_overall_away) / 2) - ((a.strength_overall_home + a.strength_overall_away) / 2));
+  const strongest = byOverall[0], weakest = byOverall[byOverall.length - 1];
+  const rows = [
+    { opp: strongest, label: "Home fixture vs the strongest club" },
+    { opp: weakest, label: "Home fixture vs the weakest club" },
+  ];
+  // customFdr needs a "your team" id distinct from the opponent — use any
+  // fixed reference club so only the opponent side of the formula varies.
+  const refTeam = state.teams.find(t => t.id !== strongest.id && t.id !== weakest.id) || state.teams[0];
+  el.innerHTML = rows.map(({ opp, label }) => {
+    const score = customFdr(refTeam.id, opp.id, true);
+    const rounded = Math.max(1, Math.min(5, Math.round(score)));
+    return `<div class="fdr-example-row">
+      <div class="fdr-example-label">${label} (${opp.name})</div>
+      <div class="fdr-pill" style="background:${FDR_COLOR[rounded] || "#888"};width:64px;font-size:10px">${opp.short_name} (H)</div>
+      <div class="mono" style="font-size:12px;color:var(--ink-dim);width:34px;text-align:right">${score.toFixed(1)}</div>
+    </div>`;
+  }).join("");
 }
 
 // ---------- rankings: club composite ----------
@@ -2989,11 +3019,13 @@ function renderFormulaPanels() {
     saveFdrFormula();
     renderStats(); // refreshes any visible fixture-dependent bits; doesn't touch this panel or the rankings list
     renderFdrGrid();
+    renderFdrFormulaExample();
   });
   renderFormulaPanel(document.getElementById("rankFormulaPanel"), state.rankFormula, RANK_FORMULA_FIELDS, () => {
     saveRankFormula();
     renderRankingsList(); // list only — never rebuilds this panel's own sliders
   });
+  renderFdrFormulaExample();
 }
 
 function renderRankings() {
