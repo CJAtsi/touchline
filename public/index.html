@@ -699,6 +699,7 @@ function imgFallback(img) {
 }
 
 const SORT_OPTIONS = [
+  ["webName", "Name (A-Z)"], ["teamShort", "Team (A-Z)"], ["position", "Position (GK-DEF-MID-FWD)"],
   ["totalPoints", "Total points"], ["form", "Form"], ["epNext", "Next GW (FPL proj.)"],
   ["pointsPerGame", "Points per game"], ["nowCost", "Price"], ["selectedByPercent", "Ownership %"],
   ["ictIndex", "ICT index"], ["threat", "Threat"], ["creativity", "Creativity"], ["influence", "Influence"],
@@ -808,6 +809,7 @@ let state = {
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false,
+  expandedShortlistId: null,
 };
 
 // ---------- data fetching ----------
@@ -1367,9 +1369,17 @@ function getFiltered() {
     if (!playerHasMatchingFixture(p)) return false;
     return true;
   });
+  const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
   list.sort((a, b) => {
-    const av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
-    const bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
+    let av, bv;
+    if (f.sort === "webName") { av = a.webName.toLowerCase(); bv = b.webName.toLowerCase(); }
+    else if (f.sort === "teamShort") { av = state.teamsById[a.teamId]?.short_name || ""; bv = state.teamsById[b.teamId]?.short_name || ""; }
+    else if (f.sort === "position") { av = POS_ORDER[a.position] ?? 9; bv = POS_ORDER[b.position] ?? 9; }
+    else {
+      av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
+      bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
+    }
+    if (typeof av === "string") return av.localeCompare(bv) * (f.dir === "asc" ? 1 : -1);
     return ((av ?? 0) - (bv ?? 0)) * (f.dir === "asc" ? 1 : -1);
   });
   return list.slice(0, 200);
@@ -1517,12 +1527,26 @@ function buildToolbarStatics() {
   });
 
   const headRow = document.getElementById("headRow");
-  [
-    ["Player", "label-col"], ["Team", "label-col"], ["Pos", "label-col"], ["", "label-col"],
-    ["Total pts", ""], ["Form", ""], ["Next GW", ""], ["Price", ""],
-  ].forEach(([label, cls]) => {
+  const FIXED_SORTABLE = [
+    ["Player", "label-col", "webName", "asc"], ["Team", "label-col", "teamShort", "asc"],
+    ["Pos", "label-col", "position", "asc"], ["", "label-col", null, null],
+    ["Total pts", "", "totalPoints", "desc"], ["Form", "", "form", "desc"],
+    ["Next GW", "", "epNext", "desc"], ["Price", "", "nowCost", "desc"],
+  ];
+  FIXED_SORTABLE.forEach(([label, cls, key, defaultDir]) => {
     const th = document.createElement("th");
     th.className = cls; th.textContent = label;
+    if (key) {
+      th.dataset.key = key;
+      th.style.cursor = "pointer";
+      th.onclick = () => {
+        if (state.filters.sort === key) state.filters.dir = state.filters.dir === "desc" ? "asc" : "desc";
+        else { state.filters.sort = key; state.filters.dir = defaultDir; }
+        document.getElementById("sortField").value = state.filters.sort;
+        document.getElementById("dirBtn").textContent = state.filters.dir === "desc" ? "↓" : "↑";
+        renderStats();
+      };
+    }
     headRow.appendChild(th);
   });
   buildStatsHeader();
@@ -1734,25 +1758,45 @@ function renderShortlist() {
     const p = state.players.find(pl => pl.id === item.playerId);
     if (!p) continue;
     const team = state.teamsById[p.teamId];
-    const card = document.createElement("div");
-    card.className = "card"; card.style.marginBottom = "12px";
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div>
-          <div style="font-weight:600">${p.webName} <span style="color:var(--ink-faint);font-weight:400">· ${team ? team.short_name : ""} · ${p.position}</span></div>
-          <div class="mono" style="font-size:12px;color:var(--ink-dim);margin-top:5px;">
-            ${p.totalPoints} pts · form ${p.form.toFixed(1)} · ${fmtPrice(p.nowCost)} · ${p.selectedByPercent.toFixed(1)}% owned · next GW proj. ${p.epNext.toFixed(1)}
-          </div>
-          <div style="margin-top:8px">${fixtureTickerHtml(p.teamId, 5)}</div>
+    const expanded = state.expandedShortlistId === p.id;
+    const row = document.createElement("div");
+    row.className = "card";
+    row.style.cssText = "margin-bottom:6px;padding:8px 12px;cursor:pointer";
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px" data-toggle="${p.id}">
+        ${playerAvatarHtml(p, 26)}
+        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600">
+          ${p.webName} <span style="color:var(--ink-faint);font-weight:400">· ${team ? team.short_name : ""} · ${p.position}</span>
         </div>
-        <button class="star-btn on" data-id="${p.id}" title="Remove from shortlist">★</button>
+        <span class="mono" style="font-size:12px;color:var(--ink-dim);flex-shrink:0">${p.totalPoints}pts</span>
+        <span class="mono" style="font-size:12px;color:var(--gold-bright);flex-shrink:0">${fmtPrice(p.nowCost)}</span>
+        <span style="flex-shrink:0;color:var(--ink-faint);font-size:11px">${expanded ? "▲" : "▼"}</span>
+        <button class="star-btn on" data-id="${p.id}" title="Remove from shortlist" style="flex-shrink:0">★</button>
       </div>
-      <textarea class="note-input" rows="2" placeholder="Notes (fixture run, injury watch, price rise...)" data-note-id="${p.id}">${item.note || ""}</textarea>
+      ${expanded ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+          <div class="mono" style="font-size:12px;color:var(--ink-dim);margin-bottom:8px">
+            form ${p.form.toFixed(1)} · ${p.selectedByPercent.toFixed(1)}% owned · next GW proj. ${p.epNext.toFixed(1)}
+          </div>
+          <div style="margin-bottom:8px">${fixtureTickerHtml(p.teamId, 5)}</div>
+          <textarea class="note-input" rows="2" placeholder="Notes (fixture run, injury watch, price rise...)" data-note-id="${p.id}">${item.note || ""}</textarea>
+        </div>
+      ` : ""}
     `;
-    el.appendChild(card);
+    el.appendChild(row);
   }
-  el.querySelectorAll(".star-btn").forEach(btn => { btn.onclick = () => toggleShortlist(Number(btn.dataset.id)); });
+  el.querySelectorAll("[data-toggle]").forEach(toggleEl => {
+    toggleEl.onclick = () => {
+      const id = Number(toggleEl.dataset.toggle);
+      state.expandedShortlistId = state.expandedShortlistId === id ? null : id;
+      renderShortlist();
+    };
+  });
+  el.querySelectorAll(".star-btn").forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
+  });
   el.querySelectorAll("[data-note-id]").forEach(ta => {
+    ta.onclick = (e) => e.stopPropagation();
     let t;
     ta.oninput = () => {
       clearTimeout(t);
