@@ -1,13 +1,17 @@
 /**
  * touchline-proxy.js — Touchline's Cloudflare Worker
  * ---------------------------------------------------
- * One job, two parts:
+ * Three jobs:
  *   1. Proxies the official FPL API (fantasy.premierleague.com/api) and adds
  *      CORS headers, since FPL doesn't send any and browsers block the
  *      request otherwise.
- *   2. Serves "deeper stats" — season aggregates scraped server-side from
- *      Understat (attacking) and FBref (defending), which FPL's own API
- *      doesn't expose at all.
+ *   2. Serves "deeper stats" — per-player season aggregates scraped
+ *      server-side from Understat (attacking) and FBref (defending), which
+ *      FPL's own API doesn't expose at all. Route: /deeperstats/*
+ *   3. Serves club-level stats — shots, xG, possession, PPDA (a pressing/
+ *      high-line proxy), CBIT (clearances+blocks+interceptions+tackles)
+ *      and more, aggregated per club from the same Understat/FBref sources.
+ *      Route: /clubstats
  *
  * HOW TO DEPLOY
  * Paste this entire file over whatever's currently in your Worker (in the
@@ -38,6 +42,9 @@ export default {
 
     if (url.pathname.startsWith("/deeperstats/")) {
       return handleDeeperStats(url, request);
+    }
+    if (url.pathname.startsWith("/clubstats")) {
+      return handleClubStats(url, request);
     }
 
     return handleFplProxy(url);
@@ -148,19 +155,20 @@ async function scrapeUnderstat() {
 function stripComments(html) {
   return html.replace(/<!--/g, "").replace(/-->/g, "");
 }
-function extractTable(html, tableId) {
+function extractTable(html, tableId, keyField) {
+  keyField = keyField || "player";
   const cleaned = stripComments(html);
   const tableMatch = cleaned.match(new RegExp(`<table[^>]*id="${tableId}"[\\s\\S]*?<\\/table>`));
   if (!tableMatch) return [];
   const rows = [...tableMatch[0].matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)];
   const out = [];
   for (const [, rowHtml] of rows) {
-    if (!rowHtml.includes('data-stat="player"')) continue; // skip header/spacer rows
+    if (!rowHtml.includes(`data-stat="${keyField}"`)) continue; // skip header/spacer rows
     const cells = {};
     for (const [, stat, raw] of rowHtml.matchAll(/data-stat="([^"]+)"[^>]*>(.*?)<\/t[hd]>/g)) {
       cells[stat] = raw.replace(/<[^>]+>/g, "").trim();
     }
-    if (cells.player) out.push(cells);
+    if (cells[keyField]) out.push(cells);
   }
   return out;
 }
@@ -169,11 +177,11 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-async function fetchFbrefPage(path, tableId) {
+async function fetchFbrefPage(path, tableId, keyField) {
   const res = await fetch("https://fbref.com" + path, { headers: SCRAPE_HEADERS });
   const html = await res.text();
   if (!res.ok) throw new Error(`HTTP ${res.status} from FBref ${path} — snippet: ${html.slice(0, 200).replace(/\s+/g, " ")}`);
-  const rows = extractTable(html, tableId);
+  const rows = extractTable(html, tableId, keyField);
   if (!rows.length) throw new Error(`HTTP 200 from FBref ${path} but table #${tableId} not found — snippet: ${html.slice(0, 200).replace(/\s+/g, " ")}`);
   return rows;
 }
@@ -203,4 +211,91 @@ async function scrapeFbref() {
       aerialWinPct: num(misc.aerials_won_pct),
     };
   });
+}
+
+// ---------- 3. Club-level stats (shots, xG, possession, xGC/oppda, CBIT) ----------
+// Understat's league page also embeds a second blob, teamsData, alongside
+// playersData — season-aggregate numbers per club (goals/xG for and
+// against, deep completions, PPDA — a standard proxy for pressing
+// intensity / how high a team's press line sits). One extra regex on a
+// page we're already fetching, no extra request.
+async function scrapeUnderstatTeams() {
+  const res = await fetch("https://understat.com/league/EPL", { headers: SCRAPE_HEADERS });
+  const html = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} from Understat — snippet: ${html.slice(0, 200).replace(/\s+/g, " ")}`);
+  const match = html.match(/var\s+teamsData\s*=\s*JSON\.parse\('(.+?)'\);/);
+  if (!match) throw new Error(`"teamsData" not found on the Understat league page — its layout may have changed.`);
+  const jsonStr = match[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  const raw = JSON.parse(jsonStr);
+  // raw is keyed by team id -> { title, history: [ {xG, xGA, deep, deep_allowed, ppda, ppda_allowed, scored, missed, ...}, ...one per match ] }
+  return Object.values(raw).map(t => {
+    const h = t.history || [];
+    const sum = (key) => h.reduce((s, m) => s + (Number(m[key]) || 0), 0);
+    const sumNested = (key, field) => h.reduce((s, m) => s + (m[key] && Number(m[key][field]) ? Number(m[key][field]) : 0), 0);
+    const games = h.length || 1;
+    return {
+      name: t.title,
+      xG: sum("xG"), xGA: sum("xGA"),
+      goalsScored: sum("scored"), goalsConceded: sum("missed"),
+      deep: sum("deep"), deepAllowed: sum("deep_allowed"),
+      ppda: games ? sumNested("ppda", "att") / Math.max(1, sumNested("ppda", "def")) : null,
+      ppdaAllowed: games ? sumNested("ppda_allowed", "att") / Math.max(1, sumNested("ppda_allowed", "def")) : null,
+      games,
+    };
+  });
+}
+// FBref's team-level "possession" page has a squad-summary table (one row
+// per club) alongside the usual per-player breakdown — data-stat="team" on
+// those rows instead of "player", which is why extractTable takes a
+// keyField now.
+async function scrapeFbrefPossession() {
+  return fetchFbrefPage("/en/comps/9/possession/Premier-League-Stats", "stats_squads_possession_for", "team").then(rows =>
+    rows.map(r => ({ team: r.team, possession: num(r.possession), touchesAttPen: num(r.touches_att_pen_area) }))
+  );
+}
+// Aggregates the already-scraped player-level Understat (shots/xG) and
+// FBref (tackles/blocks/interceptions/clearances) rows up to club level —
+// no extra fetches, just a group-by on data this Worker pulls anyway.
+function aggregatePlayerStatsByClub(understatPlayers, fbrefPlayers) {
+  const byClub = {};
+  const bump = (team, field, val) => {
+    if (!team) return;
+    byClub[team] = byClub[team] || { team, shots: 0, xG: 0, tackles: 0, blocks: 0, interceptions: 0, clearances: 0 };
+    byClub[team][field] += val;
+  };
+  for (const p of understatPlayers || []) { bump(p.team, "shots", p.shots || 0); bump(p.team, "xG", p.xG || 0); }
+  for (const p of fbrefPlayers || []) {
+    bump(p.team, "tackles", p.tackles || 0);
+    bump(p.team, "blocks", p.blocks || 0);
+    bump(p.team, "interceptions", p.interceptions || 0);
+    bump(p.team, "clearances", p.clearances || 0);
+  }
+  return Object.values(byClub).map(c => ({ ...c, cbit: c.clearances + c.blocks + c.interceptions + c.tackles }));
+}
+
+async function handleClubStats(url, request) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const warnings = [];
+  let understatPlayers = [], fbrefPlayers = [], understatTeams = [], possession = [];
+  try { understatPlayers = await scrapeUnderstat(); } catch (e) { warnings.push("Understat players: " + e.message); }
+  try { fbrefPlayers = await scrapeFbref(); } catch (e) { warnings.push("FBref defense/misc: " + e.message); }
+  try { understatTeams = await scrapeUnderstatTeams(); } catch (e) { warnings.push("Understat teams: " + e.message); }
+  try { possession = await scrapeFbrefPossession(); } catch (e) { warnings.push("FBref possession: " + e.message); }
+
+  const clubAgg = aggregatePlayerStatsByClub(understatPlayers, fbrefPlayers);
+
+  const body = JSON.stringify({ clubAgg, understatTeams, possession, warnings, syncedAt: new Date().toISOString() });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      "Cache-Control": warnings.length ? "no-store" : "public, max-age=86400",
+    },
+  });
+  if (!warnings.length) await cache.put(cacheKey, response.clone());
+  return response;
 }
