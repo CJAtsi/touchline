@@ -14,9 +14,15 @@
  *      Route: /clubstats
  *
  * HOW TO DEPLOY
- * Paste this entire file over whatever's currently in your Worker (in the
- * Cloudflare dashboard: Workers & Pages → touchline → Edit code), then hit
- * Deploy. That's it — nothing else to configure.
+ * This project needs THREE files kept in sync on your repo's main branch:
+ * index.html (the app), touchline-proxy.js (this file), and wrangler.toml
+ * (the Worker's config — tells it to serve index.html as a static site AND
+ * run this script for the API routes). Push all three to GitHub main and
+ * the Worker rebuilds automatically. If you're pasting code directly into
+ * the Cloudflare dashboard instead of using Git, you'll need to paste this
+ * file's contents over the Worker's script AND make sure wrangler.toml's
+ * [assets] block is applied too — without it, the site itself won't load
+ * (you'll see a bare "Not Found" at the root URL).
  */
 
 const FPL_BASE = "https://fantasy.premierleague.com/api";
@@ -32,8 +38,17 @@ const SCRAPE_HEADERS = {
   "Accept": "text/html,application/xhtml+xml",
 };
 
+// Paths that are genuinely FPL API calls — everything else (the root "/",
+// or any other path) is the static site and should be served from the
+// assets binding, not proxied to FPL (which 404s on anything that isn't
+// one of these exact endpoints).
+const FPL_API_PREFIXES = ["/bootstrap-static", "/fixtures", "/event/", "/element-summary/", "/entry/", "/leagues-classic/"];
+function isFplApiPath(pathname) {
+  return FPL_API_PREFIXES.some(p => pathname.startsWith(p));
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -46,8 +61,18 @@ export default {
     if (url.pathname.startsWith("/clubstats")) {
       return handleClubStats(url, request);
     }
+    if (isFplApiPath(url.pathname)) {
+      return handleFplProxy(url);
+    }
 
-    return handleFplProxy(url);
+    // Everything else — "/" for the app itself, or any other static path —
+    // is served from the assets binding (see wrangler.toml's [assets]
+    // block). If that binding isn't configured, this 404s, which is what
+    // was happening before wrangler.toml had an [assets] section at all.
+    if (env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+    return new Response("Static assets aren't configured for this Worker — check wrangler.toml has an [assets] block.", { status: 500 });
   },
 };
 
