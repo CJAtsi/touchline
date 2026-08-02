@@ -448,6 +448,7 @@
       <div class="spacer">
         <select id="sortField"></select>
         <button class="dir-btn" id="dirBtn">↓</button>
+        <button class="dir-btn" id="resetSortBtn" title="Back to Total pts, high to low">Reset sort</button>
         <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
       </div>
     </div>
@@ -466,7 +467,8 @@
 
   <section id="tab-shortlist" style="display:none">
     <h1 class="page-title">Shortlist</h1>
-    <p class="page-sub">Players you're keeping an eye on. Starred from the player stats table.</p>
+    <p class="page-sub">Players you're keeping an eye on. Starred from the player stats table. Group them into named tabs (e.g. "Goal threat") to compare within a theme.</p>
+    <div id="shortlistGroupTabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
     <div id="shortlistBody"></div>
   </section>
 
@@ -489,6 +491,7 @@
       <button class="dir-btn" id="newDraftBtn">+ New draft</button>
       <button class="dir-btn" id="renameDraftBtn">Rename</button>
       <button class="dir-btn" id="deleteDraftBtn" style="color:var(--red)">Delete</button>
+      <button class="dir-btn" id="compareDraftsBtn">Compare squads</button>
     </div>
 
     <div id="plannerBody"></div>
@@ -543,6 +546,15 @@
         <tbody id="plTableBody"></tbody>
       </table>
     </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="detail-block-title">Club stats — shots, xG, possession, CBIT and more</div>
+      <p class="foot-note" id="clubStatsNote" style="margin-top:-4px;margin-bottom:10px"></p>
+      <div class="table-wrap"><table>
+        <thead><tr id="clubStatsHeadRow"></tr></thead>
+        <tbody id="clubStatsBody"></tbody>
+      </table></div>
+    </div>
   </section>
 
   <section id="tab-fdr" style="display:none">
@@ -585,6 +597,12 @@
       <select id="h2hTeamA"></select>
       <span style="color:var(--ink-dim);align-self:center">vs</span>
       <select id="h2hTeamB"></select>
+    </div>
+
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <button class="chip-btn" data-h2h-view="overview">Overview</button>
+      <button class="chip-btn" data-h2h-view="combinedxi">Combined XI</button>
+      <button class="chip-btn" data-h2h-view="matchups">Player matchups</button>
     </div>
 
     <div id="h2hBody"></div>
@@ -850,17 +868,21 @@ let state = {
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
+  plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
-  tableSort: { key: "points", dir: "desc" },
+  tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
+  h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {},
   rangePoints: null, rangeLabel: null,
-  gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false,
+  gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
+  clubStatsByTeamId: {},
   expandedShortlistId: null, preferKits: false,
+  shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
 };
 
 // ---------- data fetching ----------
@@ -900,6 +922,40 @@ async function fetchGwLive(gw) {
   for (const el of data.elements || []) map[el.id] = el.stats || {};
   state.gwLiveCache[gw] = map;
   return map;
+}
+
+// ---------- player points heatmap (Player stats + Shortlist) ----------
+// Reuses fetchGwLive's cache, so this is cheap after the first player is
+// viewed (each finished GW is only ever fetched once per session).
+async function loadPlayerHeatmap(playerId) {
+  if (state.playerHeatmapCache[playerId]) return state.playerHeatmapCache[playerId];
+  const finishedGws = state.events.filter(e => e.finished).map(e => e.id);
+  if (!finishedGws.length) { state.playerHeatmapCache[playerId] = []; return []; }
+  const maps = await Promise.all(finishedGws.map(fetchGwLive));
+  const rows = finishedGws.map((gw, i) => ({ gw, points: maps[i][playerId] ? maps[i][playerId].total_points : null }));
+  state.playerHeatmapCache[playerId] = rows;
+  return rows;
+}
+function heatmapCellColor(points) {
+  if (points === null || points === undefined) return "rgba(255,255,255,0.06)";
+  const clamped = Math.max(-2, Math.min(15, points));
+  const t = (clamped + 2) / 17;
+  const lo = [226, 96, 79], hi = [62, 207, 142];
+  const rgb = lo.map((c, i) => Math.round(c + (hi[i] - c) * t));
+  return `rgb(${rgb.join(",")})`;
+}
+function renderPlayerHeatmapInto(container, playerId) {
+  if (!container) return;
+  container.innerHTML = '<div class="field-desc">Loading heatmap…</div>';
+  loadPlayerHeatmap(playerId).then(rows => {
+    if (!container.isConnected) return; // panel was collapsed/removed before the fetch finished
+    if (!rows.length) { container.innerHTML = '<div class="field-desc">No finished gameweeks yet this season.</div>'; return; }
+    container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:3px">' + rows.map(r => `
+      <div title="GW${r.gw}: ${r.points === null ? "did not play" : r.points + " pts"}" style="width:22px;height:22px;border-radius:4px;background:${heatmapCellColor(r.points)};display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(0,0,0,0.6);font-family:'JetBrains Mono',monospace">${r.gw}</div>
+    `).join("") + '</div>';
+  }).catch(() => {
+    if (container.isConnected) container.innerHTML = '<div class="field-desc">Couldn\'t load the heatmap — check your Worker connection and try again.</div>';
+  });
 }
 
 // When a specific gameweek or a home/away venue filter is active on Player
@@ -1048,6 +1104,27 @@ async function fetchDeeperStats() {
   }
 }
 
+// Club-level stats (shots, xG, possession, PPDA, CBIT etc.) from the
+// Worker's /clubstats route — same fail-quiet pattern as fetchDeeperStats,
+// requires touchline-proxy.js redeployed with the /clubstats route added.
+async function fetchClubStats() {
+  if (!WORKER_PROXY_URL) return null;
+  try {
+    const res = await fetch(WORKER_PROXY_URL + "/clubstats", { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      state.diagnostics.push({ path: "/clubstats", source: "your Worker", ok: false, error: data.warnings.join("; ") });
+    } else {
+      state.diagnostics.push({ path: "/clubstats", source: "your Worker", ok: true, ms: 0 });
+    }
+    return data;
+  } catch (e) {
+    state.diagnostics.push({ path: "/clubstats", source: "your Worker", ok: false, error: e.message });
+    return null;
+  }
+}
+
 // Understat/FBref have no shared player ID with the FPL API, so matching
 // is done by normalized name + club. This catches most players but isn't
 // perfect — different spellings of the same name across the three sites
@@ -1084,6 +1161,33 @@ function attachDeeperStats(data) {
     const f = fbrefByKey[fullKey] || fbrefByKey[webKey];
     if (u) { p.dsShots = u.shots; p.dsKeyPasses = u.keyPasses; p.dsXGChain = u.xGChain; p.dsXGBuildup = u.xGBuildup; }
     if (f) { p.dsTackles = f.tackles; p.dsInterceptions = f.interceptions; p.dsBlocks = f.blocks; p.dsClearances = f.clearances; p.dsAerialsWon = f.aerialsWon; p.dsAerialWinPct = f.aerialWinPct; }
+  }
+}
+
+// Attaches /clubstats data to state.clubStatsByTeamId, keyed by FPL team
+// id (matched via normTeam, same normalizer /deeperstats/ player-matching
+// already uses) so the Table tab can look a club's numbers up directly.
+function attachClubStats(data) {
+  state.clubStatsByTeamId = {};
+  if (!data) return;
+  const aggByTeam = {}, understatByTeam = {}, possByTeam = {};
+  for (const r of data.clubAgg || []) aggByTeam[normTeam(r.team)] = r;
+  for (const r of data.understatTeams || []) understatByTeam[normTeam(r.name)] = r;
+  for (const r of data.possession || []) possByTeam[normTeam(r.team)] = r;
+  for (const team of state.teams) {
+    const key = normTeam(team.name);
+    const agg = aggByTeam[key], ut = understatByTeam[key], poss = possByTeam[key];
+    if (!agg && !ut && !poss) continue;
+    state.clubStatsByTeamId[team.id] = {
+      shots: agg ? agg.shots : null, xG: agg ? agg.xG : (ut ? ut.xG : null),
+      cbit: agg ? agg.cbit : null,
+      tackles: agg ? agg.tackles : null, blocks: agg ? agg.blocks : null,
+      interceptions: agg ? agg.interceptions : null, clearances: agg ? agg.clearances : null,
+      xGA: ut ? ut.xGA : null, goalsScored: ut ? ut.goalsScored : null, goalsConceded: ut ? ut.goalsConceded : null,
+      deep: ut ? ut.deep : null, deepAllowed: ut ? ut.deepAllowed : null,
+      ppda: ut ? ut.ppda : null, ppdaAllowed: ut ? ut.ppdaAllowed : null,
+      possession: poss ? poss.possession : null,
+    };
   }
 }
 
@@ -1145,16 +1249,18 @@ async function loadData() {
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
 
-    const [fixtures, deeper] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats()]);
+    const [fixtures, deeper, clubStats] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats()]);
     state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
     computeTeamTiers();
     attachDeeperStats(deeper);
+    attachClubStats(clubStats);
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
     await loadFormulasFromStorage();
     await loadManagerNotes();
+    await loadH2hMatchups();
     setBanner(null);
     populateTeamSelect();
     renderDash();
@@ -1376,17 +1482,25 @@ async function loadShortlistFromStorage() {
   try {
     const raw = await persistGet("shortlist");
     state.shortlist = raw ? JSON.parse(raw) : [];
+    state.shortlist.forEach(s => { if (!Array.isArray(s.groups)) s.groups = []; });
   } catch (e) { state.shortlist = []; }
+  try {
+    const rawG = await persistGet("shortlistGroups");
+    state.shortlistGroups = rawG ? JSON.parse(rawG) : [];
+  } catch (e) { state.shortlistGroups = []; }
 }
 
 // ---------- shortlist persistence ----------
 async function saveShortlist() {
   await persistSet("shortlist", JSON.stringify(state.shortlist));
 }
+async function saveShortlistGroups() {
+  await persistSet("shortlistGroups", JSON.stringify(state.shortlistGroups));
+}
 function isShortlisted(id) { return state.shortlist.some(s => s.playerId === id); }
 function toggleShortlist(id) {
   if (isShortlisted(id)) state.shortlist = state.shortlist.filter(s => s.playerId !== id);
-  else state.shortlist.push({ playerId: id, note: "" });
+  else state.shortlist.push({ playerId: id, note: "", groups: [] });
   saveShortlist();
   renderStats();
   renderShortlist();
@@ -1505,6 +1619,14 @@ function buildToolbarStatics() {
     sortSel.appendChild(opt);
   });
   sortSel.onchange = () => { state.filters.sort = sortSel.value; renderStats(); };
+
+  document.getElementById("resetSortBtn").onclick = () => {
+    state.filters.sort = "totalPoints";
+    state.filters.dir = "desc";
+    sortSel.value = "totalPoints";
+    document.getElementById("dirBtn").textContent = "↓";
+    renderStats();
+  };
 
   document.getElementById("dirBtn").onclick = () => {
     state.filters.dir = state.filters.dir === "desc" ? "asc" : "desc";
@@ -1804,10 +1926,15 @@ function renderStats() {
               <div class="detail-block-title">Next 5 fixtures (your custom FDR)</div>
               ${fixtureTickerHtml(p.teamId, 5)}
             </div>
+            <div>
+              <div class="detail-block-title">Points heatmap (by gameweek)</div>
+              <div id="heatmap-stats-${p.id}"></div>
+            </div>
           </div>
         `;
         dtr.appendChild(td);
         body.appendChild(dtr);
+        renderPlayerHeatmapInto(document.getElementById(`heatmap-stats-${p.id}`), p.id);
       }
     }
     body.querySelectorAll(".star-btn").forEach(btn => {
@@ -1848,14 +1975,111 @@ function renderStats() {
 }
 
 // ---------- rendering: shortlist ----------
+function renderShortlistGroupTabs() {
+  const el = document.getElementById("shortlistGroupTabs");
+  const tabs = [{ id: "ALL", name: "All players" }, ...state.shortlistGroups];
+  el.innerHTML = tabs.map(g => `<button class="chip-btn${state.activeShortlistGroup === g.id ? " active" : ""}" data-group="${g.id}">${g.name}</button>`).join("")
+    + `<button class="chip-btn" id="newShortlistGroupBtn">+ New group</button>`;
+  el.querySelectorAll("[data-group]").forEach(btn => {
+    btn.onclick = () => {
+      state.activeShortlistGroup = btn.dataset.group;
+      state.shortlistCompareMode = false;
+      renderShortlist();
+    };
+  });
+  document.getElementById("newShortlistGroupBtn").onclick = () => {
+    const name = prompt("Name this group (e.g. \"Goal threat\")");
+    if (!name || !name.trim()) return;
+    const id = "g" + Date.now();
+    state.shortlistGroups.push({ id, name: name.trim() });
+    saveShortlistGroups();
+    state.activeShortlistGroup = id;
+    renderShortlist();
+  };
+}
+
+function renameOrDeleteActiveGroup() {
+  const group = state.shortlistGroups.find(g => g.id === state.activeShortlistGroup);
+  if (!group) return;
+  const action = confirm(`Delete the "${group.name}" group? (Players stay on your shortlist — this only removes the group.) Click Cancel to rename instead.`);
+  if (action) {
+    state.shortlistGroups = state.shortlistGroups.filter(g => g.id !== group.id);
+    state.shortlist.forEach(s => { s.groups = s.groups.filter(gid => gid !== group.id); });
+    saveShortlistGroups(); saveShortlist();
+    state.activeShortlistGroup = "ALL";
+  } else {
+    const name = prompt("Rename group", group.name);
+    if (name && name.trim()) { group.name = name.trim(); saveShortlistGroups(); }
+  }
+  renderShortlist();
+}
+
+const SHORTLIST_COMPARE_COLS = [
+  { key: "totalPoints", label: "Pts" }, { key: "form", label: "Form" },
+  { key: "goalsScored", label: "Goals" }, { key: "assists", label: "Assists" },
+  { key: "expectedGoals", label: "xG" }, { key: "expectedAssists", label: "xA" },
+  { key: "ictIndex", label: "ICT" }, { key: "minutes", label: "Mins" },
+];
+function renderShortlistCompareInto(container, players) {
+  const rows = players.map(p => {
+    const team = state.teamsById[p.teamId];
+    return `<tr>
+      <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+      ${SHORTLIST_COMPARE_COLS.map(c => `<td class="mono">${Number.isInteger(p[c.key]) ? (p[c.key] ?? 0) : (p[c.key] ?? 0).toFixed(1)}</td>`).join("")}
+      <td>${fixtureTickerHtml(p.teamId, 4)}</td>
+    </tr>`;
+  }).join("");
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="label-col">Player</th>${SHORTLIST_COMPARE_COLS.map(c => `<th>${c.label}</th>`).join("")}<th class="label-col">Next fixtures</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderShortlist() {
+  renderShortlistGroupTabs();
   const el = document.getElementById("shortlistBody");
+  const activeGroup = state.activeShortlistGroup;
+  const items = activeGroup === "ALL"
+    ? state.shortlist
+    : state.shortlist.filter(s => s.groups.includes(activeGroup));
+
   if (state.shortlist.length === 0) {
     el.innerHTML = '<div class="empty-state">No players shortlisted yet. Star players from the Player stats tab to track them here.</div>';
     return;
   }
+  if (items.length === 0) {
+    el.innerHTML = '<div class="empty-state">No players in this group yet. Open a player from "All players" and add them to it.</div>';
+    return;
+  }
+
+  // Toolbar: compare toggle (+ rename/delete when viewing a custom group)
+  const toolbar = document.createElement("div");
+  toolbar.style.cssText = "display:flex;gap:8px;margin-bottom:10px;align-items:center";
+  toolbar.innerHTML = `
+    <button class="dir-btn" id="shortlistCompareToggle">${state.shortlistCompareMode ? "Back to list" : "Compare players in this view"}</button>
+    ${activeGroup !== "ALL" ? '<button class="dir-btn" id="shortlistGroupEditBtn">Rename / delete group</button>' : ""}
+  `;
   el.innerHTML = "";
-  for (const item of state.shortlist) {
+  el.appendChild(toolbar);
+  document.getElementById("shortlistCompareToggle").onclick = () => {
+    state.shortlistCompareMode = !state.shortlistCompareMode;
+    renderShortlist();
+  };
+  if (activeGroup !== "ALL") document.getElementById("shortlistGroupEditBtn").onclick = renameOrDeleteActiveGroup;
+
+  if (state.shortlistCompareMode) {
+    const body = document.createElement("div");
+    el.appendChild(body);
+    const players = items.map(item => state.players.find(pl => pl.id === item.playerId)).filter(Boolean);
+    renderShortlistCompareInto(body, players);
+    return;
+  }
+
+  for (const item of items) {
     const p = state.players.find(pl => pl.id === item.playerId);
     if (!p) continue;
     const team = state.teamsById[p.teamId];
@@ -1880,11 +2104,24 @@ function renderShortlist() {
             form ${p.form.toFixed(1)} · ${p.selectedByPercent.toFixed(1)}% owned · next GW proj. ${p.epNext.toFixed(1)}
           </div>
           <div style="margin-bottom:8px">${fixtureTickerHtml(p.teamId, 5)}</div>
+          <div style="margin-bottom:8px">
+            <div class="field-desc" style="margin-bottom:4px">Points heatmap (by gameweek)</div>
+            <div id="heatmap-shortlist-${p.id}"></div>
+          </div>
+          ${state.shortlistGroups.length ? `
+            <div style="margin-bottom:8px">
+              <div class="field-desc" style="margin-bottom:4px">Groups</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                ${state.shortlistGroups.map(g => `<button class="chip-btn${item.groups.includes(g.id) ? " active" : ""}" data-toggle-group="${g.id}" data-player="${p.id}">${g.name}</button>`).join("")}
+              </div>
+            </div>
+          ` : `<div class="field-desc" style="margin-bottom:8px">No groups yet — create one above (e.g. "Goal threat") to sort players into themes.</div>`}
           <textarea class="note-input" rows="2" placeholder="Notes (fixture run, injury watch, price rise...)" data-note-id="${p.id}">${item.note || ""}</textarea>
         </div>
       ` : ""}
     `;
     el.appendChild(row);
+    if (expanded) renderPlayerHeatmapInto(document.getElementById(`heatmap-shortlist-${p.id}`), p.id);
   }
   el.querySelectorAll("[data-toggle]").forEach(toggleEl => {
     toggleEl.onclick = () => {
@@ -1895,6 +2132,19 @@ function renderShortlist() {
   });
   el.querySelectorAll(".star-btn").forEach(btn => {
     btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
+  });
+  el.querySelectorAll("[data-toggle-group]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const gid = btn.dataset.toggleGroup;
+      const pid = Number(btn.dataset.player);
+      const entry = state.shortlist.find(s => s.playerId === pid);
+      if (!entry) return;
+      if (entry.groups.includes(gid)) entry.groups = entry.groups.filter(x => x !== gid);
+      else entry.groups.push(gid);
+      saveShortlist();
+      renderShortlist();
+    };
   });
   el.querySelectorAll("[data-note-id]").forEach(ta => {
     ta.onclick = (e) => e.stopPropagation();
@@ -2158,6 +2408,10 @@ function renderPlanner() {
   }
 
   const body = document.getElementById("plannerBody");
+  if (state.plannerCompareMode) {
+    renderPlannerCompare(body);
+    return;
+  }
   const draft = getDraft(state.activeDraftId);
   if (!draft) {
     body.innerHTML = '<div class="empty-state">No draft selected. Click "+ New draft" to build one, or import your real team and click "Plan from this team."</div>';
@@ -2169,6 +2423,68 @@ function renderPlanner() {
   } else {
     renderGwSimulator(draft);
   }
+}
+
+// Snapshot of every completed squad, with a week-by-week 1v1v1-etc
+// projected-points comparison at a chosen gameweek (captain multiplier and
+// best-XI picked exactly as the simulator would for that GW).
+function renderPlannerCompare(body) {
+  const complete = state.drafts.filter(d => d.squad.length === 15 && d.squadConfirmed);
+  if (!state.plannerCompareIds) state.plannerCompareIds = complete.map(d => d.id);
+  if (!state.plannerCompareGw) {
+    const upcoming = getHorizonGws(1);
+    state.plannerCompareGw = upcoming[0] || (state.events[0] && state.events[0].id);
+  }
+  if (complete.length === 0) {
+    body.innerHTML = '<div class="empty-state">No completed squads yet — finish confirming a squad (15/15, no over-budget warning needed) to compare it here.</div>';
+    return;
+  }
+  const gwOptions = state.events.map(e => e.id);
+  const included = complete.filter(d => state.plannerCompareIds.includes(d.id));
+  const results = included.map(d => ({
+    draft: d,
+    result: computeGwResult(d.squad, state.plannerCompareGw, null, d.builderCaptainId),
+  })).sort((a, b) => b.result.total - a.result.total);
+  const maxTotal = Math.max(1, ...results.map(r => r.result.total));
+
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--ink-dim)">Gameweek</span>
+        <select id="plannerCompareGwSelect">${gwOptions.map(id => `<option value="${id}"${id === state.plannerCompareGw ? " selected" : ""}>GW${id}</option>`).join("")}</select>
+        <button class="dir-btn" id="exitCompareBtn" style="margin-left:auto">Back to squad view</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+        ${complete.map(d => `<button class="chip-btn${state.plannerCompareIds.includes(d.id) ? " active" : ""}" data-toggle-draft="${d.id}">${d.id === "myteam" ? "★ " : ""}${d.name}</button>`).join("")}
+      </div>
+      ${results.map(({ draft, result }) => `
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <div style="font-weight:600;font-size:13px">${draft.id === "myteam" ? "★ " : ""}${draft.name} ${result.captain ? `<span style="font-weight:400;color:var(--ink-faint);font-size:11px">(C: ${result.captain.webName})</span>` : ""}</div>
+            <div class="mono" style="font-weight:700;color:var(--gold-bright)">${result.total.toFixed(1)} pts</div>
+          </div>
+          <div style="background:var(--panel-2);border-radius:6px;height:10px;overflow:hidden">
+            <div style="width:${(result.total / maxTotal * 100).toFixed(1)}%;height:100%;background:var(--gold-bright)"></div>
+          </div>
+        </div>
+      `).join("")}
+      <p class="foot-note" style="margin-top:4px">Projected points for the chosen gameweek, using each squad's own best-XI and captain pick — same model the simulator uses.</p>
+    </div>
+  `;
+  document.getElementById("exitCompareBtn").onclick = () => { state.plannerCompareMode = false; renderPlanner(); };
+  document.getElementById("plannerCompareGwSelect").onchange = (e) => {
+    state.plannerCompareGw = Number(e.target.value);
+    renderPlanner();
+  };
+  body.querySelectorAll("[data-toggle-draft]").forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.toggleDraft;
+      if (state.plannerCompareIds.includes(id)) {
+        if (state.plannerCompareIds.length > 1) state.plannerCompareIds = state.plannerCompareIds.filter(x => x !== id);
+      } else state.plannerCompareIds.push(id);
+      renderPlanner();
+    };
+  });
 }
 
 function squadCost(playerIds) {
@@ -2901,6 +3217,11 @@ function setupPlannerControls() {
     state.activeDraftId = state.drafts[0]?.id || null;
     saveDrafts(); renderPlanner();
   };
+  document.getElementById("compareDraftsBtn").onclick = () => {
+    state.plannerCompareMode = true;
+    state.plannerCompareIds = null; // recomputed to "all complete squads" in renderPlannerCompare
+    renderPlanner();
+  };
 }
 function selectDraft(id) {
   state.activeDraftId = id;
@@ -3129,6 +3450,60 @@ function renderPlTable() {
       </tr>
     `;
   }).join("");
+  renderClubStatsTable();
+}
+
+const CLUB_STATS_COLS = [
+  { key: "shots", label: "Shots" }, { key: "xG", label: "xG" },
+  { key: "possession", label: "Poss %" }, { key: "xGA", label: "xGC" },
+  { key: "goalsConceded", label: "Goals conceded" }, { key: "cbit", label: "CBIT" },
+  { key: "ppda", label: "PPDA (press)" }, { key: "deep", label: "Deep completions" },
+];
+function renderClubStatsTable() {
+  const headRow = document.getElementById("clubStatsHeadRow");
+  const body = document.getElementById("clubStatsBody");
+  const note = document.getElementById("clubStatsNote");
+  const anyData = Object.keys(state.clubStatsByTeamId).length > 0;
+  if (!anyData) {
+    headRow.innerHTML = "";
+    const diag = state.diagnostics.find(d => d.path === "/clubstats");
+    body.innerHTML = `<tr><td class="empty-state">No club stats loaded yet.</td></tr>`;
+    note.textContent = diag && !diag.ok
+      ? `Couldn't load this from your Worker (${diag.error}). Make sure the latest touchline-proxy.js (with the /clubstats route) is deployed, then reload.`
+      : "This comes from your Worker's Understat/FBref scrape — needs the latest touchline-proxy.js (with the /clubstats route) deployed. Reload to retry.";
+    return;
+  }
+  note.textContent = "PPDA = passes allowed per defensive action — lower means a higher, more aggressive press line. Deep completions = passes into the final ~20% of the pitch, a build-up proxy. All scraped from Understat/FBref, not FPL's own API.";
+  headRow.innerHTML = `<th class="label-col">Club</th>` + CLUB_STATS_COLS.map(c => `<th data-cstat-sort="${c.key}" style="cursor:pointer">${c.label}</th>`).join("");
+  const { key, dir } = state.clubStatsSort;
+  const rows = state.teams.filter(t => state.clubStatsByTeamId[t.id]).map(t => ({ team: t, stats: state.clubStatsByTeamId[t.id] }));
+  rows.sort((a, b) => {
+    const av = a.stats[key], bv = b.stats[key];
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    return dir === "asc" ? av - bv : bv - av;
+  });
+  headRow.querySelectorAll("th[data-cstat-sort]").forEach(th => {
+    if (th.dataset.cstatSort === key) th.textContent += dir === "asc" ? " ▲" : " ▼";
+  });
+  body.innerHTML = rows.map(({ team, stats }) => `
+    <tr>
+      <td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name}</td>
+      ${CLUB_STATS_COLS.map(c => {
+        const v = stats[c.key];
+        const display = v === null || v === undefined ? "—" : (Number.isInteger(v) ? v : v.toFixed(c.key === "possession" ? 1 : 2));
+        return `<td class="mono">${display}</td>`;
+      }).join("")}
+    </tr>
+  `).join("");
+  headRow.querySelectorAll("th[data-cstat-sort]").forEach(th => {
+    th.onclick = () => {
+      const k = th.dataset.cstatSort;
+      if (state.clubStatsSort.key === k) state.clubStatsSort.dir = state.clubStatsSort.dir === "asc" ? "desc" : "asc";
+      else state.clubStatsSort = { key: k, dir: "desc" };
+      renderClubStatsTable();
+    };
+  });
 }
 function setupTableControls() {
   document.getElementById("tableSourceSelect").onchange = (e) => {
@@ -3244,9 +3619,45 @@ function populateFdrStartGw() {
   const endEvent = state.events.find(e => e.id === startId + 7) || state.events[state.events.length - 1];
   selEnd.value = endEvent ? endEvent.id : startId;
 }
-// Rough, clearly-labelled scoreline estimate — not a real prediction, just
-// a fun translation of each side's attack/defence strength (already used
-// for the FDR pills) into an expected-goals-style guess.
+// Recent-form multiplier from the last 5 results (W=3/D=1/L=0), scaled to
+// a modest 0.85x (poor run) .. 1.15x (hot streak) nudge — form shouldn't
+// swing the estimate more than the underlying attack/defence numbers do.
+function teamFormMultiplier(teamId) {
+  const form = teamRecentForm(teamId, 5);
+  if (!form) return 1;
+  let score = 0;
+  for (const c of form) score += c === "W" ? 3 : c === "D" ? 1 : 0;
+  const pct = score / (form.length * 3);
+  return 0.85 + pct * 0.3;
+}
+// Real goals-for/against per game this season — used as a live proxy for
+// each side's actual attacking/defensive output (closer to true xG/xGC
+// than a static preseason rating, without needing a new data source).
+function teamGoalsPerGame(teamId) {
+  const table = computeLiveTable(state.allFixtures, {});
+  const row = table && table.find(r => r.teamId === teamId);
+  if (!row || !row.played) return null;
+  return { gf: row.gf / row.played, ga: row.ga / row.played };
+}
+// This season's actual meetings between these two clubs, if any — surfaces
+// head-to-head anomalies a pure ratings formula would miss (a team that
+// always struggles/thrives against a specific opponent).
+function headToHeadHistory(teamId, oppId) {
+  const meetings = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null &&
+    ((f.team_h === teamId && f.team_a === oppId) || (f.team_h === oppId && f.team_a === teamId)));
+  if (!meetings.length) return null;
+  let scored = 0, conceded = 0;
+  meetings.forEach(f => {
+    const isHome = f.team_h === teamId;
+    scored += isHome ? f.team_h_score : f.team_a_score;
+    conceded += isHome ? f.team_a_score : f.team_h_score;
+  });
+  return { avgScored: scored / meetings.length, avgConceded: conceded / meetings.length, n: meetings.length };
+}
+// Scoreline estimate — still clearly labelled as a rough guess, not a real
+// prediction, but now blends four signals instead of just attack/defence:
+// the static FDR ratings, each side's actual scoring/conceding rate this
+// season, recent form, and any head-to-head history between these two.
 function estimateScoreline(teamId, oppId, isHome) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
   if (!team || !opp || !state.strengthRanges) return null;
@@ -3258,9 +3669,29 @@ function estimateScoreline(teamId, oppId, isHome) {
   const d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
   const oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
   const od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
-  const teamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
-  const oppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
-  return { teamGoals: Math.max(0, Math.round(teamXg)), oppGoals: Math.max(0, Math.round(oppXg)) };
+  const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
+  const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
+
+  const teamGpg = teamGoalsPerGame(teamId), oppGpg = teamGoalsPerGame(oppId);
+  // Empirical estimate: average of "how much this team usually scores" and
+  // "how much this opponent usually concedes" — blended 45/55 with the
+  // static-ratings formula above.
+  let teamXg = (teamGpg && oppGpg) ? baseTeamXg * 0.55 + ((teamGpg.gf + oppGpg.ga) / 2) * 0.45 : baseTeamXg;
+  let oppXg = (teamGpg && oppGpg) ? baseOppXg * 0.55 + ((oppGpg.gf + teamGpg.ga) / 2) * 0.45 : baseOppXg;
+
+  teamXg *= teamFormMultiplier(teamId);
+  oppXg *= teamFormMultiplier(oppId);
+
+  const h2h = headToHeadHistory(teamId, oppId);
+  if (h2h) {
+    teamXg = teamXg * 0.85 + h2h.avgScored * 0.15;
+    oppXg = oppXg * 0.85 + h2h.avgConceded * 0.15;
+  }
+
+  return {
+    teamGoals: Math.max(0, Math.round(teamXg)), oppGoals: Math.max(0, Math.round(oppXg)),
+    usedForm: true, usedEmpirical: !!(teamGpg && oppGpg), usedH2h: !!h2h,
+  };
 }
 function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
@@ -3269,10 +3700,14 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   const home = isHome ? team : opp, away = isHome ? opp : team;
   const homeGoals = isHome ? est.teamGoals : est.oppGoals;
   const awayGoals = isHome ? est.oppGoals : est.teamGoals;
+  const factors = ["attack/defence ratings"];
+  if (est.usedEmpirical) factors.push("this season's actual scoring rates");
+  factors.push("recent form");
+  if (est.usedH2h) factors.push("head-to-head history between these two this season");
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0">Rough estimate from each club's attack/defence strength — not a real prediction. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
+    <p class="foot-note" style="margin-top:0">Rough estimate blending ${factors.join(", ")} — still not a real prediction. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
   `;
   document.getElementById("fdrPredictModal").style.display = "flex";
 }
@@ -3336,6 +3771,144 @@ async function loadManagerNotes() {
   } catch (e) { /* keep defaults */ }
 }
 function saveManagerNotes() { persistSet("managerNotes", JSON.stringify(state.managerNotes)); }
+
+async function loadH2hMatchups() {
+  try {
+    const raw = await persistGet("h2hMatchups");
+    if (raw) state.h2hMatchups = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hMatchups() { persistSet("h2hMatchups", JSON.stringify(state.h2hMatchups)); }
+function h2hMatchupKey(teamAId, teamBId) {
+  const [x, y] = [teamAId, teamBId].sort((a, b) => a - b);
+  return `${x}-${y}`;
+}
+
+const FORMATIONS_H2H = {
+  "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
+  "3-5-2": { DEF: 3, MID: 5, FWD: 2 }, "3-4-3": { DEF: 3, MID: 4, FWD: 3 },
+  "5-3-2": { DEF: 5, MID: 3, FWD: 2 }, "5-4-1": { DEF: 5, MID: 4, FWD: 1 },
+};
+// Best XI drawn from both clubs' combined player pool (ranked by real
+// season points), slotted into whichever formation is picked — so you can
+// see at a glance which club would dominate a joint starting XI.
+function renderH2hCombinedXi(body, teamA, teamB) {
+  const formation = FORMATIONS_H2H[state.h2hFormation];
+  const pool = state.players.filter(p => p.teamId === teamA.id || p.teamId === teamB.id);
+  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+  pool.forEach(p => { if (byPos[p.position]) byPos[p.position].push(p); });
+  Object.values(byPos).forEach(arr => arr.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)));
+  const picks = {
+    GK: byPos.GK.slice(0, 1), DEF: byPos.DEF.slice(0, formation.DEF),
+    MID: byPos.MID.slice(0, formation.MID), FWD: byPos.FWD.slice(0, formation.FWD),
+  };
+  const countA = ["GK", "DEF", "MID", "FWD"].reduce((sum, pos) => sum + picks[pos].filter(p => p.teamId === teamA.id).length, 0);
+  const countB = 11 - countA;
+  const posRow = (pos, label) => `
+    <div class="detail-block-title" style="margin-top:10px">${label}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      ${picks[pos].map(p => {
+        const club = p.teamId === teamA.id ? teamA : teamB;
+        return `<div style="text-align:center;width:70px">
+          ${playerAvatarHtml(p, 32)}
+          <div style="font-size:11px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.webName}</div>
+          <div style="font-size:10px;color:var(--ink-faint)">${club.short_name} · ${p.totalPoints ?? 0}pts</div>
+        </div>`;
+      }).join("") || `<p class="foot-note">Not enough player data yet.</p>`}
+    </div>
+  `;
+  body.innerHTML = `
+    <div class="card">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+        <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
+        <select id="h2hFormationSelect">${Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}"${f === state.h2hFormation ? " selected" : ""}>${f}</option>`).join("")}</select>
+      </div>
+      <p class="foot-note" style="margin-bottom:10px">Best combined XI from both squads' real season totals. ${teamA.name} provide ${countA}, ${teamB.name} provide ${countB}.</p>
+      ${posRow("GK", "Goalkeeper")}
+      ${posRow("DEF", "Defence")}
+      ${posRow("MID", "Midfield")}
+      ${posRow("FWD", "Attack")}
+    </div>
+  `;
+  document.getElementById("h2hFormationSelect").onchange = (e) => { state.h2hFormation = e.target.value; renderH2H(); };
+}
+
+// Manual player-vs-player matchup tool. FPL's own data only distinguishes
+// GK/DEF/MID/FWD — it has no "LW" or "RB" sub-roles — so rather than fake a
+// positional match-up from data that doesn't exist, this lets you pick any
+// two players and label + call the matchup yourself; picks are saved.
+function renderH2hMatchups(body, teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const list = state.h2hMatchups[key] || [];
+  const squadA = state.players.filter(p => p.teamId === teamA.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const squadB = state.players.filter(p => p.teamId === teamB.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const optsA = squadA.map(p => `<option value="${p.id}">${p.webName} (${p.position})</option>`).join("");
+  const optsB = squadB.map(p => `<option value="${p.id}">${p.webName} (${p.position})</option>`).join("");
+  const rows = list.map(m => {
+    const pa = state.players.find(p => p.id === m.playerAId);
+    const pb = state.players.find(p => p.id === m.playerBId);
+    return `
+      <div class="card" style="margin-bottom:10px;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">${pa ? playerAvatarHtml(pa, 26) : ""}<span style="font-weight:600">${pa ? pa.webName : "?"}</span></div>
+          <input type="text" class="note-input" style="width:120px;text-align:center" data-matchup-label="${m.id}" value="${m.label || ""}" placeholder="e.g. LW vs RB" />
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-weight:600">${pb ? pb.webName : "?"}</span>${pb ? playerAvatarHtml(pb, 26) : ""}</div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+          <button class="chip-btn${m.winner === "A" ? " active" : ""}" data-matchup-winner="${m.id}" data-winner-val="A">${pa ? pa.webName : teamA.short_name} wins</button>
+          <button class="chip-btn${m.winner === "EVEN" ? " active" : ""}" data-matchup-winner="${m.id}" data-winner-val="EVEN">Even</button>
+          <button class="chip-btn${m.winner === "B" ? " active" : ""}" data-matchup-winner="${m.id}" data-winner-val="B">${pb ? pb.webName : teamB.short_name} wins</button>
+          <button class="dir-btn" style="color:var(--red)" data-matchup-remove="${m.id}">Remove</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Add a matchup</div>
+      <p class="foot-note" style="margin-bottom:10px">FPL only tracks GK/DEF/MID/FWD, not specific roles like "LW" or "RB" — pick any two players and label the matchup yourself.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="h2hMatchupPlayerA">${optsA}</select>
+        <span style="color:var(--ink-dim)">vs</span>
+        <select id="h2hMatchupPlayerB">${optsB}</select>
+        <button class="dir-btn" id="h2hAddMatchupBtn">+ Add matchup</button>
+      </div>
+    </div>
+    ${rows || '<p class="foot-note">No matchups added yet.</p>'}
+  `;
+  document.getElementById("h2hAddMatchupBtn").onclick = () => {
+    const playerAId = Number(document.getElementById("h2hMatchupPlayerA").value);
+    const playerBId = Number(document.getElementById("h2hMatchupPlayerB").value);
+    if (!playerAId || !playerBId) return;
+    const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
+    arr.push({ id: "m" + Date.now(), playerAId, playerBId, label: "", winner: null });
+    saveH2hMatchups();
+    renderH2H();
+  };
+  body.querySelectorAll("[data-matchup-label]").forEach(input => {
+    let t;
+    input.oninput = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const m = list.find(x => x.id === input.dataset.matchupLabel);
+        if (m) { m.label = input.value; saveH2hMatchups(); }
+      }, 400);
+    };
+  });
+  body.querySelectorAll("[data-matchup-winner]").forEach(btn => {
+    btn.onclick = () => {
+      const m = list.find(x => x.id === btn.dataset.matchupWinner);
+      if (m) { m.winner = btn.dataset.winnerVal; saveH2hMatchups(); renderH2H(); }
+    };
+  });
+  body.querySelectorAll("[data-matchup-remove]").forEach(btn => {
+    btn.onclick = () => {
+      state.h2hMatchups[key] = (state.h2hMatchups[key] || []).filter(x => x.id !== btn.dataset.matchupRemove);
+      saveH2hMatchups();
+      renderH2H();
+    };
+  });
+}
 
 function populateH2hSelects() {
   const selA = document.getElementById("h2hTeamA"), selB = document.getElementById("h2hTeamB");
@@ -3479,8 +4052,14 @@ function renderH2H() {
   populateH2hSelects();
   const teamA = state.teamsById[state.h2h.teamA];
   const teamB = state.teamsById[state.h2h.teamB];
+  document.querySelectorAll("[data-h2h-view]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.h2hView === state.h2hViewMode);
+  });
   const body = document.getElementById("h2hBody");
   if (!teamA || !teamB) { body.innerHTML = ""; return; }
+
+  if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
+  if (state.h2hViewMode === "matchups") { renderH2hMatchups(body, teamA, teamB); return; }
 
   // --- real data: this season's meetings between the two clubs ---
   const meetings = (state.allFixtures || []).filter(f =>
@@ -3570,6 +4149,9 @@ function renderH2H() {
 function setupH2hControls() {
   document.getElementById("h2hTeamA").onchange = (e) => { state.h2h.teamA = Number(e.target.value); renderH2H(); };
   document.getElementById("h2hTeamB").onchange = (e) => { state.h2h.teamB = Number(e.target.value); renderH2H(); };
+  document.querySelectorAll("[data-h2h-view]").forEach(btn => {
+    btn.onclick = () => { state.h2hViewMode = btn.dataset.h2hView; renderH2H(); };
+  });
 }
 
 function setupRankingsControls() {
