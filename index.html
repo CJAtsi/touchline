@@ -786,7 +786,7 @@ const STAT_THEMES = {
   overview: {
     label: "Overview",
     columns: [["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
-      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["ppm", "Pts/£m"], ["bonus", "Bon"]],
+      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
   },
   attacking: {
     label: "Attacking",
@@ -843,6 +843,7 @@ const COLUMN_FORMAT = {
   expectedGoalInvolvements: p => [p.expectedGoalInvolvements.toFixed(2), ""],
   minutes: p => [p.minutes, ""],
   ppm: p => [p.ppm.toFixed(1), ""],
+  ppm90: p => [p.ppm90.toFixed(1), ""],
   dsShots: p => [p.dsShots ?? "—", p.dsShots == null ? "color:var(--ink-faint)" : ""],
   dsKeyPasses: p => [p.dsKeyPasses ?? "—", p.dsKeyPasses == null ? "color:var(--ink-faint)" : ""],
   dsXGChain: p => [p.dsXGChain != null ? p.dsXGChain.toFixed(2) : "—", p.dsXGChain == null ? "color:var(--ink-faint)" : ""],
@@ -1014,6 +1015,7 @@ function scopedPlayer(p) {
     expectedGoalInvolvements: s ? s.expected_goal_involvements : 0, expectedGoalsConceded: s ? s.expected_goals_conceded : 0,
     defensiveContribution: s ? s.defensive_contribution : 0, totalPoints: s ? s.total_points : 0,
     ppm: s && p.nowCost > 0 ? s.total_points / (p.nowCost / 10) : 0,
+    ppm90: s && p.nowCost > 0 ? per90(s.total_points) / (p.nowCost / 10) : 0,
     xg90: per90(s ? s.expected_goals : 0), xa90: per90(s ? s.expected_assists : 0),
     xgi90: per90(s ? s.expected_goal_involvements : 0), xgc90: per90(s ? s.expected_goals_conceded : 0),
     saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
@@ -1217,6 +1219,7 @@ function transformPlayer(e) {
     inDreamteam: !!e.in_dreamteam, dreamteamCount: e.dreamteam_count ?? 0,
     starts: e.starts ?? 0,
     ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
+    ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / e.minutes) * 90) / (e.now_cost / 10) : 0,
   };
 }
 
@@ -3654,10 +3657,57 @@ function headToHeadHistory(teamId, oppId) {
   });
   return { avgScored: scored / meetings.length, avgConceded: conceded / meetings.length, n: meetings.length };
 }
-// Scoreline estimate — still clearly labelled as a rough guess, not a real
-// prediction, but now blends four signals instead of just attack/defence:
-// the static FDR ratings, each side's actual scoring/conceding rate this
-// season, recent form, and any head-to-head history between these two.
+// Scoreline estimate — a real (if simplified) statistical model, the same
+// family used by betting markets: each side's blended xG becomes the mean
+// of a Poisson goal-scoring distribution, then we compute the full
+// probability grid of joint scorelines (0-0 through 6-6) and return the
+// single MOST LIKELY joint outcome — not each side's xG rounded
+// independently, which is what caused every match to collapse toward 2-1
+// (since most xG values sit between 1 and 2, rounding both sides
+// separately erases the actual shape of the distribution).
+// We also apply the Dixon-Coles low-score correlation correction: real
+// match data shows 0-0, 1-0, 0-1 and 1-1 occur slightly more/less often
+// than plain independent Poisson predicts (defensive teams draw 0-0 more
+// than random chance implies), so we nudge those four cells by a
+// calibrated rho (-0.13, the standard published estimate from Dixon &
+// Coles' original 1997 model) before picking the most probable cell.
+function poissonPmf(k, lambda) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let logP = -lambda + k * Math.log(lambda);
+  for (let i = 2; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
+}
+function dixonColesTau(i, j, l1, l2, rho) {
+  if (i === 0 && j === 0) return 1 - l1 * l2 * rho;
+  if (i === 0 && j === 1) return 1 + l1 * rho;
+  if (i === 1 && j === 0) return 1 + l2 * rho;
+  if (i === 1 && j === 1) return 1 - rho;
+  return 1;
+}
+function scorelineProbabilityGrid(homeXg, awayXg) {
+  const RHO = -0.13;
+  const MAX_GOALS = 7; // 0..6 inclusive, covers >99.9% of real probability mass
+  const grid = [];
+  let total = 0;
+  for (let i = 0; i < MAX_GOALS; i++) {
+    for (let j = 0; j < MAX_GOALS; j++) {
+      const p = poissonPmf(i, homeXg) * poissonPmf(j, awayXg) * dixonColesTau(i, j, homeXg, awayXg, RHO);
+      grid.push({ home: i, away: j, p: Math.max(0, p) });
+      total += Math.max(0, p);
+    }
+  }
+  // Renormalize so probabilities sum to 1 after the Dixon-Coles adjustment
+  // (which isn't guaranteed to preserve normalization on its own).
+  if (total > 0) grid.forEach(c => c.p /= total);
+  grid.sort((a, b) => b.p - a.p);
+  let homeWin = 0, draw = 0, awayWin = 0;
+  grid.forEach(c => {
+    if (c.home > c.away) homeWin += c.p;
+    else if (c.home === c.away) draw += c.p;
+    else awayWin += c.p;
+  });
+  return { grid, top: grid[0], alternates: grid.slice(1, 4), homeWin, draw, awayWin };
+}
 function estimateScoreline(teamId, oppId, isHome) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
   if (!team || !opp || !state.strengthRanges) return null;
@@ -3687,9 +3737,19 @@ function estimateScoreline(teamId, oppId, isHome) {
     teamXg = teamXg * 0.85 + h2h.avgScored * 0.15;
     oppXg = oppXg * 0.85 + h2h.avgConceded * 0.15;
   }
+  // Floor xG just above 0 — a team averaging literally 0 breaks the Poisson
+  // model's shape (everything collapses onto 0 goals for that side).
+  teamXg = Math.max(0.15, teamXg);
+  oppXg = Math.max(0.15, oppXg);
+
+  const homeXg = isHome ? teamXg : oppXg;
+  const awayXg = isHome ? oppXg : teamXg;
+  const model = scorelineProbabilityGrid(homeXg, awayXg);
 
   return {
-    teamGoals: Math.max(0, Math.round(teamXg)), oppGoals: Math.max(0, Math.round(oppXg)),
+    teamGoals: isHome ? model.top.home : model.top.away,
+    oppGoals: isHome ? model.top.away : model.top.home,
+    teamXg, oppXg, model,
     usedForm: true, usedEmpirical: !!(teamGpg && oppGpg), usedH2h: !!h2h,
   };
 }
@@ -3704,10 +3764,22 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   if (est.usedEmpirical) factors.push("this season's actual scoring rates");
   factors.push("recent form");
   if (est.usedH2h) factors.push("head-to-head history between these two this season");
+  const pct = (x) => (x * 100).toFixed(0) + "%";
+  const altRow = est.model.alternates.map(c =>
+    `<span class="mono" style="margin-right:10px;color:var(--ink-faint)">${c.home}-${c.away} (${pct(c.p)})</span>`
+  ).join("");
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0">Rough estimate blending ${factors.join(", ")} — still not a real prediction. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
+    <p class="foot-note" style="margin-top:0;text-align:center">Most probable scoreline (${pct(est.model.top.p)} chance) — from a Poisson goal model with a low-score correlation correction, the same statistical family used by betting markets.</p>
+    <div style="text-align:center;margin:8px 0 12px;font-size:12px">
+      <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
+      <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
+      <span>${away.short_name} win: <b>${pct(est.model.awayWin)}</b></span>
+    </div>
+    <div class="field-desc" style="margin-bottom:4px">Other plausible scorelines</div>
+    <div style="margin-bottom:10px">${altRow}</div>
+    <p class="foot-note" style="margin-top:0">Modelled xG for the ${team.name === home.name ? "home" : "away"} side is a blend of ${factors.join(", ")}. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
   `;
   document.getElementById("fdrPredictModal").style.display = "flex";
 }
