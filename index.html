@@ -423,7 +423,10 @@
         £ <input type="number" step="0.5" id="minPrice" placeholder="min" /> – <input type="number" step="0.5" id="maxPrice" placeholder="max" />
       </div>
       <input type="text" id="search" class="search-input" placeholder="Search player…" />
-      <input type="number" id="minMinutes" placeholder="Min mins" title="Hide players with fewer minutes played than this" style="width:78px" />
+      <div class="spacer" style="gap:5px;flex-direction:column;align-items:flex-start">
+        <span style="font-size:10.5px;color:var(--ink-faint)">Min. minutes played</span>
+        <input type="number" id="minMinutes" placeholder="e.g. 300" title="Hide players with fewer minutes played than this" style="width:78px" />
+      </div>
       <select id="fixtureGw"><option value="ALL">Any gameweek</option></select>
       <select id="fixtureVenue">
         <option value="ALL">Home + Away</option>
@@ -437,13 +440,15 @@
         <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:48px" />
         <button class="dir-btn" id="rankLegendToggle" type="button" title="Show which teams are which rank">?</button>
       </div>
-      <div class="spacer" style="gap:6px">
-        <span style="font-size:12px;color:var(--ink-dim)">Points in GW range</span>
-        <input type="number" id="rangeFromGw" min="1" max="38" placeholder="from" style="width:52px" />
-        <span style="color:var(--ink-dim)">–</span>
-        <input type="number" id="rangeToGw" min="1" max="38" placeholder="to" style="width:52px" />
-        <button class="dir-btn" id="applyRangeBtn" type="button">Apply</button>
-        <span id="rangeStatus" style="font-size:11px;color:var(--ink-faint)"></span>
+      <div class="spacer" style="gap:6px;flex-direction:column;align-items:flex-start;border-left:1px solid var(--panel-2);padding-left:10px">
+        <span style="font-size:10.5px;color:var(--ink-faint)">Add up points across a custom GW range (e.g. GW1–GW5) instead of the whole season</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="rangeFromGw" min="1" max="38" placeholder="from GW" style="width:60px" />
+          <span style="color:var(--ink-dim)">–</span>
+          <input type="number" id="rangeToGw" min="1" max="38" placeholder="to GW" style="width:60px" />
+          <button class="dir-btn" id="applyRangeBtn" type="button">Apply</button>
+          <span id="rangeStatus" style="font-size:11px;color:var(--ink-faint)"></span>
+        </div>
       </div>
       <div class="spacer">
         <select id="sortField"></select>
@@ -1006,6 +1011,7 @@ function scopedPlayer(p) {
   const s = state.scopedStats[p.id];
   const mins = s ? s.minutes : 0;
   const per90 = (total) => (mins > 0 ? (total / mins) * 90 : 0);
+  const per90Floored = (total) => (mins > 0 ? (total / Math.max(mins, 180)) * 90 : 0);
   return Object.assign({}, p, {
     minutes: mins,
     goalsScored: s ? s.goals_scored : 0, assists: s ? s.assists : 0, cleanSheets: s ? s.clean_sheets : 0,
@@ -1015,7 +1021,7 @@ function scopedPlayer(p) {
     expectedGoalInvolvements: s ? s.expected_goal_involvements : 0, expectedGoalsConceded: s ? s.expected_goals_conceded : 0,
     defensiveContribution: s ? s.defensive_contribution : 0, totalPoints: s ? s.total_points : 0,
     ppm: s && p.nowCost > 0 ? s.total_points / (p.nowCost / 10) : 0,
-    ppm90: s && p.nowCost > 0 ? per90(s.total_points) / (p.nowCost / 10) : 0,
+    ppm90: s && p.nowCost > 0 ? per90Floored(s.total_points) / (p.nowCost / 10) : 0,
     xg90: per90(s ? s.expected_goals : 0), xa90: per90(s ? s.expected_assists : 0),
     xgi90: per90(s ? s.expected_goal_involvements : 0), xgc90: per90(s ? s.expected_goals_conceded : 0),
     saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
@@ -1219,7 +1225,7 @@ function transformPlayer(e) {
     inDreamteam: !!e.in_dreamteam, dreamteamCount: e.dreamteam_count ?? 0,
     starts: e.starts ?? 0,
     ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
-    ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / e.minutes) * 90) / (e.now_cost / 10) : 0,
+    ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / Math.max(e.minutes, 180)) * 90) / (e.now_cost / 10) : 0,
   };
 }
 
