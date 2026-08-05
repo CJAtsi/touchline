@@ -455,6 +455,7 @@
         <button class="dir-btn" id="dirBtn">↓</button>
         <button class="dir-btn" id="resetSortBtn" title="Back to Total pts, high to low">Reset sort</button>
         <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
+        <button class="dir-btn" id="showSelectedStatsBtn" type="button">Show selected (0)</button>
       </div>
     </div>
     <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
@@ -592,14 +593,6 @@
     </div>
   </div>
 
-  <div id="compareModal" class="pitch-modal-backdrop" style="display:none">
-    <div class="pitch-modal-card" style="max-width:900px">
-      <div class="detail-block-title">Comparing players</div>
-      <div id="compareModalBody" style="margin-top:8px"></div>
-      <button class="chip-btn" id="compareModalClose" style="margin-top:10px">Close</button>
-    </div>
-  </div>
-
   <div id="groupPickerModal" class="pitch-modal-backdrop" style="display:none">
     <div class="pitch-modal-card" style="max-width:320px">
       <div class="detail-block-title">Added to shortlist — add to a group?</div>
@@ -610,12 +603,6 @@
       </div>
       <button class="chip-btn" id="groupPickerClose" style="margin-top:10px">Done</button>
     </div>
-  </div>
-
-  <div id="compareBar" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;background:var(--panel);border:1px solid var(--panel-2);border-radius:10px;padding:8px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);align-items:center;gap:10px">
-    <span id="compareBarCount" style="font-size:13px;color:var(--ink-dim)"></span>
-    <button class="dir-btn" id="compareBarGo">Compare →</button>
-    <button class="chip-btn" id="compareBarClear">Clear</button>
   </div>
 
   <section id="tab-h2h" style="display:none">
@@ -915,7 +902,8 @@ let state = {
   clubStatsByTeamId: {},
   expandedShortlistId: null, preferKits: false,
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
-  compareSelection: new Set(),
+  compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
+  showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false,
 };
 
 // ---------- data fetching ----------
@@ -1587,31 +1575,27 @@ function renderGroupPickerBody(playerId) {
   });
 }
 
-// ---------- compare selection (Player stats + Shortlist) ----------
-function toggleCompareSelection(id) {
-  if (state.compareSelection.has(id)) state.compareSelection.delete(id);
-  else state.compareSelection.add(id);
+// ---------- selection + "show selected" filter (Player stats + Shortlist — kept fully separate) ----------
+function toggleCompareSelection(id, context) {
+  const set = context === "shortlist" ? state.compareSelectionShortlist : state.compareSelectionStats;
+  if (set.has(id)) set.delete(id);
+  else set.add(id);
   renderCompareBar();
 }
 function renderCompareBar() {
-  const bar = document.getElementById("compareBar");
-  const n = state.compareSelection.size;
-  bar.style.display = n > 0 ? "flex" : "none";
-  document.getElementById("compareBarCount").textContent = `${n} player${n === 1 ? "" : "s"} selected`;
+  const statsBtn = document.getElementById("showSelectedStatsBtn");
+  if (statsBtn) {
+    const n = state.compareSelectionStats.size;
+    statsBtn.textContent = state.showSelectedStats ? `Show all players` : `Show selected (${n})`;
+    statsBtn.disabled = !state.showSelectedStats && n === 0;
+  }
+  const shortlistBtn = document.getElementById("showSelectedShortlistBtn");
+  if (shortlistBtn) {
+    const n = state.compareSelectionShortlist.size;
+    shortlistBtn.textContent = state.shortlistShowSelectedOnly ? `Show all in group` : `Show selected (${n})`;
+    shortlistBtn.disabled = !state.shortlistShowSelectedOnly && n === 0;
+  }
 }
-function openCompareModal() {
-  const players = [...state.compareSelection].map(id => state.players.find(p => p.id === id)).filter(Boolean);
-  if (!players.length) return;
-  renderShortlistCompareInto(document.getElementById("compareModalBody"), players);
-  document.getElementById("compareModal").style.display = "flex";
-}
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("compareBarGo").onclick = openCompareModal;
-  document.getElementById("compareBarClear").onclick = () => { state.compareSelection.clear(); renderCompareBar(); renderStats(); renderShortlist(); };
-  document.getElementById("compareModalClose").onclick = () => { document.getElementById("compareModal").style.display = "none"; };
-  document.getElementById("compareModal").onclick = (e) => { if (e.target.id === "compareModal") e.target.style.display = "none"; };
-  document.getElementById("groupPickerModal").onclick = (e) => { if (e.target.id === "groupPickerModal") e.target.style.display = "none"; };
-});
 
 // ---------- filtering / sorting ----------
 function playerHasMatchingFixture(p) {
@@ -1648,6 +1632,7 @@ function getFiltered() {
       if (!foldAccents(p.webName).includes(s) && !foldAccents(p.secondName).includes(s) && !foldAccents(p.firstName).includes(s)) return false;
     }
     if (!playerHasMatchingFixture(p)) return false;
+    if (state.showSelectedStats && state.compareSelectionStats.size && !state.compareSelectionStats.has(p.id)) return false;
     return true;
   });
   const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
@@ -1781,6 +1766,13 @@ function buildToolbarStatics() {
     panel.style.display = panel.style.display === "none" ? "block" : "none";
     renderScoutPanel();
   };
+  document.getElementById("showSelectedStatsBtn").onclick = () => {
+    if (!state.showSelectedStats && state.compareSelectionStats.size === 0) return;
+    state.showSelectedStats = !state.showSelectedStats;
+    renderCompareBar();
+    renderStats();
+  };
+  document.getElementById("groupPickerModal").onclick = (e) => { if (e.target.id === "groupPickerModal") e.target.style.display = "none"; };
 
   let minMinTimer;
   document.getElementById("minMinutes").oninput = (e) => {
@@ -1960,6 +1952,7 @@ function renderScoutPanel() {
 }
 
 function renderStats() {
+  renderCompareBar();
   const list = getFiltered();
   const cols = activeColumns();
   const totalCols = 8 + cols.length;
@@ -1992,7 +1985,7 @@ function renderStats() {
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
         <td class="label-col"><span class="pos-pill" style="color:${POS_COLOR[p.position]};border:1px solid ${POS_COLOR[p.position]}">${p.position}</span></td>
         <td class="label-col" style="display:flex;align-items:center;gap:4px">
-          <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelection.has(p.id) ? "checked" : ""} title="Select to compare" />
+          <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelectionStats.has(p.id) ? "checked" : ""} title="Select to compare (Player stats only)" />
           <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-id="${p.id}">★</button>
         </td>
         <td class="mono" style="font-weight:700">${p.totalPoints}</td>
@@ -2052,7 +2045,10 @@ function renderStats() {
     });
     body.querySelectorAll("[data-compare-id]").forEach(chk => {
       chk.onclick = (e) => e.stopPropagation();
-      chk.onchange = () => toggleCompareSelection(Number(chk.dataset.compareId));
+      chk.onchange = () => {
+        toggleCompareSelection(Number(chk.dataset.compareId), "stats");
+        if (state.showSelectedStats) renderStats();
+      };
     });
   }
   const budgetNote = document.getElementById("statsBudgetNote");
@@ -2157,7 +2153,7 @@ function renderShortlist() {
   renderShortlistGroupTabs();
   const el = document.getElementById("shortlistBody");
   const activeGroup = state.activeShortlistGroup;
-  const items = activeGroup === "ALL"
+  let items = activeGroup === "ALL"
     ? state.shortlist
     : state.shortlist.filter(s => s.groups.includes(activeGroup));
 
@@ -2170,26 +2166,28 @@ function renderShortlist() {
     return;
   }
 
-  // Toolbar: compare toggle (+ rename/delete when viewing a custom group)
+  // Toolbar: show-selected toggle (+ rename/delete when viewing a custom group)
   const toolbar = document.createElement("div");
   toolbar.style.cssText = "display:flex;gap:8px;margin-bottom:10px;align-items:center";
   toolbar.innerHTML = `
-    <button class="dir-btn" id="shortlistCompareToggle">${state.shortlistCompareMode ? "Back to list" : "Compare players in this view"}</button>
+    <button class="dir-btn" id="showSelectedShortlistBtn">Show selected (0)</button>
     ${activeGroup !== "ALL" ? '<button class="dir-btn" id="shortlistGroupEditBtn">Rename / delete group</button>' : ""}
   `;
   el.innerHTML = "";
   el.appendChild(toolbar);
-  document.getElementById("shortlistCompareToggle").onclick = () => {
-    state.shortlistCompareMode = !state.shortlistCompareMode;
+  document.getElementById("showSelectedShortlistBtn").onclick = () => {
+    if (!state.shortlistShowSelectedOnly && state.compareSelectionShortlist.size === 0) return;
+    state.shortlistShowSelectedOnly = !state.shortlistShowSelectedOnly;
     renderShortlist();
   };
   if (activeGroup !== "ALL") document.getElementById("shortlistGroupEditBtn").onclick = renameOrDeleteActiveGroup;
+  renderCompareBar();
 
-  if (state.shortlistCompareMode) {
-    const body = document.createElement("div");
-    el.appendChild(body);
-    const players = items.map(item => state.players.find(pl => pl.id === item.playerId)).filter(Boolean);
-    renderShortlistCompareInto(body, players);
+  if (state.shortlistShowSelectedOnly && state.compareSelectionShortlist.size) {
+    items = items.filter(item => state.compareSelectionShortlist.has(item.playerId));
+  }
+  if (items.length === 0) {
+    el.appendChild(Object.assign(document.createElement("div"), { className: "empty-state", textContent: "No selected players in this group." }));
     return;
   }
 
@@ -2210,7 +2208,7 @@ function renderShortlist() {
         <span class="mono" style="font-size:12px;color:var(--ink-dim);flex-shrink:0">${p.totalPoints}pts</span>
         <span class="mono" style="font-size:12px;color:var(--gold-bright);flex-shrink:0">${fmtPrice(p.nowCost)}</span>
         <span style="flex-shrink:0;color:var(--ink-faint);font-size:11px">${expanded ? "▲" : "▼"}</span>
-        <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelection.has(p.id) ? "checked" : ""} title="Select to compare" onclick="event.stopPropagation()" />
+        <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelectionShortlist.has(p.id) ? "checked" : ""} title="Select to compare (Shortlist only)" onclick="event.stopPropagation()" />
         <button class="star-btn on" data-id="${p.id}" title="Remove from shortlist" style="flex-shrink:0">★</button>
       </div>
       ${expanded ? `
@@ -2249,7 +2247,10 @@ function renderShortlist() {
     btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
   });
   el.querySelectorAll("[data-compare-id]").forEach(chk => {
-    chk.onchange = () => toggleCompareSelection(Number(chk.dataset.compareId));
+    chk.onchange = () => {
+      toggleCompareSelection(Number(chk.dataset.compareId), "shortlist");
+      if (state.shortlistShowSelectedOnly) renderShortlist();
+    };
   });
   el.querySelectorAll("[data-toggle-group]").forEach(btn => {
     btn.onclick = (e) => {
@@ -2628,8 +2629,21 @@ function autoPickSquad(draft) {
     while (need > 0) {
       const clubCounts = clubCountsFor(draft.squad);
       const remaining = BUDGET - squadCost(draft.squad);
-      const totalSlotsLeft = 15 - draft.squad.length;
-      const reserve = (totalSlotsLeft - 1) * 40; // leave roughly £4.0m per other empty slot
+      // Reserve = the cheapest realistic price for every OTHER slot still to
+      // be filled (this position's remaining need, minus the one we're
+      // about to pick, plus every other position's full remaining need) —
+      // more accurate than a flat guess, since GK/FWD's cheapest options
+      // run pricier than DEF/MID's, which was starving later positions.
+      const cheapestByPos = {};
+      for (const otherPos of ["GK", "DEF", "MID", "FWD"]) {
+        const pool = state.players.filter(p => p.position === otherPos && !draft.squad.includes(p.id));
+        cheapestByPos[otherPos] = pool.length ? Math.min(...pool.map(p => p.nowCost)) : 40;
+      }
+      let reserve = (need - 1) * cheapestByPos[pos];
+      for (const otherPos of ["GK", "DEF", "MID", "FWD"]) {
+        if (otherPos === pos) continue;
+        reserve += SQUAD_RULES[otherPos] * cheapestByPos[otherPos];
+      }
       const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3;
       let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
         .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
@@ -2639,7 +2653,25 @@ function autoPickSquad(draft) {
         candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining)
           .sort((a, b) => a.nowCost - b.nowCost);
       }
-      if (!candidates.length) break; // genuinely impossible (e.g. budget exhausted) — nothing more to do
+      if (!candidates.length) {
+        // Budget is genuinely too tight even for the cheapest option in this
+        // position — completing a full 15-player squad matters more than
+        // staying under budget at this point, so drop the budget constraint
+        // entirely and take the cheapest legal (still respecting the 3-per-
+        // club cap) player. The builder UI already flags going over budget
+        // clearly (⚠️ + red "in the bank" pill), so this is visible and
+        // fixable by the user afterwards rather than silently leaving gaps.
+        candidates = state.players.filter(baseFilter).sort((a, b) => a.nowCost - b.nowCost);
+      }
+      if (!candidates.length) {
+        // Last resort — even the 3-per-club cap has no legal option left
+        // (should essentially never happen with 20 clubs). Drop that
+        // constraint too so the squad still reaches 15 rather than stalling.
+        candidates = state.players
+          .filter(p => p.position === pos && !draft.squad.includes(p.id))
+          .sort((a, b) => a.nowCost - b.nowCost);
+      }
+      if (!candidates.length) break; // truly nothing left to pick for this position at all
       // Randomised pick from a small pool of the best eligible options, so
       // clicking Auto Pick again gives a different (still strong) squad.
       const poolSize = Math.min(candidates.length, 6);
