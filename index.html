@@ -592,6 +592,32 @@
     </div>
   </div>
 
+  <div id="compareModal" class="pitch-modal-backdrop" style="display:none">
+    <div class="pitch-modal-card" style="max-width:900px">
+      <div class="detail-block-title">Comparing players</div>
+      <div id="compareModalBody" style="margin-top:8px"></div>
+      <button class="chip-btn" id="compareModalClose" style="margin-top:10px">Close</button>
+    </div>
+  </div>
+
+  <div id="groupPickerModal" class="pitch-modal-backdrop" style="display:none">
+    <div class="pitch-modal-card" style="max-width:320px">
+      <div class="detail-block-title">Added to shortlist — add to a group?</div>
+      <div id="groupPickerBody" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <input type="text" id="groupPickerNewName" placeholder="New group name…" style="flex:1" />
+        <button class="dir-btn" id="groupPickerNewBtn">Create</button>
+      </div>
+      <button class="chip-btn" id="groupPickerClose" style="margin-top:10px">Done</button>
+    </div>
+  </div>
+
+  <div id="compareBar" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;background:var(--panel);border:1px solid var(--panel-2);border-radius:10px;padding:8px 14px;box-shadow:0 6px 24px rgba(0,0,0,.35);align-items:center;gap:10px">
+    <span id="compareBarCount" style="font-size:13px;color:var(--ink-dim)"></span>
+    <button class="dir-btn" id="compareBarGo">Compare →</button>
+    <button class="chip-btn" id="compareBarClear">Clear</button>
+  </div>
+
   <section id="tab-h2h" style="display:none">
     <h1 class="page-title">Head-to-head</h1>
     <p class="page-sub">
@@ -889,6 +915,7 @@ let state = {
   clubStatsByTeamId: {},
   expandedShortlistId: null, preferKits: false,
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
+  compareSelection: new Set(),
 };
 
 // ---------- data fetching ----------
@@ -1507,13 +1534,84 @@ async function saveShortlistGroups() {
   await persistSet("shortlistGroups", JSON.stringify(state.shortlistGroups));
 }
 function isShortlisted(id) { return state.shortlist.some(s => s.playerId === id); }
-function toggleShortlist(id) {
-  if (isShortlisted(id)) state.shortlist = state.shortlist.filter(s => s.playerId !== id);
+function toggleShortlist(id, offerGroupPicker) {
+  const wasShortlisted = isShortlisted(id);
+  if (wasShortlisted) state.shortlist = state.shortlist.filter(s => s.playerId !== id);
   else state.shortlist.push({ playerId: id, note: "", groups: [] });
   saveShortlist();
   renderStats();
   renderShortlist();
+  if (!wasShortlisted && offerGroupPicker) openGroupPickerModal(id);
 }
+
+function openGroupPickerModal(playerId) {
+  renderGroupPickerBody(playerId);
+  document.getElementById("groupPickerModal").style.display = "flex";
+  document.getElementById("groupPickerNewBtn").onclick = () => {
+    const input = document.getElementById("groupPickerNewName");
+    const name = input.value.trim();
+    if (!name) return;
+    const id = "g" + Date.now();
+    state.shortlistGroups.push({ id, name });
+    saveShortlistGroups();
+    const item = state.shortlist.find(s => s.playerId === playerId);
+    if (item) item.groups.push(id);
+    saveShortlist();
+    input.value = "";
+    renderGroupPickerBody(playerId);
+    renderShortlist();
+  };
+  document.getElementById("groupPickerClose").onclick = () => { document.getElementById("groupPickerModal").style.display = "none"; };
+}
+function renderGroupPickerBody(playerId) {
+  const item = state.shortlist.find(s => s.playerId === playerId);
+  const body = document.getElementById("groupPickerBody");
+  if (!state.shortlistGroups.length) {
+    body.innerHTML = '<div class="field-desc">No groups yet — create one below.</div>';
+    return;
+  }
+  body.innerHTML = state.shortlistGroups.map(g =>
+    `<button class="chip-btn${item && item.groups.includes(g.id) ? " active" : ""}" data-gp-toggle="${g.id}">${g.name}</button>`
+  ).join("");
+  body.querySelectorAll("[data-gp-toggle]").forEach(btn => {
+    btn.onclick = () => {
+      const gid = btn.dataset.gpToggle;
+      const it = state.shortlist.find(s => s.playerId === playerId);
+      if (!it) return;
+      if (it.groups.includes(gid)) it.groups = it.groups.filter(x => x !== gid);
+      else it.groups.push(gid);
+      saveShortlist();
+      renderGroupPickerBody(playerId);
+      renderShortlist();
+    };
+  });
+}
+
+// ---------- compare selection (Player stats + Shortlist) ----------
+function toggleCompareSelection(id) {
+  if (state.compareSelection.has(id)) state.compareSelection.delete(id);
+  else state.compareSelection.add(id);
+  renderCompareBar();
+}
+function renderCompareBar() {
+  const bar = document.getElementById("compareBar");
+  const n = state.compareSelection.size;
+  bar.style.display = n > 0 ? "flex" : "none";
+  document.getElementById("compareBarCount").textContent = `${n} player${n === 1 ? "" : "s"} selected`;
+}
+function openCompareModal() {
+  const players = [...state.compareSelection].map(id => state.players.find(p => p.id === id)).filter(Boolean);
+  if (!players.length) return;
+  renderShortlistCompareInto(document.getElementById("compareModalBody"), players);
+  document.getElementById("compareModal").style.display = "flex";
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("compareBarGo").onclick = openCompareModal;
+  document.getElementById("compareBarClear").onclick = () => { state.compareSelection.clear(); renderCompareBar(); renderStats(); renderShortlist(); };
+  document.getElementById("compareModalClose").onclick = () => { document.getElementById("compareModal").style.display = "none"; };
+  document.getElementById("compareModal").onclick = (e) => { if (e.target.id === "compareModal") e.target.style.display = "none"; };
+  document.getElementById("groupPickerModal").onclick = (e) => { if (e.target.id === "groupPickerModal") e.target.style.display = "none"; };
+});
 
 // ---------- filtering / sorting ----------
 function playerHasMatchingFixture(p) {
@@ -1893,7 +1991,10 @@ function renderStats() {
         </td>
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
         <td class="label-col"><span class="pos-pill" style="color:${POS_COLOR[p.position]};border:1px solid ${POS_COLOR[p.position]}">${p.position}</span></td>
-        <td class="label-col"><button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-id="${p.id}">★</button></td>
+        <td class="label-col" style="display:flex;align-items:center;gap:4px">
+          <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelection.has(p.id) ? "checked" : ""} title="Select to compare" />
+          <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-id="${p.id}">★</button>
+        </td>
         <td class="mono" style="font-weight:700">${p.totalPoints}</td>
         <td class="mono" style="color:${p0.form >= 5 ? "var(--emerald)" : "var(--ink)"}">${p0.form.toFixed(1)}</td>
         <td class="mono" style="color:var(--gold-bright)">${p0.epNext.toFixed(1)}</td>
@@ -1947,7 +2048,11 @@ function renderStats() {
       }
     }
     body.querySelectorAll(".star-btn").forEach(btn => {
-      btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
+      btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id), true); };
+    });
+    body.querySelectorAll("[data-compare-id]").forEach(chk => {
+      chk.onclick = (e) => e.stopPropagation();
+      chk.onchange = () => toggleCompareSelection(Number(chk.dataset.compareId));
     });
   }
   const budgetNote = document.getElementById("statsBudgetNote");
@@ -2105,6 +2210,7 @@ function renderShortlist() {
         <span class="mono" style="font-size:12px;color:var(--ink-dim);flex-shrink:0">${p.totalPoints}pts</span>
         <span class="mono" style="font-size:12px;color:var(--gold-bright);flex-shrink:0">${fmtPrice(p.nowCost)}</span>
         <span style="flex-shrink:0;color:var(--ink-faint);font-size:11px">${expanded ? "▲" : "▼"}</span>
+        <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelection.has(p.id) ? "checked" : ""} title="Select to compare" onclick="event.stopPropagation()" />
         <button class="star-btn on" data-id="${p.id}" title="Remove from shortlist" style="flex-shrink:0">★</button>
       </div>
       ${expanded ? `
@@ -2141,6 +2247,9 @@ function renderShortlist() {
   });
   el.querySelectorAll(".star-btn").forEach(btn => {
     btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
+  });
+  el.querySelectorAll("[data-compare-id]").forEach(chk => {
+    chk.onchange = () => toggleCompareSelection(Number(chk.dataset.compareId));
   });
   el.querySelectorAll("[data-toggle-group]").forEach(btn => {
     btn.onclick = (e) => {
