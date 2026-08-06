@@ -45,6 +45,20 @@
   .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
   .serif { font-family: "Fraunces", Georgia, serif; }
 
+  /* keyboard accessibility — visible focus ring on anything interactive */
+  button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--gold-bright); outline-offset: 2px; border-radius: 4px;
+  }
+  /* themed scrollbar (Chrome/Edge/Safari) */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 2px solid var(--bg-1); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gold-bright); }
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  /* quick fade when switching tabs, so content doesn't just pop in */
+  section[id^="tab-"] { animation: tabFadeIn 0.18s ease; }
+  @keyframes tabFadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
   header {
     position: sticky; top: 0; z-index: 30;
     border-bottom: 1px solid var(--border);
@@ -114,6 +128,7 @@
     padding: 7px 13px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
     transition: all 0.15s ease;
   }
+  .seg button:hover:not(.active) { background: var(--panel-2); color: var(--ink-dim); }
   .seg button.active { background: var(--panel-3); color: var(--gold-bright); }
 
   select, input[type=text], input[type=number] {
@@ -129,7 +144,11 @@
   .dir-btn {
     background: var(--bg-1); border: 1px solid var(--border); color: var(--ink);
     border-radius: 8px; padding: 8px 11px; cursor: pointer; font-size: 13px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
+  .dir-btn:hover:not(:disabled) { background: var(--panel-3); border-color: var(--border-strong); }
+  .dir-btn:active:not(:disabled) { transform: translateY(1px); }
+  .dir-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
   thead th {
@@ -137,7 +156,10 @@
     background: var(--panel-2); white-space: nowrap; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
     border-bottom: 1px solid var(--border);
+    position: sticky; top: 58px; z-index: 5; /* keeps column headers visible while scrolling a long table */
+    transition: background 0.12s ease, color 0.12s ease;
   }
+  thead th:hover { color: var(--gold-bright); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
   thead th.sorted { color: var(--gold-bright); }
   tbody td { padding: 9px 13px; text-align: right; border-top: 1px solid var(--border); }
@@ -159,7 +181,8 @@
   .star-btn:hover { transform: scale(1.15); }
   .foot-note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
 
-  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 18px; box-shadow: var(--shadow); }
+  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 18px; box-shadow: var(--shadow); transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+  .card:hover { border-color: var(--border-strong); }
 
   /* fixture ticker */
   .fdr-ticker { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
@@ -184,9 +207,10 @@
   .btn {
     background: linear-gradient(135deg, var(--gold-bright), var(--gold)); border: none; color: #12100a;
     padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; font-family: inherit;
-    transition: filter 0.15s ease;
+    transition: filter 0.15s ease, transform 0.1s ease;
   }
-  .btn:hover { filter: brightness(1.08); }
+  .btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
   .btn:disabled { opacity: 0.5; cursor: default; filter: none; }
 
   .manager-summary { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -196,14 +220,18 @@
   .squad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 11px; }
   .squad-card {
     border: 1px solid var(--border); border-radius: 10px; padding: 11px; background: var(--panel-2);
-    position: relative; transition: border-color 0.15s ease;
+    position: relative; transition: border-color 0.15s ease, transform 0.12s ease;
   }
+  .squad-card:hover { transform: translateY(-1px); }
   .squad-card.captain { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-soft); }
   .cap-badge {
     position: absolute; top: 9px; right: 9px; font-size: 10px; font-weight: 800;
     color: #12100a; background: var(--gold-bright); border-radius: 4px; padding: 1px 6px;
   }
-  .empty-state { text-align: center; padding: 54px 20px; color: var(--ink-faint); font-size: 13px; }
+  .empty-state {
+    text-align: center; padding: 46px 20px; color: var(--ink-faint); font-size: 13px;
+    border: 1px dashed var(--border); border-radius: 12px; background: var(--panel-2);
+  }
   .note-input {
     width: 100%; background: var(--bg-1); border: 1px solid var(--border); color: var(--ink);
     border-radius: 8px; padding: 7px 9px; font-size: 12px; font-family: inherit; margin-top: 8px; resize: vertical;
@@ -243,7 +271,10 @@
   .chip-btn {
     background: var(--bg-1); border: 1px solid var(--border); color: var(--ink-dim);
     padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
+  .chip-btn:hover:not(.active):not(:disabled) { background: var(--panel-3); color: var(--ink); border-color: var(--border-strong); }
+  .chip-btn:active:not(:disabled) { transform: translateY(1px); }
   .chip-btn.active { background: var(--gold-soft); border-color: var(--border-strong); color: var(--gold-bright); font-weight: 600; }
   .chip-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .swap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 12px; }
@@ -282,10 +313,12 @@
   }
   .builder-row {
     display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 13px; transition: background 0.12s ease;
   }
+  .builder-row:hover { background: var(--panel-2); }
   .builder-row:last-child { border-bottom: none; }
   .builder-row.in-squad { background: var(--gold-soft); }
+  .builder-row.in-squad:hover { background: var(--gold-soft); filter: brightness(0.97); }
   .builder-row .b-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .builder-row .b-sub { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
   .builder-row .b-price { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-dim); width: 44px; text-align: right; }
@@ -486,6 +519,7 @@
         <button class="dir-btn" id="resetSortBtn" title="Back to Total pts, high to low">Reset sort</button>
         <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
         <button class="dir-btn" id="showSelectedStatsBtn" type="button">Show selected (0)</button>
+        <button class="dir-btn" id="addSelectedToGroupBtn" type="button">+ Add selected to group</button>
       </div>
     </div>
     <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
@@ -655,11 +689,13 @@
       Pick two clubs. There's no real data source for manager philosophies or planned lineups anywhere — not FPL's API, not anywhere public — so that side is a notepad you fill in yourself and it's saved for next time. Everything else on this page (fixtures, player form, stats) is real, live FPL data for the two clubs you pick.
     </p>
 
-    <div class="toolbar" style="margin-bottom:16px">
+    <div class="toolbar" style="margin-bottom:10px">
       <select id="h2hTeamA"></select>
       <span style="color:var(--ink-dim);align-self:center">vs</span>
       <select id="h2hTeamB"></select>
+      <button class="chip-btn" id="h2hSaveBtn">★ Save this head-to-head</button>
     </div>
+    <div id="h2hSavedRow" class="chip-btn-row" style="margin-bottom:16px"></div>
 
     <div style="display:flex;gap:6px;margin-bottom:16px">
       <button class="chip-btn" data-h2h-view="overview">Overview</button>
@@ -944,14 +980,15 @@ let state = {
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {},
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
-  h2hScoreboard: {},
+  h2hCombined: {}, h2hCombinedPickPos: null, h2hCombinedPickSlot: 0,
+  h2hScoreboard: {}, h2hSaved: [],
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
   clubStatsByTeamId: {},
   expandedShortlistId: null, preferKits: false,
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
-  showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false,
+  showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowStatsTable: false,
 };
 
 // ---------- data fetching ----------
@@ -1334,7 +1371,9 @@ async function loadData() {
     await loadManagerNotes();
     await loadH2hMatchups();
     await loadH2hDraft();
+    await loadH2hCombined();
     await loadH2hScoreboard();
+    await loadH2hSaved();
     setBanner(null);
     populateTeamSelect();
     renderDash();
@@ -1600,8 +1639,8 @@ function toggleShortlist(id, offerGroupPicker) {
   if (!wasShortlisted && offerGroupPicker) openGroupPickerModal(id);
 }
 
-function openGroupPickerModal(playerId) {
-  renderGroupPickerBody(playerId);
+function openGroupPickerModal(target) {
+  renderGroupPickerBody(target);
   document.getElementById("groupPickerModal").style.display = "flex";
   document.getElementById("groupPickerNewBtn").onclick = () => {
     const input = document.getElementById("groupPickerNewName");
@@ -1610,34 +1649,48 @@ function openGroupPickerModal(playerId) {
     const id = "g" + Date.now();
     state.shortlistGroups.push({ id, name });
     saveShortlistGroups();
-    const item = state.shortlist.find(s => s.playerId === playerId);
-    if (item) item.groups.push(id);
+    const ids = Array.isArray(target) ? target : [target];
+    ids.forEach(playerId => {
+      let item = state.shortlist.find(s => s.playerId === playerId);
+      if (!item) { item = { playerId, note: "", groups: [] }; state.shortlist.push(item); }
+      item.groups.push(id);
+    });
     saveShortlist();
     input.value = "";
-    renderGroupPickerBody(playerId);
+    renderGroupPickerBody(target);
     renderShortlist();
   };
   document.getElementById("groupPickerClose").onclick = () => { document.getElementById("groupPickerModal").style.display = "none"; };
 }
-function renderGroupPickerBody(playerId) {
-  const item = state.shortlist.find(s => s.playerId === playerId);
+function renderGroupPickerBody(target) {
+  const ids = Array.isArray(target) ? target : [target];
+  const items = ids.map(id => state.shortlist.find(s => s.playerId === id)).filter(Boolean);
   const body = document.getElementById("groupPickerBody");
+  const heading = ids.length > 1 ? `<div class="field-desc" style="margin-bottom:6px">Add all ${ids.length} selected players to a group — a player can belong to multiple groups.</div>` : "";
   if (!state.shortlistGroups.length) {
-    body.innerHTML = '<div class="field-desc">No groups yet — create one below.</div>';
+    body.innerHTML = heading + '<div class="field-desc">No groups yet — create one below.</div>';
     return;
   }
-  body.innerHTML = state.shortlistGroups.map(g =>
-    `<button class="chip-btn${item && item.groups.includes(g.id) ? " active" : ""}" data-gp-toggle="${g.id}">${g.name}</button>`
-  ).join("");
+  // For bulk mode a group shows "active" only once every selected player is in it.
+  body.innerHTML = heading + state.shortlistGroups.map(g => {
+    const allIn = items.length > 0 && items.every(it => it.groups.includes(g.id));
+    return `<button class="chip-btn${allIn ? " active" : ""}" data-gp-toggle="${g.id}">${g.name}</button>`;
+  }).join("");
   body.querySelectorAll("[data-gp-toggle]").forEach(btn => {
     btn.onclick = () => {
       const gid = btn.dataset.gpToggle;
-      const it = state.shortlist.find(s => s.playerId === playerId);
-      if (!it) return;
-      if (it.groups.includes(gid)) it.groups = it.groups.filter(x => x !== gid);
-      else it.groups.push(gid);
+      ids.forEach(playerId => {
+        let it = state.shortlist.find(s => s.playerId === playerId);
+        if (!it) { it = { playerId, note: "", groups: [] }; state.shortlist.push(it); }
+      });
+      const nowItems = ids.map(id => state.shortlist.find(s => s.playerId === id));
+      const allIn = nowItems.every(it => it.groups.includes(gid));
+      nowItems.forEach(it => {
+        if (allIn) it.groups = it.groups.filter(x => x !== gid); // all had it — remove from all
+        else if (!it.groups.includes(gid)) it.groups.push(gid); // add to whichever didn't have it
+      });
       saveShortlist();
-      renderGroupPickerBody(playerId);
+      renderGroupPickerBody(target);
       renderShortlist();
     };
   });
@@ -1657,6 +1710,8 @@ function renderCompareBar() {
     statsBtn.textContent = state.showSelectedStats ? `Show all players` : `Show selected (${n})`;
     statsBtn.disabled = !state.showSelectedStats && n === 0;
   }
+  const addGroupBtn = document.getElementById("addSelectedToGroupBtn");
+  if (addGroupBtn) addGroupBtn.disabled = state.compareSelectionStats.size === 0;
   const shortlistBtn = document.getElementById("showSelectedShortlistBtn");
   if (shortlistBtn) {
     const n = state.compareSelectionShortlist.size;
@@ -1839,6 +1894,10 @@ function buildToolbarStatics() {
     state.showSelectedStats = !state.showSelectedStats;
     renderCompareBar();
     renderStats();
+  };
+  document.getElementById("addSelectedToGroupBtn").onclick = () => {
+    if (state.compareSelectionStats.size === 0) return;
+    openGroupPickerModal([...state.compareSelectionStats]);
   };
   document.getElementById("groupPickerModal").onclick = (e) => { if (e.target.id === "groupPickerModal") e.target.style.display = "none"; };
 
@@ -2153,6 +2212,49 @@ function renderStats() {
 }
 
 // ---------- rendering: shortlist ----------
+// Compact, sortable stats table for a shortlist group — same column
+// vocabulary as the main Player stats tab (FIXED_COLUMNS + the Overview
+// theme's columns), just scoped to whichever players are in view.
+const SHORTLIST_STATS_COLUMNS = [...FIXED_COLUMNS, ...STAT_THEMES.overview.columns];
+let shortlistStatsSort = { key: "totalPoints", dir: "desc" };
+function buildMiniStatsTableEl(players) {
+  const wrap = document.createElement("div");
+  wrap.className = "table-wrap";
+  wrap.style.marginTop = "4px";
+  const sorted = [...players].sort((a, b) => {
+    const key = shortlistStatsSort.key;
+    let av = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](a)[0]).replace(/[^0-9.-]/g, "")) : (a[key] ?? 0);
+    let bv = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](b)[0]).replace(/[^0-9.-]/g, "")) : (b[key] ?? 0);
+    if (Number.isNaN(av)) av = 0; if (Number.isNaN(bv)) bv = 0;
+    return shortlistStatsSort.dir === "desc" ? bv - av : av - bv;
+  });
+  const head = `<tr>
+    <th class="label-col">Player</th>
+    ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer">${label}${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? " ↓" : " ↑") : ""}</th>`).join("")}
+  </tr>`;
+  const rows = sorted.map(p => {
+    const team = state.teamsById[p.teamId];
+    return `<tr>
+      <td class="label-col">${playerAvatarHtml(p, 22)} ${p.webName} <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
+      ${SHORTLIST_STATS_COLUMNS.map(([key]) => {
+        const fmt = COLUMN_FORMAT[key];
+        const [text, style] = fmt ? fmt(p) : [p[key] ?? "–", ""];
+        return `<td class="mono" style="${style}">${text}</td>`;
+      }).join("")}
+    </tr>`;
+  }).join("");
+  wrap.innerHTML = `<table>${head}<tbody>${rows}</tbody></table>`;
+  wrap.querySelectorAll("[data-sl-sort]").forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.slSort;
+      if (shortlistStatsSort.key === key) shortlistStatsSort.dir = shortlistStatsSort.dir === "desc" ? "asc" : "desc";
+      else shortlistStatsSort = { key, dir: "desc" };
+      renderShortlist();
+    };
+  });
+  return wrap;
+}
+
 function renderShortlistGroupTabs() {
   const el = document.getElementById("shortlistGroupTabs");
   const tabs = [{ id: "ALL", name: "All players" }, ...state.shortlistGroups];
@@ -2239,6 +2341,8 @@ function renderShortlist() {
   toolbar.style.cssText = "display:flex;gap:8px;margin-bottom:10px;align-items:center";
   toolbar.innerHTML = `
     <button class="dir-btn" id="showSelectedShortlistBtn">Show selected (0)</button>
+    <button class="dir-btn" id="addSelectedToGroupBtnSL">+ Add selected to group</button>
+    <button class="dir-btn" id="shortlistStatsTableBtn">📊 Statistics table</button>
     ${activeGroup !== "ALL" ? '<button class="dir-btn" id="shortlistGroupEditBtn">Rename / delete group</button>' : ""}
   `;
   el.innerHTML = "";
@@ -2246,6 +2350,14 @@ function renderShortlist() {
   document.getElementById("showSelectedShortlistBtn").onclick = () => {
     if (!state.shortlistShowSelectedOnly && state.compareSelectionShortlist.size === 0) return;
     state.shortlistShowSelectedOnly = !state.shortlistShowSelectedOnly;
+    renderShortlist();
+  };
+  document.getElementById("addSelectedToGroupBtnSL").onclick = () => {
+    if (state.compareSelectionShortlist.size === 0) return;
+    openGroupPickerModal([...state.compareSelectionShortlist]);
+  };
+  document.getElementById("shortlistStatsTableBtn").onclick = () => {
+    state.shortlistShowStatsTable = !state.shortlistShowStatsTable;
     renderShortlist();
   };
   if (activeGroup !== "ALL") document.getElementById("shortlistGroupEditBtn").onclick = renameOrDeleteActiveGroup;
@@ -2256,6 +2368,11 @@ function renderShortlist() {
   }
   if (items.length === 0) {
     el.appendChild(Object.assign(document.createElement("div"), { className: "empty-state", textContent: "No selected players in this group." }));
+    return;
+  }
+  if (state.shortlistShowStatsTable) {
+    const players = items.map(item => state.players.find(pl => pl.id === item.playerId)).filter(Boolean);
+    el.appendChild(buildMiniStatsTableEl(players));
     return;
   }
 
@@ -4216,6 +4333,14 @@ async function loadH2hDraft() {
 }
 function saveH2hDraft() { persistSet("h2hDraft", JSON.stringify(state.h2hDraft)); }
 
+async function loadH2hCombined() {
+  try {
+    const raw = await persistGet("h2hCombined");
+    if (raw) state.h2hCombined = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hCombined() { persistSet("h2hCombined", JSON.stringify(state.h2hCombined)); }
+
 async function loadH2hScoreboard() {
   try {
     const raw = await persistGet("h2hScoreboard");
@@ -4223,6 +4348,14 @@ async function loadH2hScoreboard() {
   } catch (e) { /* keep defaults */ }
 }
 function saveH2hScoreboard() { persistSet("h2hScoreboard", JSON.stringify(state.h2hScoreboard)); }
+
+async function loadH2hSaved() {
+  try {
+    const raw = await persistGet("h2hSaved");
+    if (raw) state.h2hSaved = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hSaved() { persistSet("h2hSaved", JSON.stringify(state.h2hSaved)); }
 
 const FORMATIONS_H2H = {
   "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
@@ -4267,45 +4400,26 @@ function h2hFormationSelectHtml(id, current) {
 // season points), slotted symmetrically into whichever formation is
 // picked — shown as a proper pitch so it's immediately clear which club's
 // player is which (gold outline vs blue outline).
-function renderH2hCombinedXi(body, teamA, teamB) {
-  const formation = FORMATIONS_H2H[state.h2hFormation];
-  const pool = state.players.filter(p => p.teamId === teamA.id || p.teamId === teamB.id);
-  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
-  pool.forEach(p => { if (byPos[p.position]) byPos[p.position].push(p); });
-  Object.values(byPos).forEach(arr => arr.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)));
-  const picksByPos = {
-    GK: byPos.GK.slice(0, 1).map(p => ({ p })),
-    DEF: byPos.DEF.slice(0, formation.DEF).map(p => ({ p })),
-    MID: byPos.MID.slice(0, formation.MID).map(p => ({ p })),
-    FWD: byPos.FWD.slice(0, formation.FWD).map(p => ({ p })),
-  };
-  const all = [...picksByPos.GK, ...picksByPos.DEF, ...picksByPos.MID, ...picksByPos.FWD];
-  const countA = all.filter(x => x.p.teamId === teamA.id).length;
-  const countB = all.length - countA;
-  body.innerHTML = `
-    <div class="card">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
-        <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
-        ${h2hFormationSelectHtml("h2hFormationSelect", state.h2hFormation)}
-      </div>
-      <p class="foot-note" style="margin-bottom:10px">
-        <span style="color:var(--gold-bright)">●</span> ${teamA.name} (${countA}) &nbsp;
-        <span style="color:var(--blue,#4a9eff)">●</span> ${teamB.name} (${countB}) — best combined XI by real season points.
-      </p>
-      ${h2hPitchHtml(picksByPos, teamA)}
-    </div>
-  `;
-  document.getElementById("h2hFormationSelect").onchange = (e) => { state.h2hFormation = e.target.value; renderH2H(); };
+// Shared, editable XI builder used by both the points-based Combined XI and
+// the manual Ability draft XI — pick any position at any time, and any slot
+// within it (including ones already filled). Midfield and forward pools
+// cross over (some "MID"-tagged players are really forwards in real life,
+// and vice versa) so both show up when filling either line. Saved per team
+// pairing, per mode.
+function h2hEligiblePlayers(pos) {
+  // MID and FWD pools cross over — FPL's own position tag doesn't always
+  // match how a player actually plays.
+  const positions = pos === "MID" ? ["MID", "FWD"] : pos === "FWD" ? ["FWD", "MID"] : [pos];
+  return (team) => state.players.filter(p => p.teamId === team.id && positions.includes(p.position));
 }
-
-// Manual, ability-based draft XI: pick any position at any time, and any
-// slot within it (including ones already filled) — pick whichever player
-// (from either club) you rate higher for that slot. Saved per team pairing
-// like the matchup tool.
-function renderH2hDraftXi(body, teamA, teamB) {
+function renderH2hXiBuilder(body, teamA, teamB, mode) {
+  const isCombined = mode === "combined";
+  const store = isCombined ? state.h2hCombined : state.h2hDraft;
+  const saveFn = isCombined ? saveH2hCombined : saveH2hDraft;
+  const defaultFormation = isCombined ? state.h2hFormation : state.h2hDraftFormation;
   const key = h2hMatchupKey(teamA.id, teamB.id);
-  const saved = state.h2hDraft[key] || { formation: state.h2hDraftFormation, picks: { GK: [], DEF: [], MID: [], FWD: [] } };
-  state.h2hDraft[key] = saved;
+  const saved = store[key] || { formation: defaultFormation, picks: { GK: [], DEF: [], MID: [], FWD: [] }, autoFilled: false };
+  store[key] = saved;
   const formation = FORMATIONS_H2H[saved.formation] || FORMATIONS_H2H["4-3-3"];
   const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
   ["GK", "DEF", "MID", "FWD"].forEach(pos => {
@@ -4315,18 +4429,34 @@ function renderH2hDraftXi(body, teamA, teamB) {
   });
 
   function playerById(id) { return state.players.find(p => p.id === id); }
+  function autoFillByPoints() {
+    const used = new Set();
+    ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+      const pool = h2hEligiblePlayers(pos)(teamA).concat(h2hEligiblePlayers(pos)(teamB))
+        .filter((p, i, arr) => arr.indexOf(p) === i && !used.has(p.id))
+        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      saved.picks[pos] = [];
+      for (let i = 0; i < need[pos]; i++) {
+        const p = pool.find(x => !used.has(x.id));
+        if (p) { used.add(p.id); saved.picks[pos].push(p.id); } else saved.picks[pos].push(null);
+      }
+    });
+    saved.autoFilled = true;
+  }
+  if (isCombined && !saved.autoFilled) autoFillByPoints();
+
   const picksByPos = {};
   ["GK", "DEF", "MID", "FWD"].forEach(pos => {
     picksByPos[pos] = saved.picks[pos].map(id => (id ? { p: playerById(id) } : null)).map(x => (x && x.p ? x : null));
   });
   const pickedIds = new Set(Object.values(saved.picks).flat().filter(Boolean));
 
-  // Which position/slot is currently being edited — defaults to the first
-  // empty slot, but the user can jump to any position or any slot freely.
-  let editPos = state.h2hDraftPickPos, editSlot = state.h2hDraftPickSlot ?? 0;
+  const posStateKey = isCombined ? "h2hCombinedPickPos" : "h2hDraftPickPos";
+  const slotStateKey = isCombined ? "h2hCombinedPickSlot" : "h2hDraftPickSlot";
+  let editPos = state[posStateKey], editSlot = state[slotStateKey] ?? 0;
   if (!editPos || !need[editPos]) editPos = "GK";
   if (editSlot < 0 || editSlot >= need[editPos]) editSlot = 0;
-  state.h2hDraftPickPos = editPos; state.h2hDraftPickSlot = editSlot;
+  state[posStateKey] = editPos; state[slotStateKey] = editSlot;
 
   const POS_LABEL = { GK: "Goalkeeper", DEF: "Defender", MID: "Midfielder", FWD: "Forward" };
   const tabsHtml = ["GK", "DEF", "MID", "FWD"].map(pos => {
@@ -4340,12 +4470,13 @@ function renderH2hDraftXi(body, teamA, teamB) {
 
   function candidateListHtml(pos, slotIdx) {
     const currentId = saved.picks[pos][slotIdx];
-    const listFor = (team) => state.players.filter(p => p.teamId === team.id && p.position === pos && (p.id === currentId || !pickedIds.has(p.id)))
+    const eligible = h2hEligiblePlayers(pos);
+    const listFor = (team) => eligible(team).filter(p => p.id === currentId || !pickedIds.has(p.id))
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
     const row = (p) => `
       <div class="builder-row" data-draft-pick="${p.id}" style="cursor:pointer;${p.id === currentId ? "outline:2px solid var(--gold-bright);border-radius:6px" : ""}">
         ${playerAvatarHtml(p, 26)}
-        <span class="b-name">${p.webName}${p.id === currentId ? " ✓" : ""}</span>
+        <span class="b-name">${p.webName}${p.position !== pos ? ` <span class="b-sub">(${p.position})</span>` : ""}${p.id === currentId ? " ✓" : ""}</span>
         <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
         <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
       </div>
@@ -4364,14 +4495,21 @@ function renderH2hDraftXi(body, teamA, teamB) {
     `;
   }
 
+  const intro = isCombined
+    ? `Best combined XI by real season points — click any player on the pitch, or use the position/slot buttons below, to override the pick for that spot. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`
+    : `Click any player on the pitch — or use the position/slot buttons below — to pick or change who fills that spot. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`;
+  const resetLabel = isCombined ? "Reset to auto (by points)" : "Reset draft";
+  const formationSelectId = isCombined ? "h2hFormationSelect" : "h2hDraftFormationSelect";
+  const resetBtnId = isCombined ? "h2hCombinedReset" : "h2hDraftReset";
+
   body.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
-        ${h2hFormationSelectHtml("h2hDraftFormationSelect", saved.formation)}
-        <button class="chip-btn" id="h2hDraftReset">Reset draft</button>
+        ${h2hFormationSelectHtml(formationSelectId, saved.formation)}
+        <button class="chip-btn" id="${resetBtnId}">${resetLabel}</button>
       </div>
-      <p class="foot-note" style="margin-bottom:10px">Click any player on the pitch — or use the position/slot buttons below — to pick or change who fills that spot.</p>
+      <p class="foot-note" style="margin-bottom:10px">${intro}</p>
       ${h2hPitchHtml(picksByPos, teamA, { editPos, editSlot })}
     </div>
     <div class="card">
@@ -4381,29 +4519,32 @@ function renderH2hDraftXi(body, teamA, teamB) {
       ${candidateListHtml(editPos, editSlot)}
     </div>
   `;
-  document.getElementById("h2hDraftFormationSelect").onchange = (e) => {
+  document.getElementById(formationSelectId).onchange = (e) => {
     saved.formation = e.target.value;
     saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
-    state.h2hDraftPickPos = "GK"; state.h2hDraftPickSlot = 0;
-    saveH2hDraft();
+    saved.autoFilled = false;
+    state[posStateKey] = "GK"; state[slotStateKey] = 0;
+    if (isCombined) state.h2hFormation = saved.formation;
+    saveFn();
     renderH2H();
   };
-  document.getElementById("h2hDraftReset").onclick = () => {
-    saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
-    state.h2hDraftPickPos = "GK"; state.h2hDraftPickSlot = 0;
-    saveH2hDraft();
+  document.getElementById(resetBtnId).onclick = () => {
+    if (isCombined) { autoFillByPoints(); }
+    else { saved.picks = { GK: [], DEF: [], MID: [], FWD: [] }; }
+    state[posStateKey] = "GK"; state[slotStateKey] = 0;
+    saveFn();
     renderH2H();
   };
   body.querySelectorAll("[data-h2h-pos-tab]").forEach(btn => {
-    btn.onclick = () => { state.h2hDraftPickPos = btn.dataset.h2hPosTab; state.h2hDraftPickSlot = 0; renderH2H(); };
+    btn.onclick = () => { state[posStateKey] = btn.dataset.h2hPosTab; state[slotStateKey] = 0; renderH2H(); };
   });
   body.querySelectorAll("[data-h2h-slot-tab]").forEach(btn => {
-    btn.onclick = () => { state.h2hDraftPickSlot = Number(btn.dataset.h2hSlotTab); renderH2H(); };
+    btn.onclick = () => { state[slotStateKey] = Number(btn.dataset.h2hSlotTab); renderH2H(); };
   });
   body.querySelectorAll("[data-h2h-pitch-slot]").forEach(el => {
     el.onclick = () => {
-      state.h2hDraftPickPos = el.dataset.h2hPitchPos;
-      state.h2hDraftPickSlot = Number(el.dataset.h2hPitchSlotIdx);
+      state[posStateKey] = el.dataset.h2hPitchPos;
+      state[slotStateKey] = Number(el.dataset.h2hPitchSlotIdx);
       renderH2H();
     };
   });
@@ -4411,26 +4552,27 @@ function renderH2hDraftXi(body, teamA, teamB) {
     row.onclick = () => {
       const id = Number(row.dataset.draftPick);
       saved.picks[editPos][editSlot] = id;
-      saveH2hDraft();
+      saveFn();
       // Auto-advance to the next empty slot in this position, else the
-      // next position's first empty slot, so filling a fresh XI stays
-      // quick — but nothing stops jumping back to edit any slot after.
+      // next position's first empty slot — but any slot can still be
+      // revisited and changed at any time via the tabs above or the pitch.
       const posOrder = ["GK", "DEF", "MID", "FWD"];
       let nextPos = editPos, nextSlot = saved.picks[editPos].findIndex(x => !x);
       if (nextSlot === -1) {
         for (const p of posOrder) {
-          const idx = posOrder.indexOf(editPos);
-          if (posOrder.indexOf(p) <= idx) continue;
+          if (posOrder.indexOf(p) <= posOrder.indexOf(editPos)) continue;
           const empty = saved.picks[p].findIndex(x => !x);
           if (empty !== -1) { nextPos = p; nextSlot = empty; break; }
         }
-        if (nextSlot === -1) nextSlot = 0;
+        if (nextSlot === -1) nextSlot = editSlot;
       }
-      state.h2hDraftPickPos = nextPos; state.h2hDraftPickSlot = nextSlot;
+      state[posStateKey] = nextPos; state[slotStateKey] = nextSlot;
       renderH2H();
     };
   });
 }
+function renderH2hCombinedXi(body, teamA, teamB) { renderH2hXiBuilder(body, teamA, teamB, "combined"); }
+function renderH2hDraftXi(body, teamA, teamB) { renderH2hXiBuilder(body, teamA, teamB, "draft"); }
 
 // Manual player-vs-player matchup tool. FPL's own data only distinguishes
 // GK/DEF/MID/FWD — it has no "LW" or "RB" sub-roles — so rather than fake a
@@ -4737,11 +4879,70 @@ function rivalryName(teamA, teamB) {
   return KNOWN_RIVALRIES[key1] || KNOWN_RIVALRIES[key2] || null;
 }
 
+function renderH2hSavedList() {
+  const row = document.getElementById("h2hSavedRow");
+  if (!row) return;
+  if (!state.h2hSaved.length) { row.innerHTML = `<p class="foot-note">No saved head-to-heads yet — pick two clubs and hit "Save this head-to-head".</p>`; return; }
+  row.innerHTML = state.h2hSaved.map(s => {
+    const a = state.teamsById[s.teamAId], b = state.teamsById[s.teamBId];
+    const label = s.label || (a && b ? `${a.short_name} vs ${b.short_name}` : "?");
+    const isActive = state.h2h.teamA === s.teamAId && state.h2h.teamB === s.teamBId;
+    return `
+      <span class="chip-btn${isActive ? " active" : ""}" style="display:inline-flex;align-items:center;gap:6px" data-h2h-saved-load="${s.id}">
+        ${label}
+        <span data-h2h-saved-rename="${s.id}" title="Rename" style="opacity:0.7">✎</span>
+        <span data-h2h-saved-delete="${s.id}" title="Delete" style="opacity:0.7;color:var(--red)">✕</span>
+      </span>
+    `;
+  }).join("");
+  row.querySelectorAll("[data-h2h-saved-load]").forEach(el => {
+    el.onclick = (e) => {
+      if (e.target.dataset.h2hSavedRename || e.target.dataset.h2hSavedDelete) return;
+      const s = state.h2hSaved.find(x => x.id === el.dataset.h2hSavedLoad);
+      if (!s) return;
+      state.h2h.teamA = s.teamAId; state.h2h.teamB = s.teamBId;
+      renderH2H();
+    };
+  });
+  row.querySelectorAll("[data-h2h-saved-rename]").forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const s = state.h2hSaved.find(x => x.id === el.dataset.h2hSavedRename);
+      if (!s) return;
+      const name = prompt("Rename this head-to-head:", s.label || "");
+      if (name === null) return;
+      s.label = name.trim();
+      saveH2hSaved();
+      renderH2H();
+    };
+  });
+  row.querySelectorAll("[data-h2h-saved-delete]").forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      state.h2hSaved = state.h2hSaved.filter(x => x.id !== el.dataset.h2hSavedDelete);
+      saveH2hSaved();
+      renderH2H();
+    };
+  });
+}
+
 function renderH2H() {
   if (!state.teams.length) return;
   populateH2hSelects();
   const teamA = state.teamsById[state.h2h.teamA];
   const teamB = state.teamsById[state.h2h.teamB];
+  renderH2hSavedList();
+  const saveBtn = document.getElementById("h2hSaveBtn");
+  if (saveBtn) {
+    saveBtn.onclick = () => {
+      if (!teamA || !teamB) return;
+      const already = state.h2hSaved.find(s => s.teamAId === teamA.id && s.teamBId === teamB.id);
+      if (already) return; // already saved
+      state.h2hSaved.push({ id: "h" + Date.now(), teamAId: teamA.id, teamBId: teamB.id, label: "" });
+      saveH2hSaved();
+      renderH2hSavedList();
+    };
+  }
   document.querySelectorAll("[data-h2h-view]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.h2hView === state.h2hViewMode);
   });
