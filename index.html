@@ -381,6 +381,36 @@
     font-weight: 600; cursor: pointer; font-family: inherit; flex: 1;
   }
   .theme-seg button.active { background: var(--panel-3); color: var(--gold-bright); }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 640px) {
+    header .wrap, main { padding-left: 12px; padding-right: 12px; }
+    main { padding-top: 18px; padding-bottom: 50px; }
+    nav#tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 2px; padding-bottom: 4px; }
+    nav#tabs button { flex: 0 0 auto; padding: 7px 10px; font-size: 12.5px; }
+    h1, .page-title { font-size: 19px; }
+    .page-sub { font-size: 12.5px; max-width: 100%; }
+    table { min-width: 640px; font-size: 12px; }
+    .pitch-slot { max-width: 58px; }
+    .pitch-slot img, .pitch-slot svg { width: 30px !important; height: 30px !important; }
+    .name-tag { font-size: 9.5px; max-width: 58px; padding: 1px 3px; }
+    .pts-tag { font-size: 9.5px; }
+    .pitch-row { gap: 4px; }
+    .builder-filters { flex-wrap: wrap; }
+    .builder-filters select, .builder-filters input, .search-input { max-width: 100%; flex: 1 1 100%; }
+    .builder-topbar { flex-wrap: wrap; gap: 6px; }
+    .builder-actions { flex-wrap: wrap; }
+    .builder-actions button { flex: 1 1 auto; }
+    .pitch-modal-card { max-width: 92vw !important; max-height: 85vh; overflow-y: auto; }
+    .chip-btn-row { flex-wrap: wrap; }
+    .card { padding: 12px; }
+    #h2hBody [style*="display:flex"][style*="gap:16px"] { flex-direction: column; }
+    select, input[type="text"], input[type="number"] { font-size: 14px; } /* avoid iOS auto-zoom on focus */
+  }
+  @media (max-width: 400px) {
+    .pitch-slot { max-width: 48px; }
+    .pitch-slot img, .pitch-slot svg { width: 26px !important; height: 26px !important; }
+  }
 </style>
 </head>
 <body>
@@ -605,6 +635,20 @@
     </div>
   </div>
 
+  <div id="autopickModal" class="pitch-modal-backdrop" style="display:none">
+    <div class="pitch-modal-card" style="max-width:360px">
+      <div class="detail-block-title">Auto Pick options</div>
+      <p class="foot-note" style="margin-bottom:8px">Priority</p>
+      <div id="autopickPriorityBody" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
+      <p class="foot-note" style="margin-bottom:8px">Risk tolerance</p>
+      <div id="autopickRiskBody" class="chip-btn-row" style="margin-bottom:14px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="autopickRunBtn" style="flex:1">Run Auto Pick</button>
+        <button class="chip-btn" id="autopickCancelBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <section id="tab-h2h" style="display:none">
     <h1 class="page-title">Head-to-head</h1>
     <p class="page-sub">
@@ -619,7 +663,8 @@
 
     <div style="display:flex;gap:6px;margin-bottom:16px">
       <button class="chip-btn" data-h2h-view="overview">Overview</button>
-      <button class="chip-btn" data-h2h-view="combinedxi">Combined XI</button>
+      <button class="chip-btn" data-h2h-view="combinedxi">Combined XI (by points)</button>
+      <button class="chip-btn" data-h2h-view="draftxi">Ability draft XI</button>
       <button class="chip-btn" data-h2h-view="matchups">Player matchups</button>
     </div>
 
@@ -897,6 +942,7 @@ let state = {
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {},
+  h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null,
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
   clubStatsByTeamId: {},
@@ -1285,6 +1331,7 @@ async function loadData() {
     await loadFormulasFromStorage();
     await loadManagerNotes();
     await loadH2hMatchups();
+    await loadH2hDraft();
     setBanner(null);
     populateTeamSelect();
     renderDash();
@@ -1328,6 +1375,24 @@ function precomputeStrengthRanges() {
   }
   const range = (arr) => ({ min: Math.min(...arr), max: Math.max(...arr) });
   state.strengthRanges = { overall: range(overall), attack: range(attack), defence: range(defence) };
+  // Early in a season FPL sometimes hasn't differentiated strength ratings
+  // much yet (or all teams share a placeholder value) — if a range is flat
+  // or nearly flat, toScale1to5 returns the same ~3 for every team, which
+  // is what made every predicted scoreline collapse to the same result.
+  // Flag that here so estimateScoreline can fall back to last season's
+  // real final-table strength as an extra differentiator.
+  const isFlat = (r) => (r.max - r.min) < 25; // FPL's raw strength values run ~1000-1400
+  state.strengthRangesFlat = isFlat(state.strengthRanges.attack) || isFlat(state.strengthRanges.defence);
+}
+// Last-season final-table position, 0 (champions) to 1 (bottom), used as a
+// fallback attack/defence differentiator when this season's own strength
+// ratings or results aren't differentiated enough yet (see precomputeStrengthRanges).
+function lastSeasonStrengthFactor(teamId) {
+  const team = state.teamsById[teamId];
+  const row = team && PL_TABLE_LAST_SEASON.find(r => r.short === team.short_name);
+  if (!row) return 0.5; // promoted/unknown club — treat as mid-table
+  const idx = PL_TABLE_LAST_SEASON.indexOf(row);
+  return idx / Math.max(1, PL_TABLE_LAST_SEASON.length - 1);
 }
 // 2025/26 Premier League final table, for ranking "top 6 / bottom 6" etc.
 // before this season has any results of its own. Keyed by FPL's 3-letter
@@ -2619,10 +2684,56 @@ function clubCountsFor(playerIds) {
   return counts;
 }
 
-// Greedily fills any remaining squad slots with the best-value affordable
-// player per position (highest total points that fits budget/position/club
-// limits), used by the "Auto Pick" button.
-function autoPickSquad(draft) {
+// ---------- Auto Pick: priority + risk ----------
+// Which stat autopick optimises for. Each maps to a raw score function;
+// the actual sort/upgrade logic below always works in this score, not
+// raw totalPoints, so picking a priority genuinely changes who gets picked.
+const AUTOPICK_PRIORITIES = {
+  points: { label: "Best points", desc: "Highest real season points, regardless of price." },
+  value: { label: "Best value", desc: "Highest points-per-million (Pts/£m)." },
+  defcon: { label: "Defensive contribution", desc: "Highest defensive contribution, rate (/90) and season total." },
+  fixtures: { label: "Best fixtures", desc: "Easiest next 5 gameweeks by your custom FDR weights." },
+  goalThreat: { label: "Goal threat", desc: "Highest attacking threat — Threat index + xG/90." },
+  goalContribution: { label: "Goal contributions", desc: "Highest combined goal involvement — xGI + actual goals/assists." },
+};
+function upcomingFixtureEase(teamId, n) {
+  const fx = (state.fixturesByTeam?.[teamId] || []).slice(0, n || 5);
+  if (!fx.length) return 3; // no fixture data yet — neutral
+  const avg = fx.reduce((s, f) => s + customFdr(teamId, f.oppId, f.isHome), 0) / fx.length;
+  return 10 - avg; // invert: higher = easier run
+}
+function priorityRawScore(p, priority) {
+  switch (priority) {
+    case "value": return p.ppm || 0;
+    case "defcon": return (p.defensiveContributionPer90 || 0) * 3 + (p.defensiveContribution || 0) * 0.15;
+    case "fixtures": return upcomingFixtureEase(p.teamId, 5) * 8 + (p.totalPoints || 0) * 0.3;
+    case "goalThreat": return (p.threat || 0) * 0.15 + (p.xg90 || p.expectedGoals || 0) * 40;
+    case "goalContribution": return (p.expectedGoalInvolvements || 0) * 15 + (p.goalsScored || 0) * 4 + (p.assists || 0) * 3;
+    case "points": default: return p.totalPoints || 0;
+  }
+}
+// A rate stat (defcon/90, xGI/90 etc.) built on very few minutes can be a
+// mirage — a big number over 1 cameo says a lot less than the same rate
+// over 1500 minutes. "Low" risk tolerance trusts big samples and heavily
+// discounts small ones; "high" risk tolerance is happy to bet on a small,
+// hot sample chasing upside; "med" sits between the two.
+function riskMultiplier(p, risk) {
+  const sample = Math.min(1, (p.minutes || 0) / 900); // 900 mins ≈ 10 full games = "proven"
+  if (risk === "low") return 0.4 + 0.6 * sample;
+  if (risk === "high") return 1.25 - 0.25 * sample;
+  return 0.7 + 0.3 * sample;
+}
+function priorityScore(p, priority, risk) {
+  return priorityRawScore(p, priority) * riskMultiplier(p, risk);
+}
+
+// Greedily fills any remaining squad slots with the best player per
+// position for the chosen priority/risk that fits budget/position/club
+// limits, then spends any leftover budget upgrading the weakest picks —
+// used by the "Auto Pick" button.
+function autoPickSquad(draft, opts) {
+  const priority = opts?.priority || "points";
+  const risk = opts?.risk || "med";
   draft.squad = [];
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
     let need = SQUAD_RULES[pos];
@@ -2646,7 +2757,7 @@ function autoPickSquad(draft) {
       }
       const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3;
       let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
-        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+        .sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
       if (!candidates.length) {
         // The reserve heuristic left no room — relax it and just take the
         // cheapest legal option so the squad still finishes filling.
@@ -2674,14 +2785,71 @@ function autoPickSquad(draft) {
       if (!candidates.length) break; // truly nothing left to pick for this position at all
       // Randomised pick from a small pool of the best eligible options, so
       // clicking Auto Pick again gives a different (still strong) squad.
-      const poolSize = Math.min(candidates.length, 6);
+      const poolSize = Math.min(candidates.length, 4);
       const pick = candidates[Math.floor(Math.random() * poolSize)];
       draft.squad.push(pick.id);
       need--;
     }
   }
+  // Spend leftover budget: repeatedly swap the current weakest pick (by
+  // the chosen priority score) for the best affordable same-position
+  // upgrade, so strong — often pricier — players are preferred over
+  // quietly banking unused money. Stops once no swap improves the score.
+  let upgrades = 60;
+  while (upgrades-- > 0) {
+    const remaining = BUDGET - squadCost(draft.squad);
+    if (remaining <= 0) break;
+    const clubCounts = clubCountsFor(draft.squad);
+    let worstIdx = -1, worstScore = Infinity;
+    draft.squad.forEach((id, idx) => {
+      const pl = state.players.find(x => x.id === id);
+      const sc = pl ? priorityScore(pl, priority, risk) : -Infinity;
+      if (sc < worstScore) { worstScore = sc; worstIdx = idx; }
+    });
+    if (worstIdx === -1) break;
+    const worst = state.players.find(x => x.id === draft.squad[worstIdx]);
+    if (!worst) break;
+    const budgetForSwap = remaining + worst.nowCost;
+    const upgradeClubCounts = { ...clubCounts };
+    upgradeClubCounts[worst.teamId] = Math.max(0, (upgradeClubCounts[worst.teamId] || 1) - 1);
+    const upgradeCandidates = state.players.filter(p =>
+      p.position === worst.position && p.id !== worst.id && !draft.squad.includes(p.id) &&
+      p.nowCost <= budgetForSwap && (upgradeClubCounts[p.teamId] || 0) < 3
+    ).sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
+    const best = upgradeCandidates[0];
+    if (!best || priorityScore(best, priority, risk) <= worstScore) break; // no improving swap left
+    draft.squad[worstIdx] = best.id;
+  }
   draft.builderCaptainId = null; // recomputed fresh by computeGwResult from the new squad
   draft.manualStarterIds = null;
+}
+
+function openAutopickModal(draft) {
+  state.autopickOptions = state.autopickOptions || { priority: "points", risk: "med" };
+  const modal = document.getElementById("autopickModal");
+  const priBody = document.getElementById("autopickPriorityBody");
+  const riskBody = document.getElementById("autopickRiskBody");
+  priBody.innerHTML = Object.entries(AUTOPICK_PRIORITIES).map(([key, v]) => `
+    <button class="chip-btn${state.autopickOptions.priority === key ? " active" : ""}" data-autopick-priority="${key}" style="text-align:left">
+      <strong>${v.label}</strong><br><span style="font-size:11px;color:var(--ink-faint)">${v.desc}</span>
+    </button>
+  `).join("");
+  riskBody.innerHTML = [["low", "Low"], ["med", "Medium"], ["high", "High"]].map(([key, label]) => `
+    <button class="chip-btn${state.autopickOptions.risk === key ? " active" : ""}" data-autopick-risk="${key}">${label}</button>
+  `).join("");
+  priBody.querySelectorAll("[data-autopick-priority]").forEach(btn => {
+    btn.onclick = () => { state.autopickOptions.priority = btn.dataset.autopickPriority; openAutopickModal(draft); };
+  });
+  riskBody.querySelectorAll("[data-autopick-risk]").forEach(btn => {
+    btn.onclick = () => { state.autopickOptions.risk = btn.dataset.autopickRisk; openAutopickModal(draft); };
+  });
+  document.getElementById("autopickRunBtn").onclick = () => {
+    autoPickSquad(draft, state.autopickOptions);
+    saveDrafts(); renderPlanner();
+    modal.style.display = "none";
+  };
+  document.getElementById("autopickCancelBtn").onclick = () => { modal.style.display = "none"; };
+  modal.style.display = "flex";
 }
 
 function renderSquadBuilder(draft) {
@@ -2778,9 +2946,8 @@ function renderSquadBuilder(draft) {
   };
 
   document.getElementById("builderAutoPick").onclick = () => {
-    if (draft.squad.length && !confirm("Auto Pick will replace your current squad with a new random one. Continue?")) return;
-    autoPickSquad(draft);
-    saveDrafts(); renderPlanner();
+    if (draft.squad.length && !confirm("Auto Pick will replace your current squad with a new one. Continue?")) return;
+    openAutopickModal(draft);
   };
   document.getElementById("builderResetSquad").onclick = () => {
     if (!draft.squad.length || confirm("Clear all picked players?")) {
@@ -3853,7 +4020,18 @@ function scorelineProbabilityGrid(homeXg, awayXg) {
     else if (c.home === c.away) draw += c.p;
     else awayWin += c.p;
   });
-  return { grid, top: grid[0], alternates: grid.slice(1, 4), homeWin, draw, awayWin };
+  // Several scorelines often sit within a hair of each other in probability
+  // (e.g. 1-1 vs 1-0 vs 2-1) — always taking the strict top cell tends to
+  // land on the same "safe" score for most fixtures. Among cells within 8%
+  // of the top probability, prefer whichever is most consistent with the
+  // actual expected-goal gap between the two sides, so a side that's
+  // genuinely expected to win by more shows a more decisive scoreline.
+  const contenders = grid.filter(c => c.p >= grid[0].p * 0.92);
+  const xgDiff = homeXg - awayXg;
+  contenders.sort((a, b) => Math.abs((a.home - a.away) - xgDiff) - Math.abs((b.home - b.away) - xgDiff));
+  const top = contenders[0] || grid[0];
+  const alternates = grid.filter(c => c !== top).slice(0, 3);
+  return { grid, top, alternates, homeWin, draw, awayWin };
 }
 function estimateScoreline(teamId, oppId, isHome) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
@@ -3862,10 +4040,22 @@ function estimateScoreline(teamId, oppId, isHome) {
   const teamDefence = isHome ? team.strength_defence_home : team.strength_defence_away;
   const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
   const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
-  const a5 = toScale1to5(teamAttack, state.strengthRanges.attack);
-  const d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
-  const oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
-  const od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
+  let a5 = toScale1to5(teamAttack, state.strengthRanges.attack);
+  let d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
+  let oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
+  let od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
+  // This season's own strength ratings aren't differentiated enough yet
+  // (see precomputeStrengthRanges) — blend in last season's final-table
+  // strength so different fixtures actually produce different predictions
+  // instead of every match collapsing to the same scoreline.
+  if (state.strengthRangesFlat) {
+    const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
+    const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
+    a5 = a5 * 0.3 + teamStr * 0.7;
+    oa5 = oa5 * 0.3 + oppStr * 0.7;
+    d5 = d5 * 0.3 + oppStr * 0.7;
+    od5 = od5 * 0.3 + teamStr * 0.7;
+  }
   const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
   const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
 
@@ -4003,53 +4193,176 @@ function h2hMatchupKey(teamAId, teamBId) {
   return `${x}-${y}`;
 }
 
+async function loadH2hDraft() {
+  try {
+    const raw = await persistGet("h2hDraft");
+    if (raw) state.h2hDraft = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hDraft() { persistSet("h2hDraft", JSON.stringify(state.h2hDraft)); }
+
 const FORMATIONS_H2H = {
   "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
   "3-5-2": { DEF: 3, MID: 5, FWD: 2 }, "3-4-3": { DEF: 3, MID: 4, FWD: 3 },
   "5-3-2": { DEF: 5, MID: 3, FWD: 2 }, "5-4-1": { DEF: 5, MID: 4, FWD: 1 },
 };
+// Renders a set of {p, club} picks as a symmetric pitch, same visual
+// language as the Planner squad builder (pitch-row per position, pitch-slot
+// per player) — shared by the points-based Combined XI and the manual
+// ability-draft XI so both look and behave the same way.
+function h2hPitchSlotHtml(entry, teamA) {
+  if (!entry) {
+    return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">Unpicked</div></div>`;
+  }
+  const { p } = entry;
+  const isA = p.teamId === teamA.id;
+  return `
+    <div class="pitch-slot" style="outline:2px solid ${isA ? "var(--gold-bright)" : "var(--blue, #4a9eff)"};border-radius:8px">
+      ${playerAvatarHtml(p, 40)}
+      <div class="name-tag">${p.webName}</div>
+      <div class="pts-tag mono">${p.totalPoints ?? 0}pts</div>
+    </div>
+  `;
+}
+function h2hPitchHtml(picksByPos, teamA) {
+  const rows = ["GK", "DEF", "MID", "FWD"].map(pos =>
+    `<div class="pitch-row">${(picksByPos[pos] || []).map(entry => h2hPitchSlotHtml(entry, teamA)).join("")}</div>`
+  ).join("");
+  return `<div class="pitch">${rows}</div>`;
+}
+function h2hFormationSelectHtml(id, current) {
+  return `<select id="${id}">${Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}"${f === current ? " selected" : ""}>${f}</option>`).join("")}</select>`;
+}
+
 // Best XI drawn from both clubs' combined player pool (ranked by real
-// season points), slotted into whichever formation is picked — so you can
-// see at a glance which club would dominate a joint starting XI.
+// season points), slotted symmetrically into whichever formation is
+// picked — shown as a proper pitch so it's immediately clear which club's
+// player is which (gold outline vs blue outline).
 function renderH2hCombinedXi(body, teamA, teamB) {
   const formation = FORMATIONS_H2H[state.h2hFormation];
   const pool = state.players.filter(p => p.teamId === teamA.id || p.teamId === teamB.id);
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   pool.forEach(p => { if (byPos[p.position]) byPos[p.position].push(p); });
   Object.values(byPos).forEach(arr => arr.sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)));
-  const picks = {
-    GK: byPos.GK.slice(0, 1), DEF: byPos.DEF.slice(0, formation.DEF),
-    MID: byPos.MID.slice(0, formation.MID), FWD: byPos.FWD.slice(0, formation.FWD),
+  const picksByPos = {
+    GK: byPos.GK.slice(0, 1).map(p => ({ p })),
+    DEF: byPos.DEF.slice(0, formation.DEF).map(p => ({ p })),
+    MID: byPos.MID.slice(0, formation.MID).map(p => ({ p })),
+    FWD: byPos.FWD.slice(0, formation.FWD).map(p => ({ p })),
   };
-  const countA = ["GK", "DEF", "MID", "FWD"].reduce((sum, pos) => sum + picks[pos].filter(p => p.teamId === teamA.id).length, 0);
-  const countB = 11 - countA;
-  const posRow = (pos, label) => `
-    <div class="detail-block-title" style="margin-top:10px">${label}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px">
-      ${picks[pos].map(p => {
-        const club = p.teamId === teamA.id ? teamA : teamB;
-        return `<div style="text-align:center;width:70px">
-          ${playerAvatarHtml(p, 32)}
-          <div style="font-size:11px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.webName}</div>
-          <div style="font-size:10px;color:var(--ink-faint)">${club.short_name} · ${p.totalPoints ?? 0}pts</div>
-        </div>`;
-      }).join("") || `<p class="foot-note">Not enough player data yet.</p>`}
-    </div>
-  `;
+  const all = [...picksByPos.GK, ...picksByPos.DEF, ...picksByPos.MID, ...picksByPos.FWD];
+  const countA = all.filter(x => x.p.teamId === teamA.id).length;
+  const countB = all.length - countA;
   body.innerHTML = `
     <div class="card">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
         <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
-        <select id="h2hFormationSelect">${Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}"${f === state.h2hFormation ? " selected" : ""}>${f}</option>`).join("")}</select>
+        ${h2hFormationSelectHtml("h2hFormationSelect", state.h2hFormation)}
       </div>
-      <p class="foot-note" style="margin-bottom:10px">Best combined XI from both squads' real season totals. ${teamA.name} provide ${countA}, ${teamB.name} provide ${countB}.</p>
-      ${posRow("GK", "Goalkeeper")}
-      ${posRow("DEF", "Defence")}
-      ${posRow("MID", "Midfield")}
-      ${posRow("FWD", "Attack")}
+      <p class="foot-note" style="margin-bottom:10px">
+        <span style="color:var(--gold-bright)">●</span> ${teamA.name} (${countA}) &nbsp;
+        <span style="color:var(--blue,#4a9eff)">●</span> ${teamB.name} (${countB}) — best combined XI by real season points.
+      </p>
+      ${h2hPitchHtml(picksByPos, teamA)}
     </div>
   `;
   document.getElementById("h2hFormationSelect").onchange = (e) => { state.h2hFormation = e.target.value; renderH2H(); };
+}
+
+// Manual, ability-based draft XI: step through GK → DEF → MID → FWD, and
+// for each slot pick whichever player (from either club) you rate higher —
+// unlike the points-based Combined XI above, this is your own judgement
+// call, not a stats sort. Saved per team pairing like the matchup tool.
+function renderH2hDraftXi(body, teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const saved = state.h2hDraft[key] || { formation: state.h2hDraftFormation, picks: { GK: [], DEF: [], MID: [], FWD: [] } };
+  state.h2hDraft[key] = saved;
+  const formation = FORMATIONS_H2H[saved.formation] || FORMATIONS_H2H["4-3-3"];
+  const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
+
+  function playerById(id) { return state.players.find(p => p.id === id); }
+  const picksByPos = {};
+  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+    const arr = [];
+    for (let i = 0; i < need[pos]; i++) {
+      const id = saved.picks[pos][i];
+      const p = id ? playerById(id) : null;
+      arr.push(p ? { p } : null);
+    }
+    picksByPos[pos] = arr;
+  });
+  const pickedIds = new Set(Object.values(saved.picks).flat());
+
+  // Next slot still needing a pick, in GK → DEF → MID → FWD order.
+  let nextPos = null, nextSlotIndex = -1;
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const idx = saved.picks[pos].findIndex((id, i) => i < need[pos] && !id);
+    if (idx !== -1 || saved.picks[pos].length < need[pos]) { nextPos = pos; nextSlotIndex = saved.picks[pos].length; break; }
+  }
+  const complete = !nextPos;
+
+  function candidateListHtml(pos) {
+    const listFor = (team) => state.players.filter(p => p.teamId === team.id && p.position === pos && !pickedIds.has(p.id))
+      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    const row = (p, team) => `
+      <div class="builder-row" data-draft-pick="${p.id}" style="cursor:pointer">
+        ${playerAvatarHtml(p, 26)}
+        <span class="b-name">${p.webName}</span>
+        <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
+        <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
+      </div>
+    `;
+    return `
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div class="detail-block-title" style="display:flex;align-items:center;gap:6px">${kitSvg(teamA.id, 18)}${teamA.name}</div>
+          ${listFor(teamA).map(p => row(p, teamA)).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
+        </div>
+        <div style="flex:1;min-width:220px">
+          <div class="detail-block-title" style="display:flex;align-items:center;gap:6px">${kitSvg(teamB.id, 18)}${teamB.name}</div>
+          ${listFor(teamB).map(p => row(p, teamB)).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
+        </div>
+      </div>
+    `;
+  }
+
+  const POS_LABEL = { GK: "goalkeeper", DEF: "defender", MID: "midfielder", FWD: "forward" };
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
+        ${h2hFormationSelectHtml("h2hDraftFormationSelect", saved.formation)}
+        <button class="chip-btn" id="h2hDraftReset">Reset draft</button>
+      </div>
+      <p class="foot-note" style="margin-bottom:10px">Pick whichever player you rate higher, position by position — this is your own call, not a stats sort.</p>
+      ${h2hPitchHtml(picksByPos, teamA)}
+    </div>
+    <div class="card">
+      ${complete
+        ? `<p class="foot-note">Draft XI complete — use "Reset draft" to start again, or switch formation.</p>`
+        : `<div class="detail-block-title" style="margin-bottom:8px">Pick your ${POS_LABEL[nextPos]} (${nextSlotIndex + 1} of ${need[nextPos]})</div>${candidateListHtml(nextPos)}`
+      }
+    </div>
+  `;
+  document.getElementById("h2hDraftFormationSelect").onchange = (e) => {
+    saved.formation = e.target.value;
+    saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
+    saveH2hDraft();
+    renderH2H();
+  };
+  document.getElementById("h2hDraftReset").onclick = () => {
+    saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
+    saveH2hDraft();
+    renderH2H();
+  };
+  body.querySelectorAll("[data-draft-pick]").forEach(row => {
+    row.onclick = () => {
+      const id = Number(row.dataset.draftPick);
+      saved.picks[nextPos].push(id);
+      saveH2hDraft();
+      renderH2H();
+    };
+  });
 }
 
 // Manual player-vs-player matchup tool. FPL's own data only distinguishes
@@ -4278,6 +4591,7 @@ function renderH2H() {
   if (!teamA || !teamB) { body.innerHTML = ""; return; }
 
   if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
+  if (state.h2hViewMode === "draftxi") { renderH2hDraftXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "matchups") { renderH2hMatchups(body, teamA, teamB); return; }
 
   // --- real data: this season's meetings between the two clubs ---
