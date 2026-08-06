@@ -156,7 +156,6 @@
     background: var(--panel-2); white-space: nowrap; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
     border-bottom: 1px solid var(--border);
-    position: sticky; top: 58px; z-index: 5; /* keeps column headers visible while scrolling a long table */
     transition: background 0.12s ease, color 0.12s ease;
   }
   thead th:hover { color: var(--gold-bright); }
@@ -2212,27 +2211,38 @@ function renderStats() {
 }
 
 // ---------- rendering: shortlist ----------
-// Compact, sortable stats table for a shortlist group — same column
-// vocabulary as the main Player stats tab (FIXED_COLUMNS + the Overview
-// theme's columns), just scoped to whichever players are in view.
-const SHORTLIST_STATS_COLUMNS = [...FIXED_COLUMNS, ...STAT_THEMES.overview.columns];
+// Compact, sortable stats table for a shortlist group — every stat column
+// available anywhere on the Player stats tab (all STAT_THEMES, deduped),
+// plus an editable Notes column, scoped to whichever players are in view.
+const SHORTLIST_STATS_COLUMNS = (() => {
+  const seen = new Set(FIXED_COLUMNS.map(c => c[0]));
+  const cols = [...FIXED_COLUMNS];
+  Object.values(STAT_THEMES).forEach(theme => {
+    theme.columns.forEach(([key, label]) => {
+      if (!seen.has(key)) { seen.add(key); cols.push([key, label]); }
+    });
+  });
+  return cols;
+})();
 let shortlistStatsSort = { key: "totalPoints", dir: "desc" };
-function buildMiniStatsTableEl(players) {
+function buildMiniStatsTableEl(items) {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap";
   wrap.style.marginTop = "4px";
-  const sorted = [...players].sort((a, b) => {
+  const rowsData = items.map(item => ({ item, p: state.players.find(pl => pl.id === item.playerId) })).filter(r => r.p);
+  const sorted = [...rowsData].sort((a, b) => {
     const key = shortlistStatsSort.key;
-    let av = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](a)[0]).replace(/[^0-9.-]/g, "")) : (a[key] ?? 0);
-    let bv = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](b)[0]).replace(/[^0-9.-]/g, "")) : (b[key] ?? 0);
+    let av = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](a.p)[0]).replace(/[^0-9.-]/g, "")) : (a.p[key] ?? 0);
+    let bv = COLUMN_FORMAT[key] ? Number(String(COLUMN_FORMAT[key](b.p)[0]).replace(/[^0-9.-]/g, "")) : (b.p[key] ?? 0);
     if (Number.isNaN(av)) av = 0; if (Number.isNaN(bv)) bv = 0;
     return shortlistStatsSort.dir === "desc" ? bv - av : av - bv;
   });
   const head = `<tr>
     <th class="label-col">Player</th>
     ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer">${label}${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? " ↓" : " ↑") : ""}</th>`).join("")}
+    <th class="label-col">Notes</th>
   </tr>`;
-  const rows = sorted.map(p => {
+  const rows = sorted.map(({ item, p }) => {
     const team = state.teamsById[p.teamId];
     return `<tr>
       <td class="label-col">${playerAvatarHtml(p, 22)} ${p.webName} <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
@@ -2241,6 +2251,7 @@ function buildMiniStatsTableEl(players) {
         const [text, style] = fmt ? fmt(p) : [p[key] ?? "–", ""];
         return `<td class="mono" style="${style}">${text}</td>`;
       }).join("")}
+      <td style="min-width:160px"><textarea class="note-input" rows="1" placeholder="Notes…" data-sl-note="${p.id}">${item.note || ""}</textarea></td>
     </tr>`;
   }).join("");
   wrap.innerHTML = `<table>${head}<tbody>${rows}</tbody></table>`;
@@ -2250,6 +2261,13 @@ function buildMiniStatsTableEl(players) {
       if (shortlistStatsSort.key === key) shortlistStatsSort.dir = shortlistStatsSort.dir === "desc" ? "asc" : "desc";
       else shortlistStatsSort = { key, dir: "desc" };
       renderShortlist();
+    };
+  });
+  wrap.querySelectorAll("[data-sl-note]").forEach(ta => {
+    ta.onchange = () => {
+      const pid = Number(ta.dataset.slNote);
+      const entry = state.shortlist.find(s => s.playerId === pid);
+      if (entry) { entry.note = ta.value; saveShortlist(); }
     };
   });
   return wrap;
@@ -2371,8 +2389,7 @@ function renderShortlist() {
     return;
   }
   if (state.shortlistShowStatsTable) {
-    const players = items.map(item => state.players.find(pl => pl.id === item.playerId)).filter(Boolean);
-    el.appendChild(buildMiniStatsTableEl(players));
+    el.appendChild(buildMiniStatsTableEl(items));
     return;
   }
 
