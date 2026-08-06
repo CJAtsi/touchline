@@ -666,6 +666,7 @@
       <button class="chip-btn" data-h2h-view="combinedxi">Combined XI (by points)</button>
       <button class="chip-btn" data-h2h-view="draftxi">Ability draft XI</button>
       <button class="chip-btn" data-h2h-view="matchups">Player matchups</button>
+      <button class="chip-btn" data-h2h-view="scoreboard">Scoreboard</button>
     </div>
 
     <div id="h2hBody"></div>
@@ -942,7 +943,8 @@ let state = {
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {},
-  h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null,
+  h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
+  h2hScoreboard: {},
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
   clubStatsByTeamId: {},
@@ -1332,6 +1334,7 @@ async function loadData() {
     await loadManagerNotes();
     await loadH2hMatchups();
     await loadH2hDraft();
+    await loadH2hScoreboard();
     setBanner(null);
     populateTeamSelect();
     renderDash();
@@ -4044,18 +4047,30 @@ function estimateScoreline(teamId, oppId, isHome) {
   let d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
   let oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
   let od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
-  // This season's own strength ratings aren't differentiated enough yet
-  // (see precomputeStrengthRanges) — blend in last season's final-table
-  // strength so different fixtures actually produce different predictions
-  // instead of every match collapsing to the same scoreline.
-  if (state.strengthRangesFlat) {
-    const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
-    const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
-    a5 = a5 * 0.3 + teamStr * 0.7;
-    oa5 = oa5 * 0.3 + oppStr * 0.7;
-    d5 = d5 * 0.3 + oppStr * 0.7;
-    od5 = od5 * 0.3 + teamStr * 0.7;
-  }
+  // Always blend in a slice of last season's final-table strength as a
+  // second, independent signal (not just when this season's own ratings
+  // look flat — that heuristic wasn't reliably catching the case where
+  // ratings are technically non-identical but too close together to
+  // meaningfully separate any two given fixtures, which is what made
+  // predictions keep landing on the same scoreline). This guarantees two
+  // different fixtures get two different inputs even in a season with
+  // almost no results yet.
+  const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
+  const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
+  const blend = state.strengthRangesFlat ? 0.7 : 0.35;
+  a5 = a5 * (1 - blend) + teamStr * blend;
+  oa5 = oa5 * (1 - blend) + oppStr * blend;
+  d5 = d5 * (1 - blend) + oppStr * blend;
+  od5 = od5 * (1 - blend) + teamStr * blend;
+  // Stretch each 1-5 rating away from the midpoint a little so genuinely
+  // different fixtures produce visibly different xG (and therefore
+  // different most-likely scorelines) instead of everything huddling
+  // close to the average and rounding to the same result.
+  const stretch = (v) => {
+    const d = v - 3;
+    return Math.max(1, Math.min(5, 3 + Math.sign(d) * Math.pow(Math.abs(d), 0.85) * 1.2));
+  };
+  a5 = stretch(a5); oa5 = stretch(oa5); d5 = stretch(d5); od5 = stretch(od5);
   const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
   const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
 
@@ -4201,6 +4216,14 @@ async function loadH2hDraft() {
 }
 function saveH2hDraft() { persistSet("h2hDraft", JSON.stringify(state.h2hDraft)); }
 
+async function loadH2hScoreboard() {
+  try {
+    const raw = await persistGet("h2hScoreboard");
+    if (raw) state.h2hScoreboard = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hScoreboard() { persistSet("h2hScoreboard", JSON.stringify(state.h2hScoreboard)); }
+
 const FORMATIONS_H2H = {
   "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
   "3-5-2": { DEF: 3, MID: 5, FWD: 2 }, "3-4-3": { DEF: 3, MID: 4, FWD: 3 },
@@ -4209,24 +4232,30 @@ const FORMATIONS_H2H = {
 // Renders a set of {p, club} picks as a symmetric pitch, same visual
 // language as the Planner squad builder (pitch-row per position, pitch-slot
 // per player) — shared by the points-based Combined XI and the manual
-// ability-draft XI so both look and behave the same way.
-function h2hPitchSlotHtml(entry, teamA) {
+// ability-draft XI so both look and behave the same way. When `opts` is
+// passed (draft mode), every slot becomes clickable via
+// data-h2h-pitch-slot, and the slot currently being edited is highlighted.
+function h2hPitchSlotHtml(entry, teamA, pos, idx, opts) {
+  const editable = !!opts;
+  const isEditing = editable && opts.editPos === pos && opts.editSlot === idx;
+  const clickAttrs = editable ? `data-h2h-pitch-slot="1" data-h2h-pitch-pos="${pos}" data-h2h-pitch-slot-idx="${idx}" style="cursor:pointer;${isEditing ? "outline:3px solid var(--gold-bright);border-radius:8px;" : ""}"` : "";
   if (!entry) {
-    return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">Unpicked</div></div>`;
+    return `<div class="pitch-slot placeholder-slot" ${clickAttrs}><div class="name-tag" style="opacity:0.6">Empty</div></div>`;
   }
   const { p } = entry;
   const isA = p.teamId === teamA.id;
+  const outline = isEditing ? "3px solid var(--gold-bright)" : `2px solid ${isA ? "var(--gold-bright)" : "var(--blue, #4a9eff)"}`;
   return `
-    <div class="pitch-slot" style="outline:2px solid ${isA ? "var(--gold-bright)" : "var(--blue, #4a9eff)"};border-radius:8px">
+    <div class="pitch-slot" ${clickAttrs} style="${editable ? "cursor:pointer;" : ""}outline:${outline};border-radius:8px">
       ${playerAvatarHtml(p, 40)}
       <div class="name-tag">${p.webName}</div>
       <div class="pts-tag mono">${p.totalPoints ?? 0}pts</div>
     </div>
   `;
 }
-function h2hPitchHtml(picksByPos, teamA) {
+function h2hPitchHtml(picksByPos, teamA, opts) {
   const rows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${(picksByPos[pos] || []).map(entry => h2hPitchSlotHtml(entry, teamA)).join("")}</div>`
+    `<div class="pitch-row">${(picksByPos[pos] || []).map((entry, idx) => h2hPitchSlotHtml(entry, teamA, pos, idx, opts)).join("")}</div>`
   ).join("");
   return `<div class="pitch">${rows}</div>`;
 }
@@ -4269,45 +4298,54 @@ function renderH2hCombinedXi(body, teamA, teamB) {
   document.getElementById("h2hFormationSelect").onchange = (e) => { state.h2hFormation = e.target.value; renderH2H(); };
 }
 
-// Manual, ability-based draft XI: step through GK → DEF → MID → FWD, and
-// for each slot pick whichever player (from either club) you rate higher —
-// unlike the points-based Combined XI above, this is your own judgement
-// call, not a stats sort. Saved per team pairing like the matchup tool.
+// Manual, ability-based draft XI: pick any position at any time, and any
+// slot within it (including ones already filled) — pick whichever player
+// (from either club) you rate higher for that slot. Saved per team pairing
+// like the matchup tool.
 function renderH2hDraftXi(body, teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
   const saved = state.h2hDraft[key] || { formation: state.h2hDraftFormation, picks: { GK: [], DEF: [], MID: [], FWD: [] } };
   state.h2hDraft[key] = saved;
   const formation = FORMATIONS_H2H[saved.formation] || FORMATIONS_H2H["4-3-3"];
   const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
+  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+    saved.picks[pos] = saved.picks[pos] || [];
+    while (saved.picks[pos].length < need[pos]) saved.picks[pos].push(null);
+    saved.picks[pos].length = need[pos]; // trim if formation shrank
+  });
 
   function playerById(id) { return state.players.find(p => p.id === id); }
   const picksByPos = {};
   ["GK", "DEF", "MID", "FWD"].forEach(pos => {
-    const arr = [];
-    for (let i = 0; i < need[pos]; i++) {
-      const id = saved.picks[pos][i];
-      const p = id ? playerById(id) : null;
-      arr.push(p ? { p } : null);
-    }
-    picksByPos[pos] = arr;
+    picksByPos[pos] = saved.picks[pos].map(id => (id ? { p: playerById(id) } : null)).map(x => (x && x.p ? x : null));
   });
-  const pickedIds = new Set(Object.values(saved.picks).flat());
+  const pickedIds = new Set(Object.values(saved.picks).flat().filter(Boolean));
 
-  // Next slot still needing a pick, in GK → DEF → MID → FWD order.
-  let nextPos = null, nextSlotIndex = -1;
-  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    const idx = saved.picks[pos].findIndex((id, i) => i < need[pos] && !id);
-    if (idx !== -1 || saved.picks[pos].length < need[pos]) { nextPos = pos; nextSlotIndex = saved.picks[pos].length; break; }
-  }
-  const complete = !nextPos;
+  // Which position/slot is currently being edited — defaults to the first
+  // empty slot, but the user can jump to any position or any slot freely.
+  let editPos = state.h2hDraftPickPos, editSlot = state.h2hDraftPickSlot ?? 0;
+  if (!editPos || !need[editPos]) editPos = "GK";
+  if (editSlot < 0 || editSlot >= need[editPos]) editSlot = 0;
+  state.h2hDraftPickPos = editPos; state.h2hDraftPickSlot = editSlot;
 
-  function candidateListHtml(pos) {
-    const listFor = (team) => state.players.filter(p => p.teamId === team.id && p.position === pos && !pickedIds.has(p.id))
+  const POS_LABEL = { GK: "Goalkeeper", DEF: "Defender", MID: "Midfielder", FWD: "Forward" };
+  const tabsHtml = ["GK", "DEF", "MID", "FWD"].map(pos => {
+    const filled = saved.picks[pos].filter(Boolean).length;
+    return `<button class="chip-btn${pos === editPos ? " active" : ""}" data-h2h-pos-tab="${pos}">${POS_LABEL[pos]} (${filled}/${need[pos]})</button>`;
+  }).join("");
+  const slotTabsHtml = saved.picks[editPos].map((id, i) => {
+    const p = id ? playerById(id) : null;
+    return `<button class="chip-btn${i === editSlot ? " active" : ""}" data-h2h-slot-tab="${i}">${p ? p.webName : `Empty ${i + 1}`}</button>`;
+  }).join("");
+
+  function candidateListHtml(pos, slotIdx) {
+    const currentId = saved.picks[pos][slotIdx];
+    const listFor = (team) => state.players.filter(p => p.teamId === team.id && p.position === pos && (p.id === currentId || !pickedIds.has(p.id)))
       .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-    const row = (p, team) => `
-      <div class="builder-row" data-draft-pick="${p.id}" style="cursor:pointer">
+    const row = (p) => `
+      <div class="builder-row" data-draft-pick="${p.id}" style="cursor:pointer;${p.id === currentId ? "outline:2px solid var(--gold-bright);border-radius:6px" : ""}">
         ${playerAvatarHtml(p, 26)}
-        <span class="b-name">${p.webName}</span>
+        <span class="b-name">${p.webName}${p.id === currentId ? " ✓" : ""}</span>
         <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
         <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
       </div>
@@ -4316,17 +4354,16 @@ function renderH2hDraftXi(body, teamA, teamB) {
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px">
           <div class="detail-block-title" style="display:flex;align-items:center;gap:6px">${kitSvg(teamA.id, 18)}${teamA.name}</div>
-          ${listFor(teamA).map(p => row(p, teamA)).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
+          ${listFor(teamA).map(row).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
         </div>
         <div style="flex:1;min-width:220px">
           <div class="detail-block-title" style="display:flex;align-items:center;gap:6px">${kitSvg(teamB.id, 18)}${teamB.name}</div>
-          ${listFor(teamB).map(p => row(p, teamB)).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
+          ${listFor(teamB).map(row).join("") || `<p class="foot-note">No eligible ${pos} left.</p>`}
         </div>
       </div>
     `;
   }
 
-  const POS_LABEL = { GK: "goalkeeper", DEF: "defender", MID: "midfielder", FWD: "forward" };
   body.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
@@ -4334,32 +4371,62 @@ function renderH2hDraftXi(body, teamA, teamB) {
         ${h2hFormationSelectHtml("h2hDraftFormationSelect", saved.formation)}
         <button class="chip-btn" id="h2hDraftReset">Reset draft</button>
       </div>
-      <p class="foot-note" style="margin-bottom:10px">Pick whichever player you rate higher, position by position — this is your own call, not a stats sort.</p>
-      ${h2hPitchHtml(picksByPos, teamA)}
+      <p class="foot-note" style="margin-bottom:10px">Click any player on the pitch — or use the position/slot buttons below — to pick or change who fills that spot.</p>
+      ${h2hPitchHtml(picksByPos, teamA, { editPos, editSlot })}
     </div>
     <div class="card">
-      ${complete
-        ? `<p class="foot-note">Draft XI complete — use "Reset draft" to start again, or switch formation.</p>`
-        : `<div class="detail-block-title" style="margin-bottom:8px">Pick your ${POS_LABEL[nextPos]} (${nextSlotIndex + 1} of ${need[nextPos]})</div>${candidateListHtml(nextPos)}`
-      }
+      <div class="chip-btn-row" style="margin-bottom:8px">${tabsHtml}</div>
+      <div class="chip-btn-row" style="margin-bottom:12px">${slotTabsHtml}</div>
+      <div class="detail-block-title" style="margin-bottom:8px">${POS_LABEL[editPos]} — slot ${editSlot + 1} of ${need[editPos]}</div>
+      ${candidateListHtml(editPos, editSlot)}
     </div>
   `;
   document.getElementById("h2hDraftFormationSelect").onchange = (e) => {
     saved.formation = e.target.value;
     saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
+    state.h2hDraftPickPos = "GK"; state.h2hDraftPickSlot = 0;
     saveH2hDraft();
     renderH2H();
   };
   document.getElementById("h2hDraftReset").onclick = () => {
     saved.picks = { GK: [], DEF: [], MID: [], FWD: [] };
+    state.h2hDraftPickPos = "GK"; state.h2hDraftPickSlot = 0;
     saveH2hDraft();
     renderH2H();
   };
+  body.querySelectorAll("[data-h2h-pos-tab]").forEach(btn => {
+    btn.onclick = () => { state.h2hDraftPickPos = btn.dataset.h2hPosTab; state.h2hDraftPickSlot = 0; renderH2H(); };
+  });
+  body.querySelectorAll("[data-h2h-slot-tab]").forEach(btn => {
+    btn.onclick = () => { state.h2hDraftPickSlot = Number(btn.dataset.h2hSlotTab); renderH2H(); };
+  });
+  body.querySelectorAll("[data-h2h-pitch-slot]").forEach(el => {
+    el.onclick = () => {
+      state.h2hDraftPickPos = el.dataset.h2hPitchPos;
+      state.h2hDraftPickSlot = Number(el.dataset.h2hPitchSlotIdx);
+      renderH2H();
+    };
+  });
   body.querySelectorAll("[data-draft-pick]").forEach(row => {
     row.onclick = () => {
       const id = Number(row.dataset.draftPick);
-      saved.picks[nextPos].push(id);
+      saved.picks[editPos][editSlot] = id;
       saveH2hDraft();
+      // Auto-advance to the next empty slot in this position, else the
+      // next position's first empty slot, so filling a fresh XI stays
+      // quick — but nothing stops jumping back to edit any slot after.
+      const posOrder = ["GK", "DEF", "MID", "FWD"];
+      let nextPos = editPos, nextSlot = saved.picks[editPos].findIndex(x => !x);
+      if (nextSlot === -1) {
+        for (const p of posOrder) {
+          const idx = posOrder.indexOf(editPos);
+          if (posOrder.indexOf(p) <= idx) continue;
+          const empty = saved.picks[p].findIndex(x => !x);
+          if (empty !== -1) { nextPos = p; nextSlot = empty; break; }
+        }
+        if (nextSlot === -1) nextSlot = 0;
+      }
+      state.h2hDraftPickPos = nextPos; state.h2hDraftPickSlot = nextSlot;
       renderH2H();
     };
   });
@@ -4440,6 +4507,97 @@ function renderH2hMatchups(body, teamA, teamB) {
       renderH2H();
     };
   });
+}
+
+// Cumulative H2H scoreboard: freeform named categories (Combined XI, Draft
+// XI, club form, or anything custom) — award each one to teamA, teamB, or a
+// draw, and the total tally shows who's "won" the head-to-head overall.
+// Player matchups get one automatic, always-present category computed live
+// from the tally on the Player matchups tab (majority wins it, tie = draw).
+function h2hMatchupsAutoWinner(teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const list = state.h2hMatchups[key] || [];
+  let a = 0, b = 0;
+  list.forEach(m => { if (m.winner === "A") a++; else if (m.winner === "B") b++; });
+  if (!a && !b) return { winner: null, a, b };
+  if (a === b) return { winner: "DRAW", a, b };
+  return { winner: a > b ? "A" : "B", a, b };
+}
+function renderH2hScoreboard(body, teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const saved = state.h2hScoreboard[key] || (state.h2hScoreboard[key] = { categories: [
+    { id: "c1", name: "Combined XI (by points)", winner: null },
+    { id: "c2", name: "Ability draft XI", winner: null },
+  ] });
+  const auto = h2hMatchupsAutoWinner(teamA, teamB);
+
+  let scoreA = 0, scoreB = 0;
+  saved.categories.forEach(c => {
+    if (c.winner === "A") scoreA += 1;
+    else if (c.winner === "B") scoreB += 1;
+    else if (c.winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
+  });
+  if (auto.winner === "A") scoreA += 1;
+  else if (auto.winner === "B") scoreB += 1;
+  else if (auto.winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
+
+  const winnerRow = (c, removable) => `
+    <div class="builder-row" style="justify-content:space-between">
+      <span class="b-name">${c.name}</span>
+      <div class="chip-btn-row">
+        <button class="chip-btn${c.winner === "A" ? " active" : ""}" ${removable ? `data-sb-win="${c.id}"` : ""} data-sb-val="A">${teamA.short_name}</button>
+        <button class="chip-btn${c.winner === "DRAW" ? " active" : ""}" ${removable ? `data-sb-win="${c.id}"` : ""} data-sb-val="DRAW">Draw</button>
+        <button class="chip-btn${c.winner === "B" ? " active" : ""}" ${removable ? `data-sb-win="${c.id}"` : ""} data-sb-val="B">${teamB.short_name}</button>
+        ${removable ? `<button class="chip-btn" style="color:var(--red)" data-sb-remove="${c.id}">Remove</button>` : ""}
+      </div>
+    </div>
+  `;
+
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:16px;text-align:center">
+      <div class="detail-block-title" style="margin-bottom:8px">Overall score</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:24px;font-size:32px;font-weight:700;font-family:'JetBrains Mono',monospace">
+        <span>${teamA.short_name} ${scoreA}</span><span style="color:var(--ink-faint);font-size:20px">–</span><span>${teamB.short_name} ${scoreB}</span>
+      </div>
+      <p class="foot-note" style="margin-top:8px">1 point per category won, 0.5 each for a draw.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title" style="margin-bottom:8px">Categories</div>
+      ${winnerRow({ id: "auto", name: `Player matchups (auto — ${auto.a}-${auto.b})`, winner: auto.winner }, false)}
+      ${saved.categories.map(c => winnerRow(c, true)).join("")}
+    </div>
+    <div class="card">
+      <div class="detail-block-title" style="margin-bottom:8px">Add a category</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="h2hScoreboardNewName" placeholder="e.g. Fixture run, Manager pedigree…" style="flex:1" />
+        <button class="dir-btn" id="h2hScoreboardAddBtn">+ Add</button>
+      </div>
+    </div>
+  `;
+  body.querySelectorAll("[data-sb-win]").forEach(btn => {
+    btn.onclick = () => {
+      const cat = saved.categories.find(c => c.id === btn.dataset.sbWin);
+      if (!cat) return;
+      cat.winner = cat.winner === btn.dataset.sbVal ? null : btn.dataset.sbVal; // click again to clear
+      saveH2hScoreboard();
+      renderH2H();
+    };
+  });
+  body.querySelectorAll("[data-sb-remove]").forEach(btn => {
+    btn.onclick = () => {
+      saved.categories = saved.categories.filter(c => c.id !== btn.dataset.sbRemove);
+      saveH2hScoreboard();
+      renderH2H();
+    };
+  });
+  document.getElementById("h2hScoreboardAddBtn").onclick = () => {
+    const input = document.getElementById("h2hScoreboardNewName");
+    const name = input.value.trim();
+    if (!name) return;
+    saved.categories.push({ id: "c" + Date.now(), name, winner: null });
+    saveH2hScoreboard();
+    renderH2H();
+  };
 }
 
 function populateH2hSelects() {
@@ -4593,7 +4751,7 @@ function renderH2H() {
   if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "draftxi") { renderH2hDraftXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "matchups") { renderH2hMatchups(body, teamA, teamB); return; }
-
+  if (state.h2hViewMode === "scoreboard") { renderH2hScoreboard(body, teamA, teamB); return; }
   // --- real data: this season's meetings between the two clubs ---
   const meetings = (state.allFixtures || []).filter(f =>
     (f.team_h === teamA.id && f.team_a === teamB.id) || (f.team_h === teamB.id && f.team_a === teamA.id)
