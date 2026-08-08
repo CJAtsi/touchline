@@ -455,7 +455,7 @@
       <button data-tab="shortlist">Shortlist</button>
       <button data-tab="team">My team</button>
       <button data-tab="planner">Planner</button>
-      <button data-tab="table">Table</button>
+      <button data-tab="table">Teams</button>
       <button data-tab="fdr">FDR</button>
       <button data-tab="h2h">Head-to-head</button>
       <button data-tab="rankings">Rankings</button>
@@ -617,7 +617,7 @@
     </div>
 
     <div class="card" style="margin-top:20px">
-      <div class="detail-block-title">Club stats — shots, xG, possession, CBIT and more</div>
+      <div class="detail-block-title">Team stats — form, goals, and shots/xG/possession/CBIT and more</div>
       <p class="foot-note" id="clubStatsNote" style="margin-top:-4px;margin-bottom:10px"></p>
       <div class="table-wrap"><table>
         <thead><tr id="clubStatsHeadRow"></tr></thead>
@@ -731,7 +731,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Edit club strength</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Disagree with FPL's rating for a club? Set it exactly — 1 (weakest) to 5 (strongest). This becomes that club's fixture-difficulty rating everywhere on the site (opponent pills, club rankings), overriding FPL's own attack/defence/overall blend for them entirely. Starts at FPL's own computed rating; hit ↺ to go back to it.
+        Disagree with FPL's rating for a club? Set Attack, Defence and Overall individually — 1 (weakest) to 5 (strongest). These feed both the FDR formula above (opponent pills, club rankings) <strong>and</strong> the predicted scoreline on the FDR fixture modal — change a club's Attack here and their predicted scorelines update to match. Starts at FPL's own computed rating for each field; hit ↺ Reset to go back to all three.
       </p>
       <div id="teamOverrideList"></div>
     </div>
@@ -1550,38 +1550,54 @@ function computeTeamTiers() {
 // Higher = harder fixture. Uses the opponent's relevant strength stats
 // (their away numbers when you're home, home numbers when you're away),
 // blended by user-editable weights, with a small home-advantage nudge.
-function teamOverrideRating(teamId) {
+// Any of attack/defence/overall can be individually overridden per team —
+// getTeamOverride() reads those; the FDR ranking above AND the FDR
+// scoreline predictor both flow through teamFieldRating5(), so editing a
+// team's attack strength changes both consistently.
+function getTeamOverride(teamId) {
   const v = state.teamOverrides ? state.teamOverrides[teamId] : null;
-  return (v === null || v === undefined) ? null : v;
+  if (v === null || v === undefined) return { attack: null, defence: null, overall: null };
+  if (typeof v === "number") return { attack: null, defence: null, overall: v }; // legacy single-slider shape
+  return { attack: v.attack ?? null, defence: v.defence ?? null, overall: v.overall ?? null };
 }
-// Returns a team's default 1-5 quality rating derived from FPL's own raw
-// overall strength (no override applied) — used as the slider's starting
-// position so "exact" edits start from FPL's own view, not from 3.0.
-function defaultTeamRating(teamId) {
+// Kept for anywhere that just wants "is this team overridden at all / what
+// would the single-number summary be" (e.g. showing a ↺ reset button).
+function teamOverrideRating(teamId) {
+  const ov = getTeamOverride(teamId);
+  if (ov.overall !== null) return ov.overall;
+  if (ov.attack !== null || ov.defence !== null) return (ov.attack ?? defaultFieldRating(teamId, "attack") ) * 0.5 + (ov.defence ?? defaultFieldRating(teamId, "defence")) * 0.5;
+  return null;
+}
+// FPL's own 1-5 rating for one field (attack/defence/overall), averaged
+// across home+away — used as a slider's starting position before any
+// override is applied.
+function defaultFieldRating(teamId, field) {
   const t = state.teamsById[teamId];
   if (!t || !state.strengthRanges) return 3;
-  const overall = (t.strength_overall_home + t.strength_overall_away) / 2;
-  return Math.round(toScale1to5(overall, state.strengthRanges.overall) * 10) / 10;
+  const raw = (t[`strength_${field}_home`] + t[`strength_${field}_away`]) / 2;
+  return Math.round(toScale1to5(raw, state.strengthRanges[field]) * 10) / 10;
 }
+// The actual 1-5 rating used everywhere a formula needs "this team's
+// attack/defence/overall right now" — the user's override if they've set
+// one for this field, otherwise FPL's raw value scaled to 1-5.
+function teamFieldRating5(teamId, field, rawValue) {
+  const ov = getTeamOverride(teamId);
+  if (ov[field] !== null) return ov[field];
+  return toScale1to5(rawValue, state.strengthRanges[field]);
+}
+function defaultTeamRating(teamId) { return defaultFieldRating(teamId, "overall"); }
 function customFdr(teamId, oppId, isHome) {
   const opp = state.teamsById[oppId];
   if (!opp || !state.strengthRanges) return 3;
-  const override = teamOverrideRating(oppId);
   const f = state.fdrFormula;
-  let score;
-  if (override !== null) {
-    score = override; // exact — bypasses the attack/defence/overall blend entirely
-  } else {
-    const oppOverall = isHome ? opp.strength_overall_away : opp.strength_overall_home;
-    const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
-    const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
-    const wSum = f.attackWeight + f.defenceWeight + f.overallWeight || 1;
-    score = (
-      f.attackWeight * toScale1to5(oppAttack, state.strengthRanges.attack) +
-      f.defenceWeight * toScale1to5(oppDefence, state.strengthRanges.defence) +
-      f.overallWeight * toScale1to5(oppOverall, state.strengthRanges.overall)
-    ) / wSum;
-  }
+  const oppOverallRaw = isHome ? opp.strength_overall_away : opp.strength_overall_home;
+  const oppAttackRaw = isHome ? opp.strength_attack_away : opp.strength_attack_home;
+  const oppDefenceRaw = isHome ? opp.strength_defence_away : opp.strength_defence_home;
+  const overall5 = teamFieldRating5(oppId, "overall", oppOverallRaw);
+  const attack5 = teamFieldRating5(oppId, "attack", oppAttackRaw);
+  const defence5 = teamFieldRating5(oppId, "defence", oppDefenceRaw);
+  const wSum = f.attackWeight + f.defenceWeight + f.overallWeight || 1;
+  let score = (f.attackWeight * attack5 + f.defenceWeight * defence5 + f.overallWeight * overall5) / wSum;
   if (isHome) score -= f.homeAdvantage;
   return Math.max(1, Math.min(5, score));
 }
@@ -2103,9 +2119,10 @@ function renderStats() {
         }
         return `<td class="mono">—</td>`;
       }).join("");
+      const unproven = (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0;
       tr.innerHTML = `
         <td class="label-col">
-          <div class="name-cell">${p.webName}</div>
+          <div class="name-cell">${p.webName}${unproven ? ` <span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No minutes or points recorded in the Prem this season yet — could be a new signing from outside the league, on loan, or simply unused so far. Treat any season-long stats for them with caution until they've actually played.">new / no Prem data</span>` : ""}</div>
           ${statusInfo ? `<div class="status-tag" style="color:${statusInfo[1]}">${statusInfo[0]}</div>` : ""}
         </td>
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
@@ -3907,6 +3924,14 @@ function renderPlTable() {
   renderClubStatsTable();
 }
 
+// FPL-native columns (never depend on the Understat/FBref scrape, so they
+// always render even when that scrape is failing) plus the scraped
+// columns where available — one combined, always-sortable team table.
+const CLUB_STATS_NATIVE_COLS = [
+  { key: "points", label: "Pts" }, { key: "played", label: "Pld" },
+  { key: "gd", label: "GD" }, { key: "gf", label: "GF" }, { key: "ga", label: "GA" },
+  { key: "squadPts", label: "Squad pts (FPL)" },
+];
 const CLUB_STATS_COLS = [
   { key: "shots", label: "Shots" }, { key: "xG", label: "xG" },
   { key: "possession", label: "Poss %" }, { key: "xGA", label: "xGC" },
@@ -3917,20 +3942,24 @@ function renderClubStatsTable() {
   const headRow = document.getElementById("clubStatsHeadRow");
   const body = document.getElementById("clubStatsBody");
   const note = document.getElementById("clubStatsNote");
-  const anyData = Object.keys(state.clubStatsByTeamId).length > 0;
-  if (!anyData) {
-    headRow.innerHTML = "";
-    const diag = state.diagnostics.find(d => d.path === "/clubstats");
-    body.innerHTML = `<tr><td class="empty-state">No club stats loaded yet.</td></tr>`;
-    note.textContent = diag && !diag.ok
-      ? `Couldn't load this from your Worker (${diag.error}). Make sure the latest touchline-proxy.js (with the /clubstats route) is deployed, then reload.`
-      : "This comes from your Worker's Understat/FBref scrape — needs the latest touchline-proxy.js (with the /clubstats route) deployed. Reload to retry.";
-    return;
-  }
-  note.textContent = "PPDA = passes allowed per defensive action — lower means a higher, more aggressive press line. Deep completions = passes into the final ~20% of the pitch, a build-up proxy. All scraped from Understat/FBref, not FPL's own API.";
-  headRow.innerHTML = `<th class="label-col">Club</th>` + CLUB_STATS_COLS.map(c => `<th data-cstat-sort="${c.key}" style="cursor:pointer">${c.label}</th>`).join("");
+  const scrapeOk = Object.keys(state.clubStatsByTeamId).length > 0;
+  const table = resolveActiveTable();
+  const tableByTeam = Object.fromEntries((table.rows || []).map(r => [r.teamId, r]));
+  const squadPtsByTeam = {};
+  for (const p of state.players) squadPtsByTeam[p.teamId] = (squadPtsByTeam[p.teamId] || 0) + (p.totalPoints || 0);
+
+  const allCols = [...CLUB_STATS_NATIVE_COLS, ...CLUB_STATS_COLS];
+  headRow.innerHTML = `<th class="label-col">Club</th>` + allCols.map(c => `<th data-cstat-sort="${c.key}" style="cursor:pointer">${c.label}</th>`).join("");
   const { key, dir } = state.clubStatsSort;
-  const rows = state.teams.filter(t => state.clubStatsByTeamId[t.id]).map(t => ({ team: t, stats: state.clubStatsByTeamId[t.id] }));
+  const rows = state.teams.map(t => ({
+    team: t,
+    stats: {
+      points: tableByTeam[t.id]?.points, played: tableByTeam[t.id]?.played,
+      gd: tableByTeam[t.id]?.gd, gf: tableByTeam[t.id]?.gf, ga: tableByTeam[t.id]?.ga,
+      squadPts: squadPtsByTeam[t.id] ?? 0,
+      ...(state.clubStatsByTeamId[t.id] || {}),
+    },
+  }));
   rows.sort((a, b) => {
     const av = a.stats[key], bv = b.stats[key];
     if (av === null || av === undefined) return 1;
@@ -3943,7 +3972,7 @@ function renderClubStatsTable() {
   body.innerHTML = rows.map(({ team, stats }) => `
     <tr>
       <td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name}</td>
-      ${CLUB_STATS_COLS.map(c => {
+      ${allCols.map(c => {
         const v = stats[c.key];
         const display = v === null || v === undefined ? "—" : (Number.isInteger(v) ? v : v.toFixed(c.key === "possession" ? 1 : 2));
         return `<td class="mono">${display}</td>`;
@@ -3958,6 +3987,9 @@ function renderClubStatsTable() {
       renderClubStatsTable();
     };
   });
+  note.textContent = scrapeOk
+    ? "Pts/Pld/GD/GF/GA come from the league table above; Squad pts sums every player's FPL points at that club. Shots onward are scraped from Understat/FBref. PPDA = passes allowed per defensive action (lower = higher press line); deep completions = passes into the final ~20% of the pitch."
+    : "Pts/Pld/GD/GF/GA/Squad pts are always available (FPL's own data). The Shots-onward columns come from a Understat/FBref scrape that isn't currently loaded — make sure the latest touchline-proxy.js (with the /clubstats route) is deployed, then reload; those columns will show \"—\" until then.";
 }
 function setupTableControls() {
   document.getElementById("tableSourceSelect").onchange = (e) => {
@@ -3998,25 +4030,40 @@ function setupTableControls() {
 function renderTeamOverrides() {
   const container = document.getElementById("teamOverrideList");
   const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  const FIELDS = [["attack", "Attack"], ["defence", "Defence"], ["overall", "Overall"]];
   container.innerHTML = sorted.map(t => {
-    const override = teamOverrideRating(t.id);
-    const shown = override !== null ? override : defaultTeamRating(t.id);
+    const ov = getTeamOverride(t.id);
+    const anyOverride = ov.attack !== null || ov.defence !== null || ov.overall !== null;
     return `
-      <div class="rank-row" data-team="${t.id}">
-        ${kitSvg(t.id, 22)}
-        <div style="width:150px;font-weight:600;font-size:13px">${t.name}</div>
-        <input type="range" min="1" max="5" step="0.1" value="${shown}" data-team-rating="${t.id}" style="flex:1" />
-        <div class="rank-score" style="width:40px;text-align:right" data-team-val="${t.id}">${shown.toFixed(1)}</div>
-        <button class="dir-btn" data-team-reset="${t.id}" style="${override === null ? "visibility:hidden" : ""}" title="Reset to FPL's own rating">↺</button>
+      <div class="rank-row" data-team="${t.id}" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          ${kitSvg(t.id, 22)}
+          <div style="width:150px;font-weight:600;font-size:13px">${t.name}</div>
+          <button class="dir-btn" data-team-reset="${t.id}" style="margin-left:auto;${anyOverride ? "" : "visibility:hidden"}" title="Reset all fields to FPL's own ratings">↺ Reset</button>
+        </div>
+        ${FIELDS.map(([field, label]) => {
+          const shown = ov[field] !== null ? ov[field] : defaultFieldRating(t.id, field);
+          return `
+            <div style="display:flex;align-items:center;gap:8px;padding-left:30px">
+              <span style="width:60px;font-size:11.5px;color:var(--ink-faint)">${label}</span>
+              <input type="range" min="1" max="5" step="0.1" value="${shown}" data-team-rating="${t.id}" data-team-field="${field}" style="flex:1" />
+              <span class="rank-score mono" style="width:34px;text-align:right;${ov[field] !== null ? "color:var(--gold-bright)" : ""}" data-team-val="${t.id}-${field}">${shown.toFixed(1)}</span>
+            </div>
+          `;
+        }).join("")}
       </div>
     `;
   }).join("");
   container.querySelectorAll("input[type=range]").forEach(input => {
     input.oninput = () => {
       const id = Number(input.dataset.teamRating);
+      const field = input.dataset.teamField;
       const v = Number(input.value);
-      state.teamOverrides[id] = v;
-      container.querySelector(`[data-team-val="${id}"]`).textContent = v.toFixed(1);
+      const current = getTeamOverride(id);
+      state.teamOverrides[id] = { ...current, [field]: v };
+      const valEl = container.querySelector(`[data-team-val="${id}-${field}"]`);
+      valEl.textContent = v.toFixed(1);
+      valEl.style.color = "var(--gold-bright)";
       container.querySelector(`[data-team-reset="${id}"]`).style.visibility = "visible";
       saveTeamOverrides();
       computeTeamTiers();
@@ -4177,10 +4224,14 @@ function estimateScoreline(teamId, oppId, isHome) {
   const teamDefence = isHome ? team.strength_defence_home : team.strength_defence_away;
   const oppAttack = isHome ? opp.strength_attack_away : opp.strength_attack_home;
   const oppDefence = isHome ? opp.strength_defence_away : opp.strength_defence_home;
-  let a5 = toScale1to5(teamAttack, state.strengthRanges.attack);
-  let d5 = toScale1to5(oppDefence, state.strengthRanges.defence);
-  let oa5 = toScale1to5(oppAttack, state.strengthRanges.attack);
-  let od5 = toScale1to5(teamDefence, state.strengthRanges.defence);
+  // Same per-field overrides the FDR ranking uses (see teamFieldRating5) —
+  // editing a team's attack/defence rating on the FDR tab changes this
+  // predicted scoreline too, not just the ranking.
+  const teamOv = getTeamOverride(teamId), oppOv = getTeamOverride(oppId);
+  let a5 = teamFieldRating5(teamId, "attack", teamAttack);
+  let d5 = teamFieldRating5(oppId, "defence", oppDefence);
+  let oa5 = teamFieldRating5(oppId, "attack", oppAttack);
+  let od5 = teamFieldRating5(teamId, "defence", teamDefence);
   // Always blend in a slice of last season's final-table strength as a
   // second, independent signal (not just when this season's own ratings
   // look flat — that heuristic wasn't reliably catching the case where
@@ -4188,23 +4239,27 @@ function estimateScoreline(teamId, oppId, isHome) {
   // meaningfully separate any two given fixtures, which is what made
   // predictions keep landing on the same scoreline). This guarantees two
   // different fixtures get two different inputs even in a season with
-  // almost no results yet.
+  // almost no results yet. Skipped for any field the user has explicitly
+  // overridden — their number is used exactly as entered.
   const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
   const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
   const blend = state.strengthRangesFlat ? 0.7 : 0.35;
-  a5 = a5 * (1 - blend) + teamStr * blend;
-  oa5 = oa5 * (1 - blend) + oppStr * blend;
-  d5 = d5 * (1 - blend) + oppStr * blend;
-  od5 = od5 * (1 - blend) + teamStr * blend;
-  // Stretch each 1-5 rating away from the midpoint a little so genuinely
-  // different fixtures produce visibly different xG (and therefore
-  // different most-likely scorelines) instead of everything huddling
-  // close to the average and rounding to the same result.
+  if (teamOv.attack === null) a5 = a5 * (1 - blend) + teamStr * blend;
+  if (oppOv.attack === null) oa5 = oa5 * (1 - blend) + oppStr * blend;
+  if (oppOv.defence === null) d5 = d5 * (1 - blend) + oppStr * blend;
+  if (teamOv.defence === null) od5 = od5 * (1 - blend) + teamStr * blend;
+  // Stretch each non-overridden 1-5 rating away from the midpoint a little
+  // so genuinely different fixtures produce visibly different xG (and
+  // therefore different most-likely scorelines) instead of everything
+  // huddling close to the average and rounding to the same result.
   const stretch = (v) => {
     const d = v - 3;
     return Math.max(1, Math.min(5, 3 + Math.sign(d) * Math.pow(Math.abs(d), 0.85) * 1.2));
   };
-  a5 = stretch(a5); oa5 = stretch(oa5); d5 = stretch(d5); od5 = stretch(od5);
+  if (teamOv.attack === null) a5 = stretch(a5);
+  if (oppOv.attack === null) oa5 = stretch(oa5);
+  if (oppOv.defence === null) d5 = stretch(d5);
+  if (teamOv.defence === null) od5 = stretch(od5);
   const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
   const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
 
@@ -4600,8 +4655,17 @@ function renderH2hMatchups(body, teamA, teamB) {
   const list = state.h2hMatchups[key] || [];
   const squadA = state.players.filter(p => p.teamId === teamA.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const squadB = state.players.filter(p => p.teamId === teamB.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-  const optsA = squadA.map(p => `<option value="${p.id}">${p.webName} (${p.position})</option>`).join("");
-  const optsB = squadB.map(p => `<option value="${p.id}">${p.webName} (${p.position})</option>`).join("");
+  const POS_ORDER = ["GK", "DEF", "MID", "FWD"];
+  const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  function groupedOptions(squad) {
+    return POS_ORDER.map(pos => {
+      const inPos = squad.filter(p => p.position === pos);
+      if (!inPos.length) return "";
+      return `<optgroup label="${POS_LABEL[pos]}">${inPos.map(p => `<option value="${p.id}">${p.webName}</option>`).join("")}</optgroup>`;
+    }).join("");
+  }
+  const optsA = groupedOptions(squadA);
+  const optsB = groupedOptions(squadB);
   const rows = list.map(m => {
     const pa = state.players.find(p => p.id === m.playerAId);
     const pb = state.players.find(p => p.id === m.playerBId);
