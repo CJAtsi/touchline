@@ -637,12 +637,20 @@
       <select id="fdrEndGw"></select>
       <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">Sort</span>
       <select id="fdrSortBy">
-        <option value="easiest" selected>Easiest run first</option>
-        <option value="hardest">Hardest run first</option>
+        <option value="easiest" selected>Easiest run first (FDR)</option>
+        <option value="hardest">Hardest run first (FDR)</option>
+        <option value="scorelineBest">Biggest win first (predicted)</option>
+        <option value="scorelineWorst">Biggest loss first (predicted)</option>
         <option value="alpha">Alphabetical</option>
       </select>
+      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">View</span>
+      <select id="fdrViewMode">
+        <option value="colour" selected>Fixture colour</option>
+        <option value="scoreline">Predicted scoreline</option>
+      </select>
+      <label style="font-size:12px;color:var(--ink-dim);display:flex;align-items:center;gap:4px;margin-left:10px"><input type="checkbox" id="fdrShowGoals" /> Show avg GF/GA</label>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate. The current gameweek's column is highlighted.</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Poisson model as the fixture click-through.</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -753,9 +761,11 @@ const FDR_COLOR = { 1: "#3ecf8e", 2: "#8fd9ab", 3: "#d9c98a", 4: "#e39a63", 5: "
 // score (not just the rounded bucket), so a 4.8 reads visibly harder/redder
 // than a 4.1 even though both round to the same FDR_COLOR step.
 const FDR_GRADIENT_STOPS = [
-  { at: 1, rgb: [62, 207, 142] },
-  { at: 3, rgb: [217, 201, 138] },
-  { at: 5, rgb: [226, 96, 79] },
+  { at: 1, rgb: [60, 210, 90] },   // bright green
+  { at: 2, rgb: [150, 205, 110] }, // faded green
+  { at: 3, rgb: [235, 149, 50] },  // orange (midpoint)
+  { at: 4, rgb: [214, 92, 42] },   // deep orange / soft red
+  { at: 5, rgb: [176, 42, 42] },   // deep red
 ];
 function fdrGradientColor(score) {
   const s = Math.max(1, Math.min(5, score));
@@ -4333,35 +4343,53 @@ function renderFdrGrid() {
   const gwIds = state.events.map(e => e.id).filter(id => id >= startGw && id <= endGw);
   const curId = currentEventId();
   const sortBy = document.getElementById("fdrSortBy").value;
+  const viewMode = document.getElementById("fdrViewMode").value; // "colour" | "scoreline"
+  const showGoals = document.getElementById("fdrShowGoals").checked;
+  const showAvgCol = sortBy !== "alpha";
 
-  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${sortBy !== "alpha" ? '<th>Avg</th>' : ""}</tr>`;
+  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${showAvgCol ? '<th>Avg FDR</th>' : ""}${showGoals ? '<th>Avg GF</th><th>Avg GA</th>' : ""}</tr>`;
 
   let list = state.teams.map(t => {
     const byGw = {};
     for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
     const scoresInRange = [];
+    const gfInRange = [], gaInRange = [];
     const cells = gwIds.map(gwId => {
       const fixtures = byGw[gwId] || [];
       const bg = gwId === curId ? "background:var(--panel-2)" : "";
       if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint);${bg}">–</td>`;
       return `<td style="padding:4px;${bg}">${fixtures.map(fx => {
         const opp = state.teamsById[fx.oppId];
-        const label = fx.isHome ? `${opp ? opp.short_name : "?"} (H)` : `${opp ? opp.short_name.toLowerCase() : "?"} (a)`;
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         scoresInRange.push(score);
-        const rounded = Math.max(1, Math.min(5, Math.round(score)));
-        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — custom FDR ${score.toFixed(1)}. Click for a scoreline estimate.">${label}</div>`;
+        let est = null;
+        if (viewMode === "scoreline" || showGoals || sortBy === "scorelineBest" || sortBy === "scorelineWorst") {
+          est = estimateScoreline(t.id, fx.oppId, fx.isHome);
+          if (est) { gfInRange.push(est.teamGoals); gaInRange.push(est.oppGoals); }
+        }
+        const homeAway = fx.isHome ? "(H)" : "(a)";
+        const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
+        const label = viewMode === "scoreline" && est
+          ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
+          : `${oppLabel} ${homeAway}`;
+        const scoreTitle = `custom FDR ${score.toFixed(1)}` + (est ? `, predicted ${est.teamGoals}-${est.oppGoals}` : "");
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
       }).join("")}</td>`;
     });
     const avg = scoresInRange.length ? scoresInRange.reduce((a, b) => a + b, 0) / scoresInRange.length : null;
-    return { t, cells, avg };
+    const avgGf = gfInRange.length ? gfInRange.reduce((a, b) => a + b, 0) / gfInRange.length : null;
+    const avgGa = gaInRange.length ? gaInRange.reduce((a, b) => a + b, 0) / gaInRange.length : null;
+    const avgGd = (avgGf !== null && avgGa !== null) ? avgGf - avgGa : null;
+    return { t, cells, avg, avgGf, avgGa, avgGd };
   });
 
   if (sortBy === "easiest") list.sort((a, b) => (a.avg ?? 99) - (b.avg ?? 99));
   else if (sortBy === "hardest") list.sort((a, b) => (b.avg ?? -99) - (a.avg ?? -99));
+  else if (sortBy === "scorelineBest") list.sort((a, b) => (b.avgGd ?? -99) - (a.avgGd ?? -99));
+  else if (sortBy === "scorelineWorst") list.sort((a, b) => (a.avgGd ?? 99) - (b.avgGd ?? 99));
   else list.sort((a, b) => a.t.name.localeCompare(b.t.name));
 
-  const rows = list.map(({ t, cells, avg }) => `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}${sortBy !== "alpha" ? `<td class="mono" style="font-size:12px">${avg !== null ? avg.toFixed(1) : "–"}</td>` : ""}</tr>`).join("");
+  const rows = list.map(({ t, cells, avg, avgGf, avgGa }) => `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}${showAvgCol ? `<td class="mono" style="font-size:12px">${avg !== null ? avg.toFixed(1) : "–"}</td>` : ""}${showGoals ? `<td class="mono" style="font-size:12px">${avgGf !== null ? avgGf.toFixed(2) : "–"}</td><td class="mono" style="font-size:12px">${avgGa !== null ? avgGa.toFixed(2) : "–"}</td>` : ""}</tr>`).join("");
 
   document.getElementById("fdrGrid").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   document.getElementById("fdrGrid").querySelectorAll(".fdr-pill").forEach(pill => {
@@ -4372,6 +4400,8 @@ function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
   document.getElementById("fdrSortBy").onchange = renderFdrGrid;
+  document.getElementById("fdrViewMode").onchange = renderFdrGrid;
+  document.getElementById("fdrShowGoals").onchange = renderFdrGrid;
   document.getElementById("fdrPredictClose").onclick = () => { document.getElementById("fdrPredictModal").style.display = "none"; };
   document.getElementById("fdrPredictModal").onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
 }
@@ -4737,6 +4767,29 @@ function renderH2hMatchups(body, teamA, teamB) {
 // draw, and the total tally shows who's "won" the head-to-head overall.
 // Player matchups get one automatic, always-present category computed live
 // from the tally on the Player matchups tab (majority wins it, tie = draw).
+function ppgFromRecord(r) { return (r && r.played) ? r.points / r.played : null; }
+// Quick-add stat categories for the scoreboard — pre-computed from this
+// season's actual results (via the existing teamVenueRecord helper), so the
+// suggested winner isn't just a guess. User can still flip it manually
+// afterwards, same as any other category.
+function h2hQuickCategory(kind, teamA, teamB) {
+  const homeA = teamVenueRecord(teamA.id, "HOME"), homeB = teamVenueRecord(teamB.id, "HOME");
+  const awayA = teamVenueRecord(teamA.id, "AWAY"), awayB = teamVenueRecord(teamB.id, "AWAY");
+  const homePpgA = ppgFromRecord(homeA), homePpgB = ppgFromRecord(homeB);
+  const awayPpgA = ppgFromRecord(awayA), awayPpgB = ppgFromRecord(awayB);
+  let valA = null, valB = null, label = "";
+  if (kind === "homeForm") { valA = homePpgA; valB = homePpgB; label = "Home form (PPG)"; }
+  else if (kind === "awayForm") { valA = awayPpgA; valB = awayPpgB; label = "Away form (PPG)"; }
+  else if (kind === "homeAdvantage") {
+    valA = (homePpgA !== null && awayPpgA !== null) ? homePpgA - awayPpgA : null;
+    valB = (homePpgB !== null && awayPpgB !== null) ? homePpgB - awayPpgB : null;
+    label = "Home advantage bonus";
+  }
+  let winner = null;
+  if (valA !== null && valB !== null) winner = Math.abs(valA - valB) < 0.05 ? "DRAW" : (valA > valB ? "A" : "B");
+  const detail = (valA !== null && valB !== null) ? ` (${teamA.short_name} ${valA.toFixed(2)} – ${teamB.short_name} ${valB.toFixed(2)})` : " (not enough matches yet)";
+  return { name: label + detail, winner };
+}
 function h2hMatchupsAutoWinner(teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
   const list = state.h2hMatchups[key] || [];
@@ -4791,6 +4844,12 @@ function renderH2hScoreboard(body, teamA, teamB) {
     </div>
     <div class="card">
       <div class="detail-block-title" style="margin-bottom:8px">Add a category</div>
+      <div class="field-desc" style="margin-bottom:6px">Quick-add (pre-filled from this season's results, still editable after):</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="chip-btn" data-sb-quick="homeForm">+ Home form</button>
+        <button class="chip-btn" data-sb-quick="awayForm">+ Away form</button>
+        <button class="chip-btn" data-sb-quick="homeAdvantage">+ Home advantage bonus</button>
+      </div>
       <div style="display:flex;gap:8px">
         <input type="text" id="h2hScoreboardNewName" placeholder="e.g. Fixture run, Manager pedigree…" style="flex:1" />
         <button class="dir-btn" id="h2hScoreboardAddBtn">+ Add</button>
@@ -4809,6 +4868,14 @@ function renderH2hScoreboard(body, teamA, teamB) {
   body.querySelectorAll("[data-sb-remove]").forEach(btn => {
     btn.onclick = () => {
       saved.categories = saved.categories.filter(c => c.id !== btn.dataset.sbRemove);
+      saveH2hScoreboard();
+      renderH2H();
+    };
+  });
+  body.querySelectorAll("[data-sb-quick]").forEach(btn => {
+    btn.onclick = () => {
+      const q = h2hQuickCategory(btn.dataset.sbQuick, teamA, teamB);
+      saved.categories.push({ id: "c" + Date.now(), name: q.name, winner: q.winner });
       saveH2hScoreboard();
       renderH2H();
     };
