@@ -884,7 +884,9 @@ const SORT_OPTIONS = [
   ["netTransfers", "Net transfers (GW)"], ["goalsScored", "Goals"], ["assists", "Assists"],
   ["cleanSheets", "Clean sheets"], ["goalsConcededPer90", "Goals conceded /90"], ["xgc90", "xGC /90"],
   ["saves90", "Saves /90"], ["defensiveContribution", "Defensive contribution"], ["bps", "BPS"],
-  ["minutes", "Minutes"], ["bonus", "Bonus points"],
+  ["minutes", "Minutes"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
+  ["assistsPer90", "Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
+  ["influencePer90", "Influence /90"], ["creativityPer90", "Creativity /90"], ["threatPer90", "Threat /90"],
 ];
 
 // Player, Team, Pos, star are always shown; these fixed columns stay
@@ -895,11 +897,11 @@ const STAT_THEMES = {
   overview: {
     label: "Overview",
     columns: [["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
-      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
+      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
   },
   attacking: {
     label: "Attacking",
-    columns: [["goalsScored", "G"], ["assists", "A"], ["expectedGoals", "xG"], ["expectedAssists", "xA"],
+    columns: [["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"],
       ["xg90", "xG/90"], ["xa90", "xA/90"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
@@ -919,6 +921,12 @@ const STAT_THEMES = {
   cbit: {
     label: "CBIT (defensive)",
     columns: [["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
+  },
+  per90: {
+    label: "Per 90",
+    columns: [["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["xg90", "xG/90"], ["xa90", "xA/90"],
+      ["xgi90", "xGI/90"], ["bonusPer90", "Bon/90"], ["bpsPer90", "BPS/90"], ["ictPer90", "ICT/90"],
+      ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"], ["ppm90", "Pts/£m/90"]],
   },
 };
 
@@ -953,6 +961,15 @@ const COLUMN_FORMAT = {
   minutes: p => [p.minutes, ""],
   ppm: p => [p.ppm.toFixed(1), ""],
   ppm90: p => [p.ppm90.toFixed(1), ""],
+  pointsPer90: p => [p.pointsPer90.toFixed(1), ""],
+  goalsPer90: p => [p.goalsPer90.toFixed(2), ""],
+  assistsPer90: p => [p.assistsPer90.toFixed(2), ""],
+  bonusPer90: p => [p.bonusPer90.toFixed(2), ""],
+  bpsPer90: p => [p.bpsPer90.toFixed(1), ""],
+  influencePer90: p => [p.influencePer90.toFixed(1), ""],
+  creativityPer90: p => [p.creativityPer90.toFixed(1), ""],
+  threatPer90: p => [p.threatPer90.toFixed(1), ""],
+  ictPer90: p => [p.ictPer90.toFixed(2), ""],
   dsShots: p => [p.dsShots ?? "—", p.dsShots == null ? "color:var(--ink-faint)" : ""],
   dsKeyPasses: p => [p.dsKeyPasses ?? "—", p.dsKeyPasses == null ? "color:var(--ink-faint)" : ""],
   dsXGChain: p => [p.dsXGChain != null ? p.dsXGChain.toFixed(2) : "—", p.dsXGChain == null ? "color:var(--ink-faint)" : ""],
@@ -1135,6 +1152,11 @@ function scopedPlayer(p) {
     xgi90: per90(s ? s.expected_goal_involvements : 0), xgc90: per90(s ? s.expected_goals_conceded : 0),
     saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
     goalsConcededPer90: per90(s ? s.goals_conceded : 0),
+    pointsPer90: per90Floored(s ? s.total_points : 0), goalsPer90: per90Floored(s ? s.goals_scored : 0),
+    assistsPer90: per90Floored(s ? s.assists : 0), bonusPer90: per90Floored(s ? s.bonus : 0),
+    bpsPer90: per90Floored(s ? s.bps : 0), influencePer90: per90(s ? s.influence : 0),
+    creativityPer90: per90(s ? s.creativity : 0), threatPer90: per90(s ? s.threat : 0),
+    ictPer90: per90(s ? (s.influence + s.creativity + s.threat) / 10 : 0),
   });
 }
 
@@ -1335,6 +1357,15 @@ function transformPlayer(e) {
     starts: e.starts ?? 0,
     ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
     ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / Math.max(e.minutes, 180)) * 90) / (e.now_cost / 10) : 0,
+    pointsPer90: e.minutes > 0 ? (e.total_points / Math.max(e.minutes, 180)) * 90 : 0,
+    goalsPer90: e.minutes > 0 ? (e.goals_scored / Math.max(e.minutes, 180)) * 90 : 0,
+    assistsPer90: e.minutes > 0 ? (e.assists / Math.max(e.minutes, 180)) * 90 : 0,
+    bonusPer90: e.minutes > 0 ? (e.bonus / Math.max(e.minutes, 180)) * 90 : 0,
+    bpsPer90: e.minutes > 0 ? (e.bps / Math.max(e.minutes, 180)) * 90 : 0,
+    influencePer90: e.minutes > 0 ? (num(e.influence) / Math.max(e.minutes, 180)) * 90 : 0,
+    creativityPer90: e.minutes > 0 ? (num(e.creativity) / Math.max(e.minutes, 180)) * 90 : 0,
+    threatPer90: e.minutes > 0 ? (num(e.threat) / Math.max(e.minutes, 180)) * 90 : 0,
+    ictPer90: e.minutes > 0 ? (num(e.ict_index) / Math.max(e.minutes, 180)) * 90 : 0,
   };
 }
 
