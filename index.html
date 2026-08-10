@@ -31,8 +31,11 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  html { overflow-x: hidden; width: 100%; }
   body {
     margin: 0;
+    overflow-x: hidden;
+    width: 100%;
     background:
       radial-gradient(1200px 600px at 15% -10%, rgba(168,117,47,0.05), transparent 60%),
       radial-gradient(1000px 500px at 100% 0%, rgba(31,122,83,0.03), transparent 55%),
@@ -41,6 +44,7 @@
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
   }
   .mono { font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
   .serif { font-family: "Fraunces", Georgia, serif; }
@@ -438,6 +442,14 @@
     .card { padding: 12px; }
     #h2hBody [style*="display:flex"][style*="gap:16px"] { flex-direction: column; }
     select, input[type="text"], input[type="number"] { font-size: 14px; } /* avoid iOS auto-zoom on focus */
+    /* Fixed-width team-name labels (Rankings list, Teams table, FDR/H2H rows)
+       were sized for desktop and could force a few extra px of page-wide
+       horizontal scroll on narrow phones — let them shrink and ellipsis
+       instead of holding their width. */
+    .rank-row div[style*="width:130px"],
+    div[style*="width:150px"][style*="font-weight:600"] {
+      width: auto !important; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
   }
   @media (max-width: 400px) {
     .pitch-slot { max-width: 48px; }
@@ -641,6 +653,8 @@
         <option value="hardest">Hardest run first (FDR)</option>
         <option value="scorelineBest">Biggest win first (predicted)</option>
         <option value="scorelineWorst">Biggest loss first (predicted)</option>
+        <option value="gfHigh">Most predicted goals for first</option>
+        <option value="gaLow">Fewest predicted goals against first</option>
         <option value="alpha">Alphabetical</option>
       </select>
       <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">View</span>
@@ -4320,6 +4334,17 @@ function teamGoalsPerGame(teamId) {
   if (!row || !row.played) return null;
   return { gf: row.gf / row.played, ga: row.ga / row.played };
 }
+// Same idea as teamGoalsPerGame, but restricted to just this team's home OR
+// away fixtures — more relevant than a season-wide blend when estimating a
+// specific fixture, since most teams score/concede at different rates home
+// vs away. Requires teamVenueRecord (already used elsewhere for the same
+// real data) plus how many games it's based on, so callers can decide
+// whether the sample is big enough to trust yet.
+function venueGoalsPerGame(teamId, venue) {
+  const r = teamVenueRecord(teamId, venue);
+  if (!r || !r.played) return null;
+  return { gf: r.gf / r.played, ga: r.ga / r.played, played: r.played };
+}
 // This season's actual meetings between these two clubs, if any — surfaces
 // head-to-head anomalies a pure ratings formula would miss (a team that
 // always struggles/thrives against a specific opponent).
@@ -4453,12 +4478,27 @@ function estimateScoreline(teamId, oppId, isHome) {
   const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
   const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
 
+  // Real observed data now DRIVES the estimate, with the editable
+  // attack/defence rating formula above only as a minor supporting
+  // adjustment. This was flipped from an earlier version that weighted the
+  // rating formula higher — feedback was that a 1-5 slider-based number
+  // felt opaque as the main driver of a "predicted scoreline". Goals/game
+  // splits by actual home/away venue (not season-wide combined) are the
+  // most game-relevant real signal, so they're preferred first; season-wide
+  // combined is the fallback when a team hasn't played enough games at this
+  // specific venue yet (early season); the rating formula only kicks in at
+  // real weight when there's no usable real data at all yet (e.g. GW1).
+  const teamVenueGpg = venueGoalsPerGame(teamId, isHome ? "HOME" : "AWAY");
+  const oppVenueGpg = venueGoalsPerGame(oppId, isHome ? "AWAY" : "HOME");
   const teamGpg = teamGoalsPerGame(teamId), oppGpg = teamGoalsPerGame(oppId);
-  // Empirical estimate: average of "how much this team usually scores" and
-  // "how much this opponent usually concedes" — blended 45/55 with the
-  // static-ratings formula above.
-  let teamXg = (teamGpg && oppGpg) ? baseTeamXg * 0.55 + ((teamGpg.gf + oppGpg.ga) / 2) * 0.45 : baseTeamXg;
-  let oppXg = (teamGpg && oppGpg) ? baseOppXg * 0.55 + ((oppGpg.gf + teamGpg.ga) / 2) * 0.45 : baseOppXg;
+  const teamAtkRate = (teamVenueGpg && teamVenueGpg.played >= 2) ? teamVenueGpg.gf : (teamGpg ? teamGpg.gf : null);
+  const oppDefRate = (oppVenueGpg && oppVenueGpg.played >= 2) ? oppVenueGpg.ga : (oppGpg ? oppGpg.ga : null);
+  const oppAtkRate = (oppVenueGpg && oppVenueGpg.played >= 2) ? oppVenueGpg.gf : (oppGpg ? oppGpg.gf : null);
+  const teamDefRate = (teamVenueGpg && teamVenueGpg.played >= 2) ? teamVenueGpg.ga : (teamGpg ? teamGpg.ga : null);
+  const empiricalTeamXg = (teamAtkRate != null && oppDefRate != null) ? (teamAtkRate + oppDefRate) / 2 : null;
+  const empiricalOppXg = (oppAtkRate != null && teamDefRate != null) ? (oppAtkRate + teamDefRate) / 2 : null;
+  let teamXg = empiricalTeamXg != null ? empiricalTeamXg * 0.7 + baseTeamXg * 0.3 : baseTeamXg;
+  let oppXg = empiricalOppXg != null ? empiricalOppXg * 0.7 + baseOppXg * 0.3 : baseOppXg;
 
   teamXg *= teamFormMultiplier(teamId);
   oppXg *= teamFormMultiplier(oppId);
@@ -4481,7 +4521,7 @@ function estimateScoreline(teamId, oppId, isHome) {
     teamGoals: isHome ? model.top.home : model.top.away,
     oppGoals: isHome ? model.top.away : model.top.home,
     teamXg, oppXg, model,
-    usedForm: true, usedEmpirical: !!(teamGpg && oppGpg), usedH2h: !!h2h,
+    usedForm: true, usedEmpirical: !!(empiricalTeamXg != null && empiricalOppXg != null), usedH2h: !!h2h,
   };
 }
 function openFdrPredictModal(teamId, oppId, isHome, gwId) {
@@ -4491,10 +4531,11 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   const home = isHome ? team : opp, away = isHome ? opp : team;
   const homeGoals = isHome ? est.teamGoals : est.oppGoals;
   const awayGoals = isHome ? est.oppGoals : est.teamGoals;
-  const factors = ["attack/defence ratings"];
-  if (est.usedEmpirical) factors.push("this season's actual scoring rates");
+  const factors = [];
+  if (est.usedEmpirical) factors.push("actual goals scored/conceded this season (home/away specific where there's enough data)");
   factors.push("recent form");
   if (est.usedH2h) factors.push("head-to-head history between these two this season");
+  factors.push("attack/defence ratings (minor adjustment only)");
   const pct = (x) => (x * 100).toFixed(0) + "%";
   const altRow = est.model.alternates.map(c =>
     `<span class="mono" style="margin-right:10px;color:var(--ink-faint)">${c.home}-${c.away} (${pct(c.p)})</span>`
@@ -4527,6 +4568,7 @@ function renderFdrGrid() {
   const showGoals = document.getElementById("fdrShowGoals").checked;
   const showAvgCol = sortBy !== "alpha";
 
+  const needsScoreline = viewMode === "scoreline" || showGoals || ["scorelineBest", "scorelineWorst", "gfHigh", "gaLow"].includes(sortBy);
   const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${showAvgCol ? '<th>Avg FDR</th>' : ""}${showGoals ? '<th>Avg GF</th><th>Avg GA</th>' : ""}</tr>`;
 
   let list = state.teams.map(t => {
@@ -4534,16 +4576,23 @@ function renderFdrGrid() {
     for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
     const scoresInRange = [];
     const gfInRange = [], gaInRange = [];
+    const scoresInOrder = []; // per-fixture FDR score, in chronological gw
+                               // order, for the good-run streak bar below
     const cells = gwIds.map(gwId => {
       const fixtures = byGw[gwId] || [];
       const bg = gwId === curId ? "background:var(--panel-2)" : "";
-      if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint);${bg}">–</td>`;
-      return `<td style="padding:4px;${bg}">${fixtures.map(fx => {
+      if (!fixtures.length) { scoresInOrder.push(null); return `<td class="mono" style="color:var(--ink-faint);${bg}">–</td>`; }
+      // A gameweek can have 0, 1, or (rarely, on a blank/double) 2+
+      // fixtures — use the toughest of that week's fixtures for the streak
+      // bar so a double-gameweek with one hard game doesn't get flattered.
+      let worstThisGw = -Infinity;
+      const html = fixtures.map(fx => {
         const opp = state.teamsById[fx.oppId];
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         scoresInRange.push(score);
+        if (score > worstThisGw) worstThisGw = score;
         let est = null;
-        if (viewMode === "scoreline" || showGoals || sortBy === "scorelineBest" || sortBy === "scorelineWorst") {
+        if (needsScoreline) {
           est = estimateScoreline(t.id, fx.oppId, fx.isHome);
           if (est) { gfInRange.push(est.teamGoals); gaInRange.push(est.oppGoals); }
         }
@@ -4554,22 +4603,55 @@ function renderFdrGrid() {
           : `${oppLabel} ${homeAway}`;
         const scoreTitle = `custom FDR ${score.toFixed(1)}` + (est ? `, predicted ${est.teamGoals}-${est.oppGoals}` : "");
         return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
-      }).join("")}</td>`;
+      }).join("");
+      scoresInOrder.push(worstThisGw);
+      return `<td style="padding:4px 4px 2px;${bg}">${html}</td>`;
     });
     const avg = scoresInRange.length ? scoresInRange.reduce((a, b) => a + b, 0) / scoresInRange.length : null;
     const avgGf = gfInRange.length ? gfInRange.reduce((a, b) => a + b, 0) / gfInRange.length : null;
     const avgGa = gaInRange.length ? gaInRange.reduce((a, b) => a + b, 0) / gaInRange.length : null;
     const avgGd = (avgGf !== null && avgGa !== null) ? avgGf - avgGa : null;
-    return { t, cells, avg, avgGf, avgGa, avgGd };
+    // Longest run of consecutive gameweeks in this range where the
+    // (worst) fixture that week is "good" (FDR ≤ 2.5) — the streak the
+    // green bar highlights under the fixture row.
+    let bestRun = { start: -1, len: 0 }, curRun = { start: -1, len: 0 };
+    scoresInOrder.forEach((s, i) => {
+      if (s !== null && s !== -Infinity && s <= 2.5) {
+        if (curRun.len === 0) curRun.start = i;
+        curRun.len++;
+        if (curRun.len > bestRun.len) bestRun = { ...curRun };
+      } else {
+        curRun = { start: -1, len: 0 };
+      }
+    });
+    return { t, cells, bestRun, scoresInOrder, avg, avgGf, avgGa, avgGd };
   });
 
   if (sortBy === "easiest") list.sort((a, b) => (a.avg ?? 99) - (b.avg ?? 99));
   else if (sortBy === "hardest") list.sort((a, b) => (b.avg ?? -99) - (a.avg ?? -99));
   else if (sortBy === "scorelineBest") list.sort((a, b) => (b.avgGd ?? -99) - (a.avgGd ?? -99));
   else if (sortBy === "scorelineWorst") list.sort((a, b) => (a.avgGd ?? 99) - (b.avgGd ?? 99));
+  else if (sortBy === "gfHigh") list.sort((a, b) => (b.avgGf ?? -99) - (a.avgGf ?? -99));
+  else if (sortBy === "gaLow") list.sort((a, b) => (a.avgGa ?? 99) - (b.avgGa ?? 99));
   else list.sort((a, b) => a.t.name.localeCompare(b.t.name));
 
-  const rows = list.map(({ t, cells, avg, avgGf, avgGa }) => `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}${showAvgCol ? `<td class="mono" style="font-size:12px">${avg !== null ? avg.toFixed(1) : "–"}</td>` : ""}${showGoals ? `<td class="mono" style="font-size:12px">${avgGf !== null ? avgGf.toFixed(2) : "–"}</td><td class="mono" style="font-size:12px">${avgGa !== null ? avgGa.toFixed(2) : "–"}</td>` : ""}</tr>`).join("");
+  const extraTailCols = (showAvgCol ? 1 : 0) + (showGoals ? 2 : 0);
+  const rows = list.map(({ t, cells, bestRun, scoresInOrder, avg, avgGf, avgGa }) => {
+    const fixtureRow = `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${cells.join("")}${showAvgCol ? `<td class="mono" style="font-size:12px">${avg !== null ? avg.toFixed(1) : "–"}</td>` : ""}${showGoals ? `<td class="mono" style="font-size:12px">${avgGf !== null ? avgGf.toFixed(2) : "–"}</td><td class="mono" style="font-size:12px">${avgGa !== null ? avgGa.toFixed(2) : "–"}</td>` : ""}</tr>`;
+    // Slim second row directly under the fixture row: a green segment
+    // under every gameweek that's part of this team's longest run of
+    // consecutive favourable fixtures (FDR ≤ 2.5) in the visible range —
+    // makes a good run visible at a glance without reading each pill.
+    const streakCells = scoresInOrder.map((s, i) => {
+      const inRun = bestRun.len >= 2 && i >= bestRun.start && i < bestRun.start + bestRun.len;
+      return `<td style="padding:0 4px 6px"><div style="height:4px;border-radius:2px;background:${inRun ? "#3cd25a" : "transparent"}"></div></td>`;
+    }).join("");
+    const tailCells = extraTailCols ? `<td colspan="${extraTailCols}"></td>` : "";
+    const streakRow = bestRun.len >= 2
+      ? `<tr style="border-top:none"><td class="label-col" style="padding-top:0;font-size:9.5px;color:var(--ink-faint)">🟢 ${bestRun.len}-fixture good run</td>${streakCells}${tailCells}</tr>`
+      : "";
+    return fixtureRow + streakRow;
+  }).join("");
 
   document.getElementById("fdrGrid").innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
   document.getElementById("fdrGrid").querySelectorAll(".fdr-pill").forEach(pill => {
