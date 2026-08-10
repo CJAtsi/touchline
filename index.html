@@ -887,6 +887,7 @@ const SORT_OPTIONS = [
   ["minutes", "Minutes"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
   ["assistsPer90", "Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
   ["influencePer90", "Influence /90"], ["creativityPer90", "Creativity /90"], ["threatPer90", "Threat /90"],
+  ["teamGoalShare", "% of team goals+assists"], ["teamXgiShare", "% of team xGI"],
 ];
 
 // Player, Team, Pos, star are always shown; these fixed columns stay
@@ -896,36 +897,36 @@ const FIXED_COLUMNS = [["totalPoints", "Pts"], ["form", "Form"], ["epNext", "Nex
 const STAT_THEMES = {
   overview: {
     label: "Overview",
-    columns: [["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
-      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
+    columns: [["minutes", "Mins"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
+      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["pointsPer90", "Pts/90"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
   },
   attacking: {
     label: "Attacking",
-    columns: [["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"],
-      ["xg90", "xG/90"], ["xa90", "xA/90"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
+    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
-    columns: [["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
+    columns: [["minutes", "Mins"], ["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
       ["saves90", "Sv/90"], ["defensiveContribution", "DefCon"], ["defensiveContributionPer90", "DefCon/90"], ["bps", "BPS"]],
   },
   advanced: {
     label: "Deeper stats",
-    columns: [["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"],
+    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   creativity: {
     label: "Shots & creativity",
-    columns: [["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
+    columns: [["minutes", "Mins"], ["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
   },
   cbit: {
     label: "CBIT (defensive)",
-    columns: [["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
+    columns: [["minutes", "Mins"], ["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
   },
   per90: {
     label: "Per 90",
-    columns: [["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["xg90", "xG/90"], ["xa90", "xA/90"],
-      ["xgi90", "xGI/90"], ["bonusPer90", "Bon/90"], ["bpsPer90", "BPS/90"], ["ictPer90", "ICT/90"],
+    columns: [["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["xg90", "xG/90"], ["xa90", "xA/90"],
+      ["xgi90", "xGI/90"], ["goalsConcededPer90", "GA/90"], ["bpsPer90", "BPS/90"], ["ictPer90", "ICT/90"],
       ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"], ["ppm90", "Pts/£m/90"]],
   },
 };
@@ -958,6 +959,8 @@ const COLUMN_FORMAT = {
   directFreekicksOrder: p => [p.directFreekicksOrder ?? "—", p.directFreekicksOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.directFreekicksOrder == null ? "color:var(--ink-faint)" : ""],
   cornersOrder: p => [p.cornersOrder ?? "—", p.cornersOrder === 1 ? "color:var(--gold-bright);font-weight:700" : p.cornersOrder == null ? "color:var(--ink-faint)" : ""],
   expectedGoalInvolvements: p => [p.expectedGoalInvolvements.toFixed(2), ""],
+  teamGoalShare: p => [p.teamGoalShare.toFixed(0) + "%", ""],
+  teamXgiShare: p => [p.teamXgiShare.toFixed(0) + "%", ""],
   minutes: p => [p.minutes, ""],
   ppm: p => [p.ppm.toFixed(1), ""],
   ppm90: p => [p.ppm90.toFixed(1), ""],
@@ -1397,6 +1400,7 @@ async function loadData() {
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
+    computeTeamContributionShares();
 
     const [fixtures, deeper, clubStats] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats()]);
     state.allFixtures = fixtures;
@@ -1447,6 +1451,28 @@ function buildFixtureTicker(fixtures) {
   state.fixturesByTeam = byTeam;
 }
 
+// ---------- team contribution share ("who's carrying this club's attack") ----------
+// For each player, what % of their OWN club's total goal involvements (G+A)
+// and total expected goal involvements (xGI) they personally account for.
+// The point: a decent player buried in a weak team's low overall attack
+// numbers can still be THAT team's talisman — getting the lion's share of
+// whatever chances the team creates — which raw totals or per-90 stats
+// alone don't surface, since those compare across different teams'
+// baselines rather than within one team's actual output.
+function computeTeamContributionShares() {
+  const teamTotals = {}; // teamId -> { ga: goals+assists, xgi: expected goal involvements }
+  for (const p of state.players) {
+    const t = teamTotals[p.teamId] || (teamTotals[p.teamId] = { ga: 0, xgi: 0 });
+    t.ga += (p.goalsScored || 0) + (p.assists || 0);
+    t.xgi += p.expectedGoalInvolvements || 0;
+  }
+  for (const p of state.players) {
+    const t = teamTotals[p.teamId];
+    const ownGa = (p.goalsScored || 0) + (p.assists || 0);
+    p.teamGoalShare = (t && t.ga > 0) ? (ownGa / t.ga) * 100 : 0;
+    p.teamXgiShare = (t && t.xgi > 0) ? ((p.expectedGoalInvolvements || 0) / t.xgi) * 100 : 0;
+  }
+}
 // ---------- custom, editable FDR formula ----------
 function precomputeStrengthRanges() {
   const overall = [], attack = [], defence = [];
@@ -2703,38 +2729,53 @@ function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
 
 // Chooses a valid starting XI (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD) maximizing
 // projected points, then applies captain/chip effects.
-function computeGwResult(squadIds, gwId, chip, captainId) {
+function computeGwResult(squadIds, gwId, chip, captainId, manualStarterIds, viceCaptainId) {
   const withProj = squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
     .map(p => ({ p, proj: projectPoints(p, gwId) }));
-  const byPos = {
-    GK: withProj.filter(x => x.p.position === "GK"),
-    DEF: withProj.filter(x => x.p.position === "DEF"),
-    MID: withProj.filter(x => x.p.position === "MID"),
-    FWD: withProj.filter(x => x.p.position === "FWD"),
-  };
-  const gk = topN(byPos.GK, 1);
-  let best = null, bestTotal = -Infinity;
-  for (let d = 3; d <= 5; d++) {
-    for (let f = 1; f <= 3; f++) {
-      const m = 10 - d - f;
-      if (m < 2 || m > 5) continue;
-      if (d > byPos.DEF.length || m > byPos.MID.length || f > byPos.FWD.length) continue;
-      const defTop = topN(byPos.DEF, d), midTop = topN(byPos.MID, m), fwdTop = topN(byPos.FWD, f);
-      const total = sumProj(defTop) + sumProj(midTop) + sumProj(fwdTop);
-      if (total > bestTotal) { bestTotal = total; best = [...defTop, ...midTop, ...fwdTop]; }
+  let starting, bench;
+  const validManual = manualStarterIds && manualStarterIds.length === 11 &&
+    manualStarterIds.every(id => squadIds.includes(id)) && isLegalXi(manualStarterIds);
+  if (validManual) {
+    const startingSet = new Set(manualStarterIds);
+    starting = withProj.filter(x => startingSet.has(x.p.id));
+    bench = withProj.filter(x => !startingSet.has(x.p.id));
+  } else {
+    const byPos = {
+      GK: withProj.filter(x => x.p.position === "GK"),
+      DEF: withProj.filter(x => x.p.position === "DEF"),
+      MID: withProj.filter(x => x.p.position === "MID"),
+      FWD: withProj.filter(x => x.p.position === "FWD"),
+    };
+    const gk = topN(byPos.GK, 1);
+    let best = null, bestTotal = -Infinity;
+    for (let d = 3; d <= 5; d++) {
+      for (let f = 1; f <= 3; f++) {
+        const m = 10 - d - f;
+        if (m < 2 || m > 5) continue;
+        if (d > byPos.DEF.length || m > byPos.MID.length || f > byPos.FWD.length) continue;
+        const defTop = topN(byPos.DEF, d), midTop = topN(byPos.MID, m), fwdTop = topN(byPos.FWD, f);
+        const total = sumProj(defTop) + sumProj(midTop) + sumProj(fwdTop);
+        if (total > bestTotal) { bestTotal = total; best = [...defTop, ...midTop, ...fwdTop]; }
+      }
     }
+    starting = [...gk, ...(best || [])];
+    const startingIds = new Set(starting.map(x => x.p.id));
+    bench = withProj.filter(x => !startingIds.has(x.p.id));
   }
-  const starting = [...gk, ...(best || [])];
-  const startingIds = new Set(starting.map(x => x.p.id));
-  const bench = withProj.filter(x => !startingIds.has(x.p.id));
 
   let total = sumProj(starting);
-  const captainEntry = starting.find(x => x.p.id === captainId) || topN(starting, 1)[0];
+  let captainEntry = starting.find(x => x.p.id === captainId);
+  // If the chosen captain isn't in the starting XI (e.g. a transfer/sub
+  // moved them to the bench), fall back to the vice-captain if they ARE
+  // starting, same as real FPL's auto-substitution rule — otherwise fall
+  // back to the top projected starter so a captain multiplier is never
+  // just silently lost.
+  if (!captainEntry) captainEntry = starting.find(x => x.p.id === viceCaptainId) || topN(starting, 1)[0];
   const capMult = chip === "TC" ? 3 : 2;
   if (captainEntry) total += captainEntry.proj * (capMult - 1);
   if (chip === "BB") total += sumProj(bench);
 
-  return { total, starting, bench, captain: captainEntry?.p };
+  return { total, starting, bench, captain: captainEntry?.p, viceCaptainId: viceCaptainId || null };
 }
 
 function applyTransfers(squadIds, outIds, inIds) {
@@ -3584,8 +3625,10 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   const el = document.getElementById(`gw-body-${gwId}`);
   if (!el) return;
   const entry = timeline.find(t => t.gwId === gwId);
-  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null });
-  const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId);
+  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null, viceCaptainId: null, manualStarterIds: null });
+  if (log.viceCaptainId === undefined) log.viceCaptainId = null;
+  if (log.manualStarterIds === undefined) log.manualStarterIds = null;
+  const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId, log.manualStarterIds, log.viceCaptainId);
 
   const chipsAvailable = ["WC", "FH", "BB", "TC"];
   const chipRow = chipsAvailable.map(c => {
@@ -3593,10 +3636,14 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     const active = log.chip === c;
     return `<button class="chip-btn ${active ? "active" : ""}" data-chip="${c}" ${used ? "disabled" : ""}>${CHIP_LABELS[c]}${used ? " (used)" : ""}</button>`;
   }).join("");
+  const activeChipBanner = log.chip
+    ? `<div style="background:var(--accent-dim,#2d3a4a);border:1px solid var(--accent);border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:12.5px;font-weight:600">⚡ ${CHIP_LABELS[log.chip]} active this gameweek${log.chip === "BB" ? " — bench points count too (highlighted below)" : log.chip === "TC" ? " — captain scores 3× (highlighted below)" : ""}</div>`
+    : "";
 
   el.innerHTML = `
     <div class="chip-btn-row">${chipRow}</div>
-    <div class="detail-block-title">Squad this gameweek — click a player to make them captain</div>
+    ${activeChipBanner}
+    <div class="detail-block-title">Squad this gameweek — click a player for Captain / Vice / Sub / Transfer</div>
     <div id="pitchWrap-${gwId}"></div>
     <div class="detail-block-title" style="margin-top:14px">Transfer out → in</div>
     <div id="transferControls-${gwId}"></div>
@@ -3614,15 +3661,19 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   });
 
   // pitch view: starting XI grouped by position (attackers nearest the top,
-  // like FPL's own Pick Team screen), bench below as a separate strip
+  // like FPL's own Pick Team screen), bench below as a separate strip.
+  // The starting XI is NOT re-optimized on every render any more — it's
+  // whatever was last set (manually, via the Sub action, or the initial
+  // auto-pick the first time this gameweek is opened), so picks a user
+  // makes actually stick instead of snapping back to the "best" XI.
   const pitchWrap = document.getElementById(`pitchWrap-${gwId}`);
   const byPos = { FWD: [], MID: [], DEF: [], GK: [] };
   for (const x of result.starting) byPos[x.p.position].push(x);
 
-  function slotHtml(x, isCaptainSlot) {
+  function slotHtml(x, isCaptainSlot, isViceSlot) {
     return `
       <div class="pitch-slot" data-player="${x.p.id}">
-        ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
+        ${isCaptainSlot ? `<span class="cap-mark">${log.chip === "TC" ? "3×" : "C"}</span>` : isViceSlot ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
         ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag">${x.proj.toFixed(1)} pts</div>
@@ -3630,20 +3681,16 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     `;
   }
   const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id)).join("")}</div>`
+    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, result.captain?.id === x.p.id, log.viceCaptainId === x.p.id)).join("")}</div>`
   ).join("");
+  const bbHighlight = log.chip === "BB" ? 'style="border:2px solid var(--accent);border-radius:10px;background:var(--accent-dim,rgba(255,255,255,0.04));padding:8px"' : "";
   const benchHtml = result.bench.length
-    ? `<div class="bench-strip"><div class="bench-label">Bench</div>${result.bench.map(x => slotHtml(x, false)).join("")}</div>`
+    ? `<div class="bench-strip" ${bbHighlight}><div class="bench-label">Bench${log.chip === "BB" ? " — scoring (Bench Boost active)" : ""}</div>${result.bench.map(x => slotHtml(x, false, log.viceCaptainId === x.p.id)).join("")}</div>`
     : "";
   pitchWrap.innerHTML = `<div class="pitch">${pitchRows}</div>${benchHtml}`;
 
   pitchWrap.querySelectorAll(".pitch-slot").forEach(slot => {
-    slot.onclick = () => {
-      log.captainId = Number(slot.dataset.player);
-      saveDrafts(); renderPlanner();
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
-    };
+    slot.onclick = () => openGwPlayerActionModal(draft, gwId, horizon, Number(slot.dataset.player), result);
   });
   const allInSquad = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean);
 
@@ -3697,6 +3744,98 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   }
 }
 
+// Per-gameweek player action popup — replaces the old "click = instant
+// captain" behaviour. Shows Captain / Vice-Captain / Sub (move between
+// starting XI and bench) / Transfer out, and does nothing until one of
+// those is explicitly chosen.
+function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
+  closePitchModal();
+  const p = state.players.find(pl => pl.id === playerId);
+  const log = draft.transfersLog[gwId];
+  if (!p || !log) return;
+  const isStarter = result.starting.some(x => x.p.id === playerId);
+  const team = state.teamsById[p.teamId];
+  const modal = document.createElement("div");
+  modal.id = "pitchActionModal";
+  modal.className = "pitch-modal-backdrop";
+  modal.innerHTML = `
+    <div class="pitch-modal-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        ${playerAvatarHtml(p, 36)}
+        <div>
+          <div style="font-weight:700">${p.webName}</div>
+          <div style="font-size:12px;color:var(--ink-dim)">${team ? team.short_name : ""} · ${p.position} · ${fmtPrice(p.nowCost)}${isStarter ? "" : " · bench"}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${isStarter ? `<button class="chip-btn" id="gwModalCaptain">👑 ${log.captainId === playerId ? "Remove as captain" : "Make captain"}</button>` : ""}
+        ${isStarter ? `<button class="chip-btn" id="gwModalVice">🅥 ${log.viceCaptainId === playerId ? "Remove as vice-captain" : "Make vice-captain"}</button>` : ""}
+        <button class="chip-btn" id="gwModalSub">🔁 ${isStarter ? "Sub to bench" : "Sub into starting XI"}</button>
+        <button class="chip-btn" id="gwModalTransfer">↔️ Set up a transfer out</button>
+        <button class="chip-btn" id="gwModalCancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  modal.onclick = (e) => { if (e.target === modal) closePitchModal(); };
+  document.body.appendChild(modal);
+
+  const rerender = () => {
+    closePitchModal(); saveDrafts(); renderPlanner();
+    state.plannerExpandedGw = gwId;
+    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+  };
+
+  const capBtn = document.getElementById("gwModalCaptain");
+  if (capBtn) capBtn.onclick = () => {
+    log.captainId = log.captainId === playerId ? null : playerId;
+    if (log.captainId && log.viceCaptainId === log.captainId) log.viceCaptainId = null;
+    rerender();
+  };
+  const viceBtn = document.getElementById("gwModalVice");
+  if (viceBtn) viceBtn.onclick = () => {
+    log.viceCaptainId = log.viceCaptainId === playerId ? null : playerId;
+    if (log.viceCaptainId && log.captainId === log.viceCaptainId) log.captainId = null;
+    rerender();
+  };
+  document.getElementById("gwModalSub").onclick = () => {
+    const currentStarters = (log.manualStarterIds && log.manualStarterIds.length === 11) ? log.manualStarterIds : result.starting.map(x => x.p.id);
+    if (isStarter) {
+      // Sub to bench: swap with whichever bench player of a compatible
+      // position keeps the XI legal, preferring the bench's best projected
+      // player at any position first.
+      const benchIds = result.bench.map(x => x.p.id).sort((a, b) => {
+        const pa = result.bench.find(x => x.p.id === a).proj, pb = result.bench.find(x => x.p.id === b).proj;
+        return pb - pa;
+      });
+      let done = false;
+      for (const inId of benchIds) {
+        const candidate = currentStarters.filter(id => id !== playerId).concat([inId]);
+        if (isLegalXi(candidate)) { log.manualStarterIds = candidate; if (log.captainId === playerId) log.captainId = null; if (log.viceCaptainId === playerId) log.viceCaptainId = null; done = true; break; }
+      }
+      if (!done) { alert("Can't bench them — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
+    } else {
+      const starterIds = result.starting.map(x => x.p.id).sort((a, b) => {
+        const pa = result.starting.find(x => x.p.id === a).proj, pb = result.starting.find(x => x.p.id === b).proj;
+        return pa - pb; // weakest starter first, most likely swap candidate
+      });
+      let done = false;
+      for (const outId of starterIds) {
+        const candidate = currentStarters.filter(id => id !== outId).concat([playerId]);
+        if (isLegalXi(candidate)) { log.manualStarterIds = candidate; done = true; break; }
+      }
+      if (!done) { alert("Can't start them — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
+    }
+    rerender();
+  };
+  document.getElementById("gwModalTransfer").onclick = () => {
+    closePitchModal();
+    state.plannerExpandedGw = gwId;
+    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    const outSelect = document.getElementById(`gw-body-${gwId}`)?.querySelector(".swap-out-select");
+    if (outSelect) { outSelect.value = String(playerId); outSelect.scrollIntoView({ behavior: "smooth", block: "center" }); outSelect.focus(); }
+  };
+  document.getElementById("gwModalCancel").onclick = closePitchModal;
+}
 // ---------- planner: draft management controls ----------
 function setupPlannerControls() {
   document.getElementById("draftSelect").onchange = (e) => {
@@ -4280,19 +4419,29 @@ function estimateScoreline(teamId, oppId, isHome) {
   // meaningfully separate any two given fixtures, which is what made
   // predictions keep landing on the same scoreline). This guarantees two
   // different fixtures get two different inputs even in a season with
-  // almost no results yet. Skipped for any field the user has explicitly
-  // overridden — their number is used exactly as entered.
+  // almost no results yet. NOW applied to overrides too, at the same
+  // weight as computed ratings — a manually-typed 5 no longer skips this
+  // step. Nothing in real football is a mathematically perfect defence;
+  // even the best side in the league still concedes sometimes, so a stated
+  // "5" gets tempered by that team's actual underlying data rather than
+  // being taken as literal perfection. The override still dominates the
+  // result (65-70% weight, same as any computed rating that lands at the
+  // extreme) — this isn't overriding the override, just grounding it.
   const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
   const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
   const blend = state.strengthRangesFlat ? 0.7 : 0.35;
-  if (teamOv.attack === null) a5 = a5 * (1 - blend) + teamStr * blend;
-  if (oppOv.attack === null) oa5 = oa5 * (1 - blend) + oppStr * blend;
-  if (oppOv.defence === null) d5 = d5 * (1 - blend) + oppStr * blend;
-  if (teamOv.defence === null) od5 = od5 * (1 - blend) + teamStr * blend;
-  // Stretch each non-overridden 1-5 rating away from the midpoint a little
-  // so genuinely different fixtures produce visibly different xG (and
-  // therefore different most-likely scorelines) instead of everything
-  // huddling close to the average and rounding to the same result.
+  a5 = a5 * (1 - blend) + teamStr * blend;
+  oa5 = oa5 * (1 - blend) + oppStr * blend;
+  d5 = d5 * (1 - blend) + oppStr * blend;
+  od5 = od5 * (1 - blend) + teamStr * blend;
+  // Stretch each rating away from the midpoint a little so genuinely
+  // different fixtures produce visibly different xG instead of everything
+  // huddling close to the average. Only applied to COMPUTED ratings —
+  // overrides are already a deliberate, explicit extreme, so re-amplifying
+  // them away from 3 on top of that (which is what stretch does) would
+  // partially undo the blend step above and put us back near the original
+  // bug. Computed ratings, by contrast, naturally cluster near 3 and need
+  // this nudge to produce visibly different fixtures at all.
   const stretch = (v) => {
     const d = v - 3;
     return Math.max(1, Math.min(5, 3 + Math.sign(d) * Math.pow(Math.abs(d), 0.85) * 1.2));
