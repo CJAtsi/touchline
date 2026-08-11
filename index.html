@@ -159,7 +159,7 @@
     text-align: right; padding: 10px 13px; color: var(--ink-dim); font-weight: 600;
     background: var(--panel-2); white-space: nowrap; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
     transition: background 0.12s ease, color 0.12s ease;
   }
   thead th:hover { color: var(--gold-bright); }
@@ -654,7 +654,9 @@
         <option value="scorelineBest">Biggest win first (predicted)</option>
         <option value="scorelineWorst">Biggest loss first (predicted)</option>
         <option value="gfHigh">Most predicted goals for first</option>
+        <option value="gfLow">Fewest predicted goals for first</option>
         <option value="gaLow">Fewest predicted goals against first</option>
+        <option value="gaHigh">Most predicted goals against first</option>
         <option value="alpha">Alphabetical</option>
       </select>
       <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">View</span>
@@ -662,9 +664,8 @@
         <option value="colour" selected>Fixture colour</option>
         <option value="scoreline">Predicted scoreline</option>
       </select>
-      <label style="font-size:12px;color:var(--ink-dim);display:flex;align-items:center;gap:4px;margin-left:10px"><input type="checkbox" id="fdrShowGoals" /> Show avg GF/GA</label>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Poisson model as the fixture click-through.</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Poisson model as the fixture click-through.</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -916,8 +917,8 @@ const STAT_THEMES = {
   },
   attacking: {
     label: "Attacking",
-    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"],
-      ["xg90", "xG/90"], ["xa90", "xA/90"], ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
+    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
@@ -926,7 +927,7 @@ const STAT_THEMES = {
   },
   advanced: {
     label: "Deeper stats",
-    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"],
+    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   creativity: {
@@ -2170,7 +2171,7 @@ function renderScoutPanel() {
   `;
   }).join("");
   panel.querySelectorAll("[data-scout-star]").forEach(btn => {
-    btn.onclick = () => { toggleShortlist(Number(btn.dataset.scoutStar)); renderScoutPanel(); };
+    btn.onclick = () => { toggleShortlist(Number(btn.dataset.scoutStar), true); renderScoutPanel(); };
   });
 }
 
@@ -2337,7 +2338,7 @@ function buildMiniStatsTableEl(items) {
   });
   const head = `<tr>
     <th class="label-col">Player</th>
-    ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer">${label}${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? " ↓" : " ↑") : ""}</th>`).join("")}
+    ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer">${label}<span style="display:inline-block;width:12px;text-align:left">${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? "↓" : "↑") : ""}</span></th>`).join("")}
     <th class="label-col">Notes</th>
   </tr>`;
   const rows = sorted.map(({ item, p }) => {
@@ -4345,6 +4346,56 @@ function venueGoalsPerGame(teamId, venue) {
   if (!r || !r.played) return null;
   return { gf: r.gf / r.played, ga: r.ga / r.played, played: r.played };
 }
+// How far into the season we are, league-wide (0 = kickoff, 1 = "enough
+// games that this season's own data should be trusted over last season's
+// table"). Uses the whole league's average games played rather than just
+// this fixture's two teams, so the handoff between "last season as
+// foundation" and "this season's own results" is consistent across every
+// fixture, not skewed by one team having extra blanks/doubles.
+function seasonProgressFactor() {
+  const table = computeLiveTable(state.allFixtures, {});
+  if (!table || !table.length) return 0;
+  const avgPlayed = table.reduce((s, r) => s + r.played, 0) / table.length;
+  return Math.min(1, avgPlayed / 12); // treat ~GW12 as "fully this season"
+}
+// Squad value (total current market value of a club's registered players,
+// from real FPL price data) as a light supporting signal — a well-funded
+// squad tends to have more overall quality/depth than raw goals data alone
+// captures, and it's real observable data, not a guess. Scaled 1-5 across
+// the 20 clubs the same way FDR's other ratings are.
+function squadValueRating5(teamId) {
+  const totals = state.teams.map(t => ({
+    id: t.id,
+    total: state.players.filter(p => p.teamId === t.id).reduce((s, p) => s + p.nowCost, 0),
+  }));
+  const min = Math.min(...totals.map(x => x.total)), max = Math.max(...totals.map(x => x.total));
+  const row = totals.find(x => x.id === teamId);
+  if (!row || max <= min) return 3;
+  return 1 + 4 * (row.total - min) / (max - min);
+}
+function monthsInChargeFromStr(str) {
+  if (!str) return 0;
+  const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11, summer: 5 };
+  const m = str.trim().toLowerCase().match(/([a-z]+)\s+(\d{4})/);
+  if (!m) return 0;
+  const monthIdx = MONTHS[m[1].slice(0, 3)] ?? MONTHS[m[1]] ?? 5;
+  const start = new Date(parseInt(m[2], 10), monthIdx, 1);
+  const now = new Date();
+  return Math.max(0, (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()));
+}
+// Manager pedigree, as a defensible proxy rather than a subjective rating:
+// time in the job. A longer-tenured manager has had time to actually
+// implement their system and be judged on results (they're still there),
+// while a brand-new summer appointment is an unknown quantity either way —
+// this doesn't claim to know if a manager is "good", just how established
+// their current setup is, capped at 5 years so a very long tenure doesn't
+// keep climbing indefinitely.
+function managerTenureRating5(teamId) {
+  const team = state.teamsById[teamId];
+  const mgr = team && MANAGER_BY_SHORT[team.short_name];
+  const months = mgr ? Math.min(60, monthsInChargeFromStr(mgr.since)) : 0;
+  return 1 + 4 * (months / 60);
+}
 // This season's actual meetings between these two clubs, if any — surfaces
 // head-to-head anomalies a pure ratings formula would miss (a team that
 // always struggles/thrives against a specific opponent).
@@ -4437,24 +4488,36 @@ function estimateScoreline(teamId, oppId, isHome) {
   let d5 = teamFieldRating5(oppId, "defence", oppDefence);
   let oa5 = teamFieldRating5(oppId, "attack", oppAttack);
   let od5 = teamFieldRating5(teamId, "defence", teamDefence);
+  // Squad value and manager tenure — two more real (non-guessed) signals,
+  // folded in as a light adjustment before the last-season blend below.
+  // Applied to BOTH attack and defence for the relevant club (a stronger
+  // squad/more settled manager should lift both ends), same light weight
+  // for computed ratings and overrides alike (consistent with why the
+  // last-season blend below also applies to both).
+  const teamSquadR = squadValueRating5(teamId), oppSquadR = squadValueRating5(oppId);
+  const teamMgrR = managerTenureRating5(teamId), oppMgrR = managerTenureRating5(oppId);
+  const SQUAD_W = 0.12, MGR_W = 0.06, keepW = 1 - SQUAD_W - MGR_W;
+  a5 = a5 * keepW + teamSquadR * SQUAD_W + teamMgrR * MGR_W;
+  od5 = od5 * keepW + teamSquadR * SQUAD_W + teamMgrR * MGR_W;
+  oa5 = oa5 * keepW + oppSquadR * SQUAD_W + oppMgrR * MGR_W;
+  d5 = d5 * keepW + oppSquadR * SQUAD_W + oppMgrR * MGR_W;
   // Always blend in a slice of last season's final-table strength as a
-  // second, independent signal (not just when this season's own ratings
-  // look flat — that heuristic wasn't reliably catching the case where
-  // ratings are technically non-identical but too close together to
-  // meaningfully separate any two given fixtures, which is what made
-  // predictions keep landing on the same scoreline). This guarantees two
-  // different fixtures get two different inputs even in a season with
-  // almost no results yet. NOW applied to overrides too, at the same
-  // weight as computed ratings — a manually-typed 5 no longer skips this
-  // step. Nothing in real football is a mathematically perfect defence;
-  // even the best side in the league still concedes sometimes, so a stated
-  // "5" gets tempered by that team's actual underlying data rather than
-  // being taken as literal perfection. The override still dominates the
-  // result (65-70% weight, same as any computed rating that lands at the
-  // extreme) — this isn't overriding the override, just grounding it.
+  // second, independent signal — this is the season's FOUNDATION, most
+  // important when there's little of the current season to go on yet.
+  // As the season progresses and this season's own results accumulate,
+  // the weight given to last season shrinks smoothly (via
+  // seasonProgressFactor) rather than snapping between two fixed values —
+  // so last season never just vanishes, it gradually hands over to more
+  // recent form as real weeks of data come in. Applied to overrides too,
+  // at the same weight as computed ratings — a manually-typed 5 no longer
+  // skips this step. Nothing in real football is a mathematically perfect
+  // defence; even the best side in the league still concedes sometimes, so
+  // a stated "5" gets tempered by that team's actual underlying data
+  // rather than being taken as literal perfection.
   const teamStr = 1 + 4 * (1 - lastSeasonStrengthFactor(teamId));
   const oppStr = 1 + 4 * (1 - lastSeasonStrengthFactor(oppId));
-  const blend = state.strengthRangesFlat ? 0.7 : 0.35;
+  const progress = seasonProgressFactor();
+  const blend = 0.65 * (1 - progress) + 0.15 * progress;
   a5 = a5 * (1 - blend) + teamStr * blend;
   oa5 = oa5 * (1 - blend) + oppStr * blend;
   d5 = d5 * (1 - blend) + oppStr * blend;
@@ -4497,8 +4560,14 @@ function estimateScoreline(teamId, oppId, isHome) {
   const teamDefRate = (teamVenueGpg && teamVenueGpg.played >= 2) ? teamVenueGpg.ga : (teamGpg ? teamGpg.ga : null);
   const empiricalTeamXg = (teamAtkRate != null && oppDefRate != null) ? (teamAtkRate + oppDefRate) / 2 : null;
   const empiricalOppXg = (oppAtkRate != null && teamDefRate != null) ? (oppAtkRate + teamDefRate) / 2 : null;
-  let teamXg = empiricalTeamXg != null ? empiricalTeamXg * 0.7 + baseTeamXg * 0.3 : baseTeamXg;
-  let oppXg = empiricalOppXg != null ? empiricalOppXg * 0.7 + baseOppXg * 0.3 : baseOppXg;
+  // This weight also scales with season progress — early on, "empirical"
+  // often just means 1-2 games, so it shouldn't fully dominate yet even
+  // once it clears the sample-size gate above; by the ~GW12 mark it caps
+  // out at 0.8, firmly the primary driver, with the rating formula (which
+  // itself is now mostly last-season-grounded early on) filling the rest.
+  const empWeight = Math.min(0.8, 0.35 + 0.55 * progress);
+  let teamXg = empiricalTeamXg != null ? empiricalTeamXg * empWeight + baseTeamXg * (1 - empWeight) : baseTeamXg;
+  let oppXg = empiricalOppXg != null ? empiricalOppXg * empWeight + baseOppXg * (1 - empWeight) : baseOppXg;
 
   teamXg *= teamFormMultiplier(teamId);
   oppXg *= teamFormMultiplier(oppId);
@@ -4535,6 +4604,8 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   if (est.usedEmpirical) factors.push("actual goals scored/conceded this season (home/away specific where there's enough data)");
   factors.push("recent form");
   if (est.usedH2h) factors.push("head-to-head history between these two this season");
+  factors.push("last season's table (weighted down as this season's own results pile up)");
+  factors.push("squad value + manager tenure (light adjustment)");
   factors.push("attack/defence ratings (minor adjustment only)");
   const pct = (x) => (x * 100).toFixed(0) + "%";
   const altRow = est.model.alternates.map(c =>
@@ -4565,11 +4636,22 @@ function renderFdrGrid() {
   const curId = currentEventId();
   const sortBy = document.getElementById("fdrSortBy").value;
   const viewMode = document.getElementById("fdrViewMode").value; // "colour" | "scoreline"
-  const showGoals = document.getElementById("fdrShowGoals").checked;
+  const showGoals = true; // Avg GF/Avg GA now always shown, no toggle
   const showAvgCol = sortBy !== "alpha";
 
-  const needsScoreline = viewMode === "scoreline" || showGoals || ["scorelineBest", "scorelineWorst", "gfHigh", "gaLow"].includes(sortBy);
-  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${showAvgCol ? '<th>Avg FDR</th>' : ""}${showGoals ? '<th>Avg GF</th><th>Avg GA</th>' : ""}</tr>`;
+  const needsScoreline = true; // GF/GA always computed now
+  // Reserve a fixed-width space for the sort arrow on every clickable
+  // header (even when not the active sort) so clicking to sort doesn't
+  // change that header's rendered width and shift the column — this was
+  // the actual cause of the table looking "out of alignment" when sorting.
+  function sortableHeadLabel(label, kind) {
+    const dirMap = { fdr: { asc: "easiest", desc: "hardest" }, gf: { asc: "gfLow", desc: "gfHigh" }, ga: { asc: "gaLow", desc: "gaHigh" } };
+    const active = Object.values(dirMap[kind]).includes(sortBy);
+    const dir = sortBy === dirMap[kind].asc ? "asc" : "desc";
+    const arrow = active ? (dir === "asc" ? "↑" : "↓") : "";
+    return `<th data-fdr-head-sort="${kind}" style="cursor:pointer">${label}<span style="display:inline-block;width:12px;text-align:left">${arrow}</span></th>`;
+  }
+  const head = `<tr><th class="label-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="background:var(--panel-2)"' : ""}>GW${id}${id === curId ? " •" : ""}</th>`).join("")}${showAvgCol ? sortableHeadLabel("Avg FDR", "fdr") : ""}${showGoals ? sortableHeadLabel("Avg GF", "gf") + sortableHeadLabel("Avg GA", "ga") : ""}</tr>`;
 
   let list = state.teams.map(t => {
     const byGw = {};
@@ -4632,7 +4714,9 @@ function renderFdrGrid() {
   else if (sortBy === "scorelineBest") list.sort((a, b) => (b.avgGd ?? -99) - (a.avgGd ?? -99));
   else if (sortBy === "scorelineWorst") list.sort((a, b) => (a.avgGd ?? 99) - (b.avgGd ?? 99));
   else if (sortBy === "gfHigh") list.sort((a, b) => (b.avgGf ?? -99) - (a.avgGf ?? -99));
+  else if (sortBy === "gfLow") list.sort((a, b) => (a.avgGf ?? 99) - (b.avgGf ?? 99));
   else if (sortBy === "gaLow") list.sort((a, b) => (a.avgGa ?? 99) - (b.avgGa ?? 99));
+  else if (sortBy === "gaHigh") list.sort((a, b) => (b.avgGa ?? -99) - (a.avgGa ?? -99));
   else list.sort((a, b) => a.t.name.localeCompare(b.t.name));
 
   const extraTailCols = (showAvgCol ? 1 : 0) + (showGoals ? 2 : 0);
@@ -4657,13 +4741,22 @@ function renderFdrGrid() {
   document.getElementById("fdrGrid").querySelectorAll(".fdr-pill").forEach(pill => {
     pill.onclick = () => openFdrPredictModal(Number(pill.dataset.team), Number(pill.dataset.opp), pill.dataset.home === "true", Number(pill.dataset.gw));
   });
+  document.getElementById("fdrGrid").querySelectorAll("[data-fdr-head-sort]").forEach(th => {
+    th.onclick = () => {
+      const kind = th.dataset.fdrHeadSort;
+      const sel = document.getElementById("fdrSortBy");
+      if (kind === "fdr") sel.value = sel.value === "easiest" ? "hardest" : "easiest";
+      else if (kind === "gf") sel.value = sel.value === "gfHigh" ? "gfLow" : "gfHigh";
+      else if (kind === "ga") sel.value = sel.value === "gaLow" ? "gaHigh" : "gaLow";
+      renderFdrGrid();
+    };
+  });
 }
 function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
   document.getElementById("fdrSortBy").onchange = renderFdrGrid;
   document.getElementById("fdrViewMode").onchange = renderFdrGrid;
-  document.getElementById("fdrShowGoals").onchange = renderFdrGrid;
   document.getElementById("fdrPredictClose").onclick = () => { document.getElementById("fdrPredictModal").style.display = "none"; };
   document.getElementById("fdrPredictModal").onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
 }
