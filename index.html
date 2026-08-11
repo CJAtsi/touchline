@@ -760,7 +760,18 @@
         Powers the predicted scorelines and win/draw/loss % on the FDR tab. Win/draw/loss % blends three sources: <strong>Pi-ratings</strong> (an iterative team-strength rating built from every real result this season — not a static preseason number), the <strong>scoreline model itself</strong>, and <strong>real betting odds</strong> when available (needs the Worker's <code>/odds</code> route + a free API key — see the deploy notes). The exact predicted score comes from a <strong>Weibull-count distribution with a copula</strong> linking the two teams' goal counts, replacing the previous Poisson/Dixon-Coles model.
       </p>
       <div class="formula-panel" id="modelFormulaPanel"></div>
+      <p class="foot-note" id="oddsStatusNote" style="margin-top:8px"></p>
       <button class="dir-btn" id="resetModelBtn" style="margin-top:8px">Reset to default</button>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Saved setting slots</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Save the current FDR weights, club ranking weights, and prediction-model weights together as a named slot, so you can switch between setups without re-entering every value. Team overrides and fixture-run tiers aren't included — those persist on their own regardless of which slot is active.</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="rankingsPresetName" placeholder="Slot name (e.g. \"Aggressive\")" style="flex:1" />
+        <button class="btn" id="rankingsPresetSave">Save current as slot</button>
+      </div>
+      <div id="rankingsPresetList" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -1053,6 +1064,7 @@ let state = {
     medium:  { label: "Fairly easy",   minLen: 3, maxAvg: 2.7 },
     lenient: { label: "Lenient",       minLen: 3, maxAvg: 3.2 },
   },
+  rankingsPresets: {}, // name -> { fdrFormula, rankFormula, modelWeights } — see "Saved setting slots"
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
@@ -1415,16 +1427,27 @@ function attachClubStats(data) {
   for (const r of data.clubAgg || []) aggByTeam[normTeam(r.team)] = r;
   for (const r of data.understatTeams || []) understatByTeam[normTeam(r.name)] = r;
   for (const r of data.possession || []) possByTeam[normTeam(r.team)] = r;
+  const liveTable = computeLiveTable(state.allFixtures, {});
+  const playedByTeam = Object.fromEntries((liveTable || []).map(r => [r.teamId, r.played]));
   for (const team of state.teams) {
     const key = normTeam(team.name);
     const agg = aggByTeam[key], ut = understatByTeam[key], poss = possByTeam[key];
     if (!agg && !ut && !poss) continue;
+    // Sanity check: a club with several real games played (per the actual
+    // FPL table, not this scrape) but an exact 0 here is far more likely a
+    // broken scrape than a genuine shutout/clean-sheet-every-game record —
+    // show it as unavailable rather than let a scrape glitch masquerade as
+    // "this defence has conceded nothing all season".
+    const played = playedByTeam[team.id] || 0;
+    const suspect = (v) => (played >= 3 && v === 0) ? null : v;
     state.clubStatsByTeamId[team.id] = {
       shots: agg ? agg.shots : null, xG: agg ? agg.xG : (ut ? ut.xG : null),
       cbit: agg ? agg.cbit : null,
       tackles: agg ? agg.tackles : null, blocks: agg ? agg.blocks : null,
       interceptions: agg ? agg.interceptions : null, clearances: agg ? agg.clearances : null,
-      xGA: ut ? ut.xGA : null, goalsScored: ut ? ut.goalsScored : null, goalsConceded: ut ? ut.goalsConceded : null,
+      xGA: ut ? ut.xGA : null,
+      goalsScored: ut ? suspect(ut.goalsScored) : null,
+      goalsConceded: ut ? suspect(ut.goalsConceded) : null,
       deep: ut ? ut.deep : null, deepAllowed: ut ? ut.deepAllowed : null,
       ppda: ut ? ut.ppda : null, ppdaAllowed: ut ? ut.ppdaAllowed : null,
       possession: poss ? poss.possession : null,
@@ -4037,12 +4060,17 @@ async function loadFormulasFromStorage() {
     const raw = await persistGet("fixtureRunTiers");
     if (raw) state.fixtureRunTiers = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("rankingsPresets");
+    if (raw) state.rankingsPresets = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
 function saveTeamOverrides() { persistSet("teamOverrides", JSON.stringify(state.teamOverrides)); }
 function saveModelWeights() { persistSet("modelWeights", JSON.stringify(state.modelWeights)); }
 function saveFixtureRunTiers() { persistSet("fixtureRunTiers", JSON.stringify(state.fixtureRunTiers)); }
+function saveRankingsPresets() { persistSet("rankingsPresets", JSON.stringify(state.rankingsPresets)); }
 
 const FDR_FORMULA_FIELDS = [
   { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1, desc: "How much their goal-scoring threat counts against you." },
@@ -4198,6 +4226,7 @@ function renderRankings() {
   renderRankingsList();
   renderTeamOverrides();
   renderFixtureList();
+  renderOddsStatus();
 }
 
 // ---------- Premier League table ----------
@@ -5914,6 +5943,77 @@ function setupRankingsControls() {
     renderRankings();
     renderFdrGrid();
   };
+  renderOddsStatus();
+  setupRankingsPresets();
+}
+// Shows whether the /odds route is actually returning data, right next to
+// the weight that controls how much it's used — so it's obvious at a
+// glance whether the odds weight above is doing anything or sitting idle.
+function renderOddsStatus() {
+  const el = document.getElementById("oddsStatusNote");
+  if (!el) return;
+  const diag = state.diagnostics.find(d => d.path === "/odds");
+  if (state.oddsData && state.oddsData.length) {
+    const bookmakerCounts = state.oddsData.map(o => o.bookmakerCount || 0).filter(n => n > 0);
+    const avgBooks = bookmakerCounts.length ? (bookmakerCounts.reduce((a, b) => a + b, 0) / bookmakerCounts.length).toFixed(0) : "?";
+    el.innerHTML = `<span style="color:var(--green,#3bb273)">✓ Odds connected</span> — ${state.oddsData.length} upcoming fixture${state.oddsData.length === 1 ? "" : "s"} matched, averaging ~${avgBooks} bookmakers each.`;
+  } else if (state.oddsWarnings && state.oddsWarnings.length) {
+    el.innerHTML = `<span style="color:var(--rose,#e05d5d)">✗ Odds not connected</span> — ${state.oddsWarnings.join("; ")}`;
+  } else if (diag && !diag.ok) {
+    el.innerHTML = `<span style="color:var(--rose,#e05d5d)">✗ Odds not connected</span> — ${diag.error}`;
+  } else {
+    el.innerHTML = `<span style="color:var(--ink-dim)">Odds status unknown</span> — reload the app to check again.`;
+  }
+}
+function setupRankingsPresets() {
+  const listEl = document.getElementById("rankingsPresetList");
+  const nameInput = document.getElementById("rankingsPresetName");
+  const saveBtn = document.getElementById("rankingsPresetSave");
+  if (!listEl || !saveBtn) return;
+  const renderList = () => {
+    const names = Object.keys(state.rankingsPresets);
+    listEl.innerHTML = names.length
+      ? names.map(n => `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="flex:1;font-size:13px">${n}</span>
+          <button class="dir-btn" data-preset-load="${n}">Load</button>
+          <button class="dir-btn" data-preset-delete="${n}">Delete</button>
+        </div>
+      `).join("")
+      : `<p class="foot-note" style="margin:0">No saved slots yet.</p>`;
+    listEl.querySelectorAll("[data-preset-load]").forEach(btn => {
+      btn.onclick = () => {
+        const preset = state.rankingsPresets[btn.dataset.presetLoad];
+        if (!preset) return;
+        state.fdrFormula = { ...preset.fdrFormula };
+        state.rankFormula = { ...preset.rankFormula };
+        state.modelWeights = { ...preset.modelWeights };
+        saveFdrFormula(); saveRankFormula(); saveModelWeights();
+        renderRankings();
+        renderFdrGrid();
+      };
+    });
+    listEl.querySelectorAll("[data-preset-delete]").forEach(btn => {
+      btn.onclick = () => {
+        delete state.rankingsPresets[btn.dataset.presetDelete];
+        saveRankingsPresets();
+        renderList();
+      };
+    });
+  };
+  saveBtn.onclick = () => {
+    const name = (nameInput.value || "").trim();
+    if (!name) return;
+    state.rankingsPresets[name] = {
+      fdrFormula: { ...state.fdrFormula },
+      rankFormula: { ...state.rankFormula },
+      modelWeights: { ...state.modelWeights },
+    };
+    saveRankingsPresets();
+    nameInput.value = "";
+    renderList();
+  };
+  renderList();
 }
 
 // ---------- tabs ----------
