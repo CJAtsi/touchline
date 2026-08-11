@@ -665,10 +665,20 @@
         <option value="scoreline">Predicted scoreline</option>
       </select>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Poisson model as the fixture click-through.</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab) as the fixture click-through.</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="detail-block-title">Fixture run finder</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can still be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
+      </p>
+      <div id="fixtureRunTierEditor" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div class="table-wrap"><table id="fixtureRunGrid"></table></div>
+      <p class="foot-note" id="fixtureRunSuggestion" style="margin-top:10px"></p>
     </div>
   </section>
 
@@ -741,6 +751,15 @@
       <button class="dir-btn" id="resetFdrBtn" style="margin-top:8px">Reset to default</button>
       <div class="detail-block-title" style="margin-top:16px;font-size:12px">Try it: two example fixtures</div>
       <div id="fdrFormulaExample"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Prediction model</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        Powers the predicted scorelines and win/draw/loss % on the FDR tab. Win/draw/loss % blends three sources: <strong>Pi-ratings</strong> (an iterative team-strength rating built from every real result this season — not a static preseason number), the <strong>scoreline model itself</strong>, and <strong>real betting odds</strong> when available (needs the Worker's <code>/odds</code> route + a free API key — see the deploy notes). The exact predicted score comes from a <strong>Weibull-count distribution with a copula</strong> linking the two teams' goal counts, replacing the previous Poisson/Dixon-Coles model.
+      </p>
+      <div class="formula-panel" id="modelFormulaPanel"></div>
+      <button class="dir-btn" id="resetModelBtn" style="margin-top:8px">Reset to default</button>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -1014,11 +1033,25 @@ let state = {
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
-  builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" }, builderSelectedId: null,
+  builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
+  // Outcome (W/D/L) is blended from three sources: the Weibull+copula
+  // scoreline grid itself, a Pi-ratings system built from real results,
+  // and (when available) betting-odds-implied probabilities. Scoreline
+  // shape (which exact score gets picked) comes from the Weibull+copula
+  // grid, tuned by weibullShape/copulaTheta below. All editable — see
+  // "Edit prediction model" on the Rankings tab.
+  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -1.2, piLearningRate: 0.06, piCrossInfluence: 0.6 },
+  piRatings: null, // computed once per data load — see computePiRatings()
+  oddsData: [], oddsWarnings: [],
+  fixtureRunTiers: {
+    strict:  { label: "Strictly good", minLen: 3, maxAvg: 2.2 },
+    medium:  { label: "Fairly easy",   minLen: 3, maxAvg: 2.7 },
+    lenient: { label: "Lenient",       minLen: 3, maxAvg: 3.2 },
+  },
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
@@ -1282,6 +1315,56 @@ async function fetchClubStats() {
   }
 }
 
+// Betting odds (/odds route) — same fail-quiet pattern as the two above.
+// Real bookmaker consensus for upcoming EPL fixtures, used as one of the
+// three signals blended into predicted win/draw/loss % (see
+// scorelineProbabilityGrid / attachOdds / oddsForFixture).
+async function fetchOdds() {
+  if (!WORKER_PROXY_URL) return null;
+  try {
+    const res = await fetch(WORKER_PROXY_URL + "/odds", { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      state.diagnostics.push({ path: "/odds", source: "your Worker", ok: false, error: data.warnings.join("; ") });
+    } else {
+      state.diagnostics.push({ path: "/odds", source: "your Worker", ok: true, ms: 0 });
+    }
+    return data;
+  } catch (e) {
+    state.diagnostics.push({ path: "/odds", source: "your Worker", ok: false, error: e.message });
+    return null;
+  }
+}
+function attachOdds(data) {
+  state.oddsData = (data && data.odds) || [];
+  state.oddsWarnings = (data && data.warnings) || [];
+}
+// Matches an odds-API entry to an FPL fixture by normalized club name
+// (same normTeam() used for the Understat/FBref matching above) — the
+// two sources use slightly different team-name strings ("Man City" vs
+// "Manchester City" etc.), so this can occasionally miss a fixture; when
+// it does, that match just falls back to the scoreline model alone.
+function oddsForFixture(teamId, oppId, isHome) {
+  if (!state.oddsData.length) return null;
+  const team = state.teamsById[teamId], opp = state.teamsById[oppId];
+  if (!team || !opp) return null;
+  const teamKey = normTeam(team.name), oppKey = normTeam(opp.name);
+  const match = state.oddsData.find(o => {
+    const hKey = normTeam(o.homeTeam), aKey = normTeam(o.awayTeam);
+    return isHome ? (hKey === teamKey && aKey === oppKey) : (hKey === oppKey && aKey === teamKey);
+  });
+  if (!match || match.impliedHome == null) return null;
+  // Re-express as "team" (not necessarily home) win/draw/loss so callers
+  // don't have to juggle home/away themselves.
+  return {
+    teamWin: isHome ? match.impliedHome : match.impliedAway,
+    draw: match.impliedDraw,
+    oppWin: isHome ? match.impliedAway : match.impliedHome,
+    bookmakerCount: match.bookmakerCount,
+  };
+}
+
 // Understat/FBref have no shared player ID with the FPL API, so matching
 // is done by normalized name + club. This catches most players but isn't
 // perfect — different spellings of the same name across the three sites
@@ -1417,16 +1500,18 @@ async function loadData() {
     precomputeStrengthRanges();
     computeTeamContributionShares();
 
-    const [fixtures, deeper, clubStats] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats()]);
+    const [fixtures, deeper, clubStats, oddsData] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats(), fetchOdds()]);
     state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
     computeTeamTiers();
     attachDeeperStats(deeper);
     attachClubStats(clubStats);
+    attachOdds(oddsData);
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
     await loadFormulasFromStorage();
+    state.piRatings = computePiRatings(fixtures); // after formulas load, so any saved learning-rate/cross-influence overrides apply
     await loadManagerNotes();
     await loadH2hMatchups();
     await loadH2hDraft();
@@ -2980,14 +3065,23 @@ function priorityScore(p, priority, risk) {
 
 // Greedily fills any remaining squad slots with the best player per
 // position for the chosen priority/risk that fits budget/position/club
-// limits, then spends any leftover budget upgrading the weakest picks —
-// used by the "Auto Pick" button.
+// limits, then spends any leftover budget upgrading the weakest of the
+// NEWLY ADDED picks — used by the "Auto Pick" button.
+// Never touches players already in the squad: if a position already has
+// players picked, Auto Pick only tops it up to the required count and
+// only ever swaps among the slots it just filled itself, not anything
+// that was there before it ran.
 function autoPickSquad(draft, opts) {
   const priority = opts?.priority || "points";
   const risk = opts?.risk || "med";
-  draft.squad = [];
+  draft.squad = draft.squad || [];
+  const newlyAddedIds = [];
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    let need = SQUAD_RULES[pos];
+    const existingInPos = draft.squad.filter(id => {
+      const pl = state.players.find(x => x.id === id);
+      return pl && pl.position === pos;
+    }).length;
+    let need = SQUAD_RULES[pos] - existingInPos;
     while (need > 0) {
       const clubCounts = clubCountsFor(draft.squad);
       const remaining = BUDGET - squadCost(draft.squad);
@@ -3004,7 +3098,11 @@ function autoPickSquad(draft, opts) {
       let reserve = (need - 1) * cheapestByPos[pos];
       for (const otherPos of ["GK", "DEF", "MID", "FWD"]) {
         if (otherPos === pos) continue;
-        reserve += SQUAD_RULES[otherPos] * cheapestByPos[otherPos];
+        const stillNeeded = Math.max(0, SQUAD_RULES[otherPos] - draft.squad.filter(id => {
+          const pl = state.players.find(x => x.id === id);
+          return pl && pl.position === otherPos;
+        }).length);
+        reserve += stillNeeded * cheapestByPos[otherPos];
       }
       const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3;
       let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
@@ -3039,23 +3137,26 @@ function autoPickSquad(draft, opts) {
       const poolSize = Math.min(candidates.length, 4);
       const pick = candidates[Math.floor(Math.random() * poolSize)];
       draft.squad.push(pick.id);
+      newlyAddedIds.push(pick.id);
       need--;
     }
   }
-  // Spend leftover budget: repeatedly swap the current weakest pick (by
-  // the chosen priority score) for the best affordable same-position
-  // upgrade, so strong — often pricier — players are preferred over
-  // quietly banking unused money. Stops once no swap improves the score.
+  // Spend leftover budget: repeatedly swap the current weakest pick AMONG
+  // THE SLOTS JUST FILLED (never a pre-existing player) for the best
+  // affordable same-position upgrade, so strong — often pricier — players
+  // are preferred over quietly banking unused money. Stops once no swap
+  // improves the score, or once every newly-added slot has been upgraded
+  // away and there's nothing left this run is allowed to touch.
   let upgrades = 60;
-  while (upgrades-- > 0) {
+  while (upgrades-- > 0 && newlyAddedIds.length) {
     const remaining = BUDGET - squadCost(draft.squad);
     if (remaining <= 0) break;
     const clubCounts = clubCountsFor(draft.squad);
-    let worstIdx = -1, worstScore = Infinity;
-    draft.squad.forEach((id, idx) => {
+    let worstIdx = -1, worstScore = Infinity, worstListPos = -1;
+    newlyAddedIds.forEach((id, listPos) => {
       const pl = state.players.find(x => x.id === id);
       const sc = pl ? priorityScore(pl, priority, risk) : -Infinity;
-      if (sc < worstScore) { worstScore = sc; worstIdx = idx; }
+      if (sc < worstScore) { worstScore = sc; worstIdx = draft.squad.indexOf(id); worstListPos = listPos; }
     });
     if (worstIdx === -1) break;
     const worst = state.players.find(x => x.id === draft.squad[worstIdx]);
@@ -3070,6 +3171,7 @@ function autoPickSquad(draft, opts) {
     const best = upgradeCandidates[0];
     if (!best || priorityScore(best, priority, risk) <= worstScore) break; // no improving swap left
     draft.squad[worstIdx] = best.id;
+    newlyAddedIds[worstListPos] = best.id;
   }
   draft.builderCaptainId = null; // recomputed fresh by computeGwResult from the new squad
   draft.manualStarterIds = null;
@@ -3119,7 +3221,8 @@ function renderSquadBuilder(draft) {
         <div class="builder-filters">
           <select id="builderPosFilter"></select>
           <select id="builderSortFilter"></select>
-          <select id="builderPriceFilter"></select>
+          <button class="dir-btn" id="builderSortDir" title="Flip sort direction"></button>
+          £ <input type="number" step="0.1" id="builderMinPrice" placeholder="min" style="width:64px" value="${state.builderFilters.minPrice}" /> – <input type="number" step="0.1" id="builderMaxPrice" placeholder="max" style="width:64px" value="${state.builderFilters.maxPrice}" />
           <button class="dir-btn" id="builderResetFilters">Reset filters</button>
         </div>
         <div class="builder-count" id="builderCount"></div>
@@ -3909,10 +4012,20 @@ async function loadFormulasFromStorage() {
     const raw = await persistGet("teamOverrides");
     if (raw) state.teamOverrides = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("modelWeights");
+    if (raw) state.modelWeights = { ...state.modelWeights, ...JSON.parse(raw) };
+  } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("fixtureRunTiers");
+    if (raw) state.fixtureRunTiers = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
 function saveTeamOverrides() { persistSet("teamOverrides", JSON.stringify(state.teamOverrides)); }
+function saveModelWeights() { persistSet("modelWeights", JSON.stringify(state.modelWeights)); }
+function saveFixtureRunTiers() { persistSet("fixtureRunTiers", JSON.stringify(state.fixtureRunTiers)); }
 
 const FDR_FORMULA_FIELDS = [
   { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1, desc: "How much their goal-scoring threat counts against you." },
@@ -3923,6 +4036,16 @@ const FDR_FORMULA_FIELDS = [
 const RANK_FORMULA_FIELDS = [
   { key: "squadWeight", label: "Squad quality weight", min: 0, max: 3, step: 0.1, desc: "This season's actual squad — total points once the season's underway, squad value before that." },
   { key: "strengthWeight", label: "Team strength weight", min: 0, max: 3, step: 0.1, desc: "FPL's own longer-run club rating, independent of this season's results so far." },
+];
+// Controls for the scoreline/outcome model (Pi-ratings + Weibull-count +
+// copula, blended with betting odds when available — see estimateScoreline
+// / scorelineProbabilityGrid / computePiRatings). Not weights on the old
+// Poisson model, which this replaces entirely.
+const MODEL_FORMULA_FIELDS = [
+  { key: "piRatingWeight", label: "Pi-rating weight (outcome)", min: 0, max: 1, step: 0.05, desc: "How much the win/draw/loss % leans on Pi-ratings (a form-sensitive rating built from every real result this season) vs the raw scoreline model." },
+  { key: "oddsWeight", label: "Betting-odds weight (outcome)", min: 0, max: 1, step: 0.05, desc: "How much win/draw/loss % leans on real bookmaker-implied probabilities when odds are available for that fixture. Ignored (redistributed to the other two) when no odds are found." },
+  { key: "weibullShape", label: "Weibull shape (β)", min: 0.7, max: 1.8, step: 0.05, desc: "Controls the spread of the goals model. Near 1 behaves close to a standard count model; higher values pull probability mass tighter around the expected scoreline." },
+  { key: "copulaTheta", label: "Copula correlation (θ)", min: -5, max: 5, step: 0.1, desc: "How strongly the two teams' goal counts are linked (replaces the old Dixon-Coles low-score correction). Negative = matches lean slightly toward low, correlated scorelines (0-0, 1-1); 0 = fully independent sides." },
 ];
 
 function renderFormulaPanel(containerEl, formulaObj, fields, onChange) {
@@ -4044,6 +4167,10 @@ function renderFormulaPanels() {
   renderFormulaPanel(document.getElementById("rankFormulaPanel"), state.rankFormula, RANK_FORMULA_FIELDS, () => {
     saveRankFormula();
     renderRankingsList(); // list only — never rebuilds this panel's own sliders
+  });
+  renderFormulaPanel(document.getElementById("modelFormulaPanel"), state.modelWeights, MODEL_FORMULA_FIELDS, () => {
+    saveModelWeights();
+    renderFdrGrid(); // predicted scorelines/outcome % depend on these
   });
   renderFdrFormulaExample();
 }
@@ -4411,47 +4538,135 @@ function headToHeadHistory(teamId, oppId) {
   });
   return { avgScored: scored / meetings.length, avgConceded: conceded / meetings.length, n: meetings.length };
 }
-// Scoreline estimate — a real (if simplified) statistical model, the same
-// family used by betting markets: each side's blended xG becomes the mean
-// of a Poisson goal-scoring distribution, then we compute the full
-// probability grid of joint scorelines (0-0 through 6-6) and return the
-// single MOST LIKELY joint outcome — not each side's xG rounded
-// independently, which is what caused every match to collapse toward 2-1
-// (since most xG values sit between 1 and 2, rounding both sides
-// separately erases the actual shape of the distribution).
-// We also apply the Dixon-Coles low-score correlation correction: real
-// match data shows 0-0, 1-0, 0-1 and 1-1 occur slightly more/less often
-// than plain independent Poisson predicts (defensive teams draw 0-0 more
-// than random chance implies), so we nudge those four cells by a
-// calibrated rho (-0.13, the standard published estimate from Dixon &
-// Coles' original 1997 model) before picking the most probable cell.
-function poissonPmf(k, lambda) {
-  if (lambda <= 0) return k === 0 ? 1 : 0;
-  let logP = -lambda + k * Math.log(lambda);
-  for (let i = 2; i <= k; i++) logP -= Math.log(i);
-  return Math.exp(logP);
+// ---------- Pi-ratings: iterative team-strength ratings from real results ----------
+// A simplified implementation of the Pi-rating system (Constantinou &
+// Fenner, 2013) — the same family of model used in published football
+// forecasting research as an alternative to static preseason ratings.
+// Each club has a separate "home" and "away" rating; both start at 0 and
+// are nudged after every finished match based on the surprise (actual
+// goal difference vs. what the ratings predicted), so a team's rating
+// reflects real, recent match-by-match evidence rather than a fixed
+// number set once at the start of the season. Ratings are mapped to an
+// expected goal difference via psi() (a compressive log curve — the
+// further two teams are apart, the less an extra rating point matters,
+// matching how football scorelines rarely blow out proportionally to
+// underlying strength). Recomputed once per data load (state.piRatings).
+function psi(r) {
+  const C = 3, XI = 1.7; // shape constants from the published Pi-rating model
+  return Math.sign(r) * C * Math.log10(1 + XI * Math.abs(r));
 }
-function dixonColesTau(i, j, l1, l2, rho) {
-  if (i === 0 && j === 0) return 1 - l1 * l2 * rho;
-  if (i === 0 && j === 1) return 1 + l1 * rho;
-  if (i === 1 && j === 0) return 1 + l2 * rho;
-  if (i === 1 && j === 1) return 1 - rho;
-  return 1;
+function psiInverse(gd) {
+  const C = 3, XI = 1.7;
+  return Math.sign(gd) * (Math.pow(10, Math.abs(gd) / C) - 1) / XI;
+}
+function computePiRatings(fixtures) {
+  const lambda = state.modelWeights.piLearningRate;   // how fast ratings move on a surprise
+  const gamma = state.modelWeights.piCrossInfluence;   // how much of a team's home result also nudges its away rating (and vice versa)
+  const ratings = {};
+  for (const t of state.teams) ratings[t.id] = { home: 0, away: 0 };
+  const finished = (fixtures || [])
+    .filter(f => f.finished && f.team_h_score != null)
+    .sort((a, b) => (a.event ?? 0) - (b.event ?? 0) || (a.id ?? 0) - (b.id ?? 0));
+  for (const f of finished) {
+    const h = ratings[f.team_h], a = ratings[f.team_a];
+    if (!h || !a) continue;
+    const actualGd = f.team_h_score - f.team_a_score;
+    const expectedGd = psi(h.home) - psi(a.away);
+    const error = psiInverse(actualGd) - psiInverse(expectedGd);
+    const homeUpdate = lambda * error;
+    const awayUpdate = lambda * error;
+    h.home += homeUpdate;
+    a.away -= awayUpdate;
+    h.away += homeUpdate * gamma;   // playing well at home is weak evidence of general quality too
+    a.home -= awayUpdate * gamma;
+  }
+  return ratings;
+}
+// Win/draw/loss purely from Pi-ratings, via a logistic mapping of the
+// expected goal difference (a standard approach for turning a ratings gap
+// into match-outcome probabilities). Draw probability shrinks as the
+// expected gap widens — mismatched teams draw less often in practice.
+function piRatingOutcomeProbs(teamId, oppId, isHome) {
+  const pr = state.piRatings;
+  if (!pr || !pr[teamId] || !pr[oppId]) return null;
+  const teamR = isHome ? pr[teamId].home : pr[teamId].away;
+  const oppR = isHome ? pr[oppId].away : pr[oppId].home;
+  const gd = psi(teamR) - psi(oppR) + (isHome ? 0.15 : -0.15); // small home-advantage nudge, consistent with the FDR formula's own
+  const drawBase = 0.27, drawShrink = 0.05;
+  const drawP = Math.max(0.08, drawBase - drawShrink * Math.abs(gd));
+  const teamWinShare = 1 / (1 + Math.exp(-1.1 * gd)); // logistic on the expected goal gap
+  const teamWin = (1 - drawP) * teamWinShare;
+  const oppWin = 1 - drawP - teamWin;
+  return { teamWin, draw: drawP, oppWin };
+}
+
+// ---------- Scoreline model: discrete Weibull-count + Frank copula ----------
+// Replaces the previous Poisson + Dixon-Coles model. Each side's goal
+// count follows a discrete Weibull distribution (Nakagawa-Osaki form) —
+// a more flexible count model than Poisson, since its shape parameter (β,
+// editable in "Edit prediction model") controls how tightly probability
+// mass clusters around the mean independently of the mean itself, rather
+// than mean and variance always being locked together as in a Poisson.
+// The two sides' goal counts are then linked with a Frank copula (θ,
+// also editable) instead of the old fixed Dixon-Coles correction, so the
+// same "low, correlated scorelines happen slightly more than pure
+// independence predicts" real-world effect is modelled but at a strength
+// the user actually controls.
+function discreteWeibullPmf(k, scale, shape) {
+  const surv = (x) => Math.exp(-Math.pow(x / scale, shape)); // survival function S(x) = P(X > x-ish)
+  return Math.max(0, surv(k) - surv(k + 1));
+}
+// discrete Weibull has no closed-form mean, so we solve for the scale (λ)
+// that gives the target mean via bisection — fast and stable since the
+// mean is monotonic in λ for fixed shape.
+function weibullScaleForMean(targetMean, shape) {
+  const meanFor = (scale) => {
+    let m = 0;
+    for (let k = 0; k < 40; k++) m += Math.exp(-Math.pow((k + 1) / scale, shape));
+    return m;
+  };
+  let lo = 0.01, hi = 40;
+  for (let iter = 0; iter < 40; iter++) {
+    const mid = (lo + hi) / 2;
+    if (meanFor(mid) < targetMean) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+function frankCopulaCdf(u, v, theta) {
+  if (Math.abs(theta) < 1e-4) return u * v; // independence in the limit theta->0
+  const num = (Math.exp(-theta * u) - 1) * (Math.exp(-theta * v) - 1);
+  const den = Math.exp(-theta) - 1;
+  return -Math.log(1 + num / den) / theta;
 }
 function scorelineProbabilityGrid(homeXg, awayXg) {
-  const RHO = -0.13;
-  const MAX_GOALS = 7; // 0..6 inclusive, covers >99.9% of real probability mass
+  const shape = state.modelWeights.weibullShape;
+  const theta = state.modelWeights.copulaTheta;
+  const MAX_GOALS = 8; // 0..7 inclusive
+  const homeScale = weibullScaleForMean(homeXg, shape);
+  const awayScale = weibullScaleForMean(awayXg, shape);
+  // Marginal CDFs at each integer, needed to evaluate the copula.
+  const cdf = (scale) => {
+    const c = [0];
+    for (let k = 0; k < MAX_GOALS; k++) c.push(c[k] + discreteWeibullPmf(k, scale, shape));
+    return c;
+  };
+  const homeCdf = cdf(homeScale), awayCdf = cdf(awayScale);
   const grid = [];
   let total = 0;
   for (let i = 0; i < MAX_GOALS; i++) {
     for (let j = 0; j < MAX_GOALS; j++) {
-      const p = poissonPmf(i, homeXg) * poissonPmf(j, awayXg) * dixonColesTau(i, j, homeXg, awayXg, RHO);
-      grid.push({ home: i, away: j, p: Math.max(0, p) });
-      total += Math.max(0, p);
+      // Joint pmf from the copula CDF via a finite-difference rectangle —
+      // standard construction for turning a copula into a discrete joint
+      // distribution from its marginal CDFs.
+      const p = frankCopulaCdf(homeCdf[i + 1], awayCdf[j + 1], theta)
+              - frankCopulaCdf(homeCdf[i], awayCdf[j + 1], theta)
+              - frankCopulaCdf(homeCdf[i + 1], awayCdf[j], theta)
+              + frankCopulaCdf(homeCdf[i], awayCdf[j], theta);
+      const pp = Math.max(0, p);
+      grid.push({ home: i, away: j, p: pp });
+      total += pp;
     }
   }
-  // Renormalize so probabilities sum to 1 after the Dixon-Coles adjustment
-  // (which isn't guaranteed to preserve normalization on its own).
   if (total > 0) grid.forEach(c => c.p /= total);
   grid.sort((a, b) => b.p - a.p);
   let homeWin = 0, draw = 0, awayWin = 0;
@@ -4472,6 +4687,26 @@ function scorelineProbabilityGrid(homeXg, awayXg) {
   const top = contenders[0] || grid[0];
   const alternates = grid.filter(c => c !== top).slice(0, 3);
   return { grid, top, alternates, homeWin, draw, awayWin };
+}
+// Blends the raw scoreline-model outcome % with Pi-ratings and (when
+// available) real betting odds, per the editable weights on the Rankings
+// tab. Odds weight is automatically redistributed to the other two
+// sources for fixtures where no odds match was found, rather than
+// treated as missing data.
+function blendOutcomeProbs(modelProbs, teamId, oppId, isHome) {
+  const w = state.modelWeights;
+  const piProbs = piRatingOutcomeProbs(teamId, oppId, isHome);
+  const odds = oddsForFixture(teamId, oppId, isHome);
+  let piW = piProbs ? w.piRatingWeight : 0;
+  let oddsW = odds ? w.oddsWeight : 0;
+  let modelW = Math.max(0, 1 - piW - oddsW);
+  const sum = piW + oddsW + modelW || 1;
+  piW /= sum; oddsW /= sum; modelW /= sum;
+  const teamWin = modelW * modelProbs.teamWin + piW * (piProbs ? piProbs.teamWin : 0) + oddsW * (odds ? odds.teamWin : 0);
+  const draw = modelW * modelProbs.draw + piW * (piProbs ? piProbs.draw : 0) + oddsW * (odds ? odds.draw : 0);
+  const oppWin = modelW * modelProbs.oppWin + piW * (piProbs ? piProbs.oppWin : 0) + oddsW * (odds ? odds.oppWin : 0);
+  const total = teamWin + draw + oppWin || 1;
+  return { teamWin: teamWin / total, draw: draw / total, oppWin: oppWin / total, usedPiRatings: !!piProbs, usedOdds: !!odds };
 }
 function estimateScoreline(teamId, oppId, isHome) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
@@ -4585,12 +4820,21 @@ function estimateScoreline(teamId, oppId, isHome) {
   const homeXg = isHome ? teamXg : oppXg;
   const awayXg = isHome ? oppXg : teamXg;
   const model = scorelineProbabilityGrid(homeXg, awayXg);
+  // Outcome % (win/draw/loss) is then blended with Pi-ratings and real
+  // odds — the scoreline grid above still supplies the exact predicted
+  // score, but not necessarily the final win/draw/loss numbers shown.
+  const modelProbsFromTeam = { teamWin: isHome ? model.homeWin : model.awayWin, draw: model.draw, oppWin: isHome ? model.awayWin : model.homeWin };
+  const blended = blendOutcomeProbs(modelProbsFromTeam, teamId, oppId, isHome);
+  model.homeWin = isHome ? blended.teamWin : blended.oppWin;
+  model.awayWin = isHome ? blended.oppWin : blended.teamWin;
+  model.draw = blended.draw;
 
   return {
     teamGoals: isHome ? model.top.home : model.top.away,
     oppGoals: isHome ? model.top.away : model.top.home,
     teamXg, oppXg, model,
     usedForm: true, usedEmpirical: !!(empiricalTeamXg != null && empiricalOppXg != null), usedH2h: !!h2h,
+    usedPiRatings: blended.usedPiRatings, usedOdds: blended.usedOdds,
   };
 }
 function openFdrPredictModal(teamId, oppId, isHome, gwId) {
@@ -4607,6 +4851,8 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   factors.push("last season's table (weighted down as this season's own results pile up)");
   factors.push("squad value + manager tenure (light adjustment)");
   factors.push("attack/defence ratings (minor adjustment only)");
+  if (est.usedPiRatings) factors.push("Pi-ratings (form-sensitive rating built from every real result this season)");
+  if (est.usedOdds) factors.push("real betting odds (bookmaker consensus)");
   const pct = (x) => (x * 100).toFixed(0) + "%";
   const altRow = est.model.alternates.map(c =>
     `<span class="mono" style="margin-right:10px;color:var(--ink-faint)">${c.home}-${c.away} (${pct(c.p)})</span>`
@@ -4614,7 +4860,7 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0;text-align:center">Most probable scoreline (${pct(est.model.top.p)} chance) — from a Poisson goal model with a low-score correlation correction, the same statistical family used by betting markets.</p>
+    <p class="foot-note" style="margin-top:0;text-align:center">Most probable scoreline (${pct(est.model.top.p)} chance) — from a discrete Weibull-count model with a copula linking both sides' goals (win/draw/loss blended with Pi-ratings and real odds where available).</p>
     <div style="text-align:center;margin:8px 0 12px;font-size:12px">
       <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
       <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
@@ -4751,7 +4997,95 @@ function renderFdrGrid() {
       renderFdrGrid();
     };
   });
+  renderFixtureRunTierEditor();
+  renderFixtureRunFinder(list, gwIds);
 }
+// ---------- Fixture run finder: best run per tier (strict/medium/lenient) ----------
+// Unlike the single "good run" streak bar (which requires every game in
+// the run to individually be <=2.5 FDR), a "run" here only needs its
+// AVERAGE FDR to stay under the tier's threshold — so a run can absorb
+// one tougher game as long as the rest pulls the average back down.
+// For each team, finds the longest window (>= tier.minLen games) whose
+// average FDR satisfies the tier; among equal-length windows, prefers the
+// lowest average. Returns null for a team/tier if no window qualifies.
+function bestFixtureRun(scoresInOrder, gwIds, minLen, maxAvg) {
+  const n = scoresInOrder.length;
+  let best = null;
+  for (let start = 0; start < n; start++) {
+    if (scoresInOrder[start] === null) continue;
+    let sum = 0;
+    for (let end = start; end < n; end++) {
+      if (scoresInOrder[end] === null) break; // blank gameweek breaks the run
+      sum += scoresInOrder[end];
+      const len = end - start + 1;
+      if (len < minLen) continue;
+      const avg = sum / len;
+      if (avg > maxAvg) continue;
+      if (!best || len > best.len || (len === best.len && avg < best.avg)) {
+        best = { start, end, len, avg, startGw: gwIds[start], endGw: gwIds[end] };
+      }
+    }
+  }
+  return best;
+}
+function renderFixtureRunTierEditor() {
+  const el = document.getElementById("fixtureRunTierEditor");
+  if (!el) return;
+  const tiers = state.fixtureRunTiers;
+  el.innerHTML = Object.entries(tiers).map(([key, t]) => `
+    <div style="min-width:180px">
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px">${t.label}</div>
+      <label style="font-size:11px;color:var(--ink-dim);display:block;margin-bottom:2px">Min run length
+        <input type="number" min="2" max="10" step="1" value="${t.minLen}" data-tier="${key}" data-field="minLen" style="width:100%" />
+      </label>
+      <label style="font-size:11px;color:var(--ink-dim);display:block">Max average FDR
+        <input type="number" min="1" max="5" step="0.1" value="${t.maxAvg}" data-tier="${key}" data-field="maxAvg" style="width:100%" />
+      </label>
+    </div>
+  `).join("");
+  el.querySelectorAll("input").forEach(input => {
+    input.onchange = () => {
+      const { tier, field } = input.dataset;
+      const v = Number(input.value);
+      if (!Number.isFinite(v)) return;
+      state.fixtureRunTiers[tier][field] = v;
+      saveFixtureRunTiers();
+      renderFdrGrid();
+    };
+  });
+}
+// list here is the same per-team array renderFdrGrid already built
+// ({ t, scoresInOrder, ... }), so this reuses that work rather than
+// recomputing FDR scores a second time.
+function renderFixtureRunFinder(list, gwIds) {
+  const grid = document.getElementById("fixtureRunGrid");
+  const suggestionEl = document.getElementById("fixtureRunSuggestion");
+  if (!grid) return;
+  const tiers = state.fixtureRunTiers;
+  const tierKeys = Object.keys(tiers);
+  const head = `<tr><th class="label-col">Club</th>${tierKeys.map(k => `<th>${tiers[k].label}</th>`).join("")}</tr>`;
+  const perTeamRuns = list.map(({ t, scoresInOrder }) => {
+    const runs = {};
+    for (const k of tierKeys) runs[k] = bestFixtureRun(scoresInOrder, gwIds, tiers[k].minLen, tiers[k].maxAvg);
+    return { t, runs };
+  });
+  const fmtRun = (r) => r ? `GW${r.startGw}–GW${r.endGw} <span class="mono" style="color:var(--ink-dim)">(${r.len} games, avg ${r.avg.toFixed(1)})</span>` : `<span style="color:var(--ink-faint)">–</span>`;
+  const rows = perTeamRuns.map(({ t, runs }) =>
+    `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${tierKeys.map(k => `<td style="font-size:12px">${fmtRun(runs[k])}</td>`).join("")}</tr>`
+  ).join("");
+  grid.innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
+
+  // Suggestion line: which club has the best run to target, per tier —
+  // "best" = longest run, tie-broken by lowest average FDR.
+  const suggestions = tierKeys.map(k => {
+    const withRun = perTeamRuns.filter(x => x.runs[k]).sort((a, b) => b.runs[k].len - a.runs[k].len || a.runs[k].avg - b.runs[k].avg);
+    if (!withRun.length) return `${tiers[k].label}: no club has a qualifying run in this range.`;
+    const top = withRun[0];
+    return `${tiers[k].label}: target <strong>${top.t.name}</strong> (GW${top.runs[k].startGw}–GW${top.runs[k].endGw}, ${top.runs[k].len} games, avg ${top.runs[k].avg.toFixed(1)} FDR).`;
+  });
+  suggestionEl.innerHTML = suggestions.join("<br>");
+}
+
 function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
@@ -5555,6 +5889,13 @@ function setupRankingsControls() {
     saveFdrFormula();
     renderRankings();
     renderStats();
+  };
+  const resetModelBtn = document.getElementById("resetModelBtn");
+  if (resetModelBtn) resetModelBtn.onclick = () => {
+    state.modelWeights = { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -1.2, piLearningRate: 0.06, piCrossInfluence: 0.6 };
+    saveModelWeights();
+    renderRankings();
+    renderFdrGrid();
   };
 }
 
