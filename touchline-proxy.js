@@ -12,6 +12,10 @@
  *      high-line proxy), CBIT (clearances+blocks+interceptions+tackles)
  *      and more, aggregated per club from the same Understat/FBref sources.
  *      Route: /clubstats
+ *   4. Serves betting-odds-implied outcome probabilities from The Odds
+ *      API (free tier, real bookmaker consensus — not scraped). Needs a
+ *      free API key set as a Worker secret: wrangler secret put
+ *      ODDS_API_KEY. Route: /odds
  *
  * HOW TO DEPLOY
  * This project needs THREE files kept in sync on your repo's main branch:
@@ -60,6 +64,9 @@ export default {
     }
     if (url.pathname.startsWith("/clubstats")) {
       return handleClubStats(url, request);
+    }
+    if (url.pathname.startsWith("/odds")) {
+      return handleOdds(url, request, env);
     }
     if (isFplApiPath(url.pathname)) {
       return handleFplProxy(url);
@@ -319,6 +326,86 @@ async function handleClubStats(url, request) {
       ...CORS_HEADERS,
       "Content-Type": "application/json",
       "Cache-Control": warnings.length ? "no-store" : "public, max-age=86400",
+    },
+  });
+  if (!warnings.length) await cache.put(cacheKey, response.clone());
+  return response;
+}
+
+// ---------- 4. Betting odds (The Odds API) — real market-implied probabilities ----------
+// Free tier: 500 credits/month, 1 credit per (market x region) call. A
+// single call for uk region + h2h market = 1 credit; cached for 6h below,
+// so even hourly polling stays far under the monthly cap. Requires a free
+// key from https://the-odds-api.com set as a Worker secret:
+//   wrangler secret put ODDS_API_KEY
+// (or paste it into the Cloudflare dashboard under Settings > Variables).
+// If the secret isn't set, this route returns an empty list with a
+// warning rather than failing the whole app — same fail-quiet pattern as
+// /deeperstats and /clubstats.
+async function handleOdds(url, request, env) {
+  if (!env.ODDS_API_KEY) {
+    return new Response(JSON.stringify({ odds: [], warnings: ["ODDS_API_KEY not set — run: wrangler secret put ODDS_API_KEY (free key from the-odds-api.com)"], syncedAt: new Date().toISOString() }), {
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  }
+
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const warnings = [];
+  let odds = [];
+  try {
+    const target = `https://api.the-odds-api.com/v4/sports/soccer_epl/odds?regions=uk&markets=h2h&oddsFormat=decimal&apiKey=${env.ODDS_API_KEY}`;
+    const res = await fetch(target);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`HTTP ${res.status} — ${body.slice(0, 200)}`);
+    }
+    const raw = await res.json();
+    // Collapse each match's multiple bookmakers down to the average
+    // decimal price per outcome (a simple consensus), then also convert to
+    // an implied (vig-adjusted) probability so the app doesn't have to
+    // redo that math per fixture. Team names are the-odds-api's own
+    // strings, not FPL's — matched fuzzily on the app side.
+    odds = raw.map(m => {
+      const priceSum = { home: 0, draw: 0, away: 0 };
+      const priceN = { home: 0, draw: 0, away: 0 };
+      for (const bk of m.bookmakers || []) {
+        const h2h = (bk.markets || []).find(mk => mk.key === "h2h");
+        if (!h2h) continue;
+        for (const o of h2h.outcomes || []) {
+          if (o.name === m.home_team) { priceSum.home += o.price; priceN.home++; }
+          else if (o.name === m.away_team) { priceSum.away += o.price; priceN.away++; }
+          else { priceSum.draw += o.price; priceN.draw++; } // "Draw"
+        }
+      }
+      const avg = (k) => priceN[k] ? priceSum[k] / priceN[k] : null;
+      const homePrice = avg("home"), drawPrice = avg("draw"), awayPrice = avg("away");
+      let impliedHome = null, impliedDraw = null, impliedAway = null;
+      if (homePrice && drawPrice && awayPrice) {
+        const rawH = 1 / homePrice, rawD = 1 / drawPrice, rawA = 1 / awayPrice;
+        const overround = rawH + rawD + rawA; // >1 due to bookmaker margin
+        impliedHome = rawH / overround; impliedDraw = rawD / overround; impliedAway = rawA / overround;
+      }
+      return {
+        homeTeam: m.home_team, awayTeam: m.away_team, commenceTime: m.commence_time,
+        homePrice, drawPrice, awayPrice, impliedHome, impliedDraw, impliedAway,
+        bookmakerCount: Math.max(priceN.home, priceN.draw, priceN.away),
+      };
+    });
+    if (!odds.length) warnings.push("The Odds API returned 0 upcoming EPL matches — may just mean nothing's currently listed.");
+  } catch (e) {
+    warnings.push("Odds fetch failed: " + e.message);
+  }
+
+  const body = JSON.stringify({ odds, warnings, syncedAt: new Date().toISOString() });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      "Cache-Control": warnings.length ? "no-store" : "public, max-age=21600", // 6h
     },
   });
   if (!warnings.length) await cache.put(cacheKey, response.clone());

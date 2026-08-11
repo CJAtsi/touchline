@@ -704,6 +704,7 @@
   <div id="autopickModal" class="pitch-modal-backdrop" style="display:none">
     <div class="pitch-modal-card" style="max-width:360px">
       <div class="detail-block-title">Auto Pick options</div>
+      <p class="foot-note" style="margin-bottom:10px">Only fills empty slots — any players already in your squad are left exactly as they are.</p>
       <p class="foot-note" style="margin-bottom:8px">Priority</p>
       <div id="autopickPriorityBody" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
       <p class="foot-note" style="margin-bottom:8px">Risk tolerance</p>
@@ -3262,17 +3263,18 @@ function renderSquadBuilder(draft) {
   const sortSel = document.getElementById("builderSortFilter");
   sortSel.innerHTML = SORT_OPTIONS.map(([key, label]) =>
     `<option value="${key}" ${state.builderFilters.sort === key ? "selected" : ""}>${label}</option>`).join("");
-  const priceSel = document.getElementById("builderPriceFilter");
-  const priceBands = [["ALL", "Any price"], ["150", "≤ £15.0m"], ["100", "≤ £10.0m"], ["75", "≤ £7.5m"], ["55", "≤ £5.5m"]];
-  priceSel.innerHTML = priceBands.map(([v, label]) =>
-    `<option value="${v}" ${state.builderFilters.price === v ? "selected" : ""}>${label}</option>`).join("");
-
   posSel.onchange = () => { state.builderFilters.pos = posSel.value; renderBuilderList(draft); };
   sortSel.onchange = () => { state.builderFilters.sort = sortSel.value; renderBuilderList(draft); };
-  priceSel.onchange = () => { state.builderFilters.price = priceSel.value; renderBuilderList(draft); };
+  document.getElementById("builderSortDir").textContent = state.builderFilters.dir === "asc" ? "↑ Low first" : "↓ High first";
+  document.getElementById("builderSortDir").onclick = () => {
+    state.builderFilters.dir = state.builderFilters.dir === "asc" ? "desc" : "asc";
+    renderSquadBuilder(draft);
+  };
+  document.getElementById("builderMinPrice").oninput = (e) => { state.builderFilters.minPrice = e.target.value; renderBuilderList(draft); };
+  document.getElementById("builderMaxPrice").oninput = (e) => { state.builderFilters.maxPrice = e.target.value; renderBuilderList(draft); };
   document.getElementById("builderSearch").oninput = (e) => { state.builderFilters.q = e.target.value; renderBuilderList(draft); };
   document.getElementById("builderResetFilters").onclick = () => {
-    state.builderFilters = { pos: "ALL", sort: "totalPoints", price: "ALL", q: "" };
+    state.builderFilters = { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" };
     renderSquadBuilder(draft);
   };
 
@@ -3300,7 +3302,6 @@ function renderSquadBuilder(draft) {
   };
 
   document.getElementById("builderAutoPick").onclick = () => {
-    if (draft.squad.length && !confirm("Auto Pick will replace your current squad with a new one. Continue?")) return;
     openAutopickModal(draft);
   };
   document.getElementById("builderResetSquad").onclick = () => {
@@ -3330,11 +3331,27 @@ function renderBuilderList(draft) {
   let pool = state.players.filter(p => {
     if (f.pos !== "ALL" && p.position !== f.pos) return false;
     if (q && !foldAccents(p.webName).includes(q)) return false;
-    if (f.price !== "ALL" && p.nowCost > Number(f.price)) return false;
+    if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
+    if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
     return true;
-  }).sort((a, b) => (b[f.sort] ?? 0) - (a[f.sort] ?? 0));
+  }).sort((a, b) => f.dir === "asc" ? (a[f.sort] ?? 0) - (b[f.sort] ?? 0) : (b[f.sort] ?? 0) - (a[f.sort] ?? 0));
 
   countEl.textContent = `${pool.length} players shown`;
+
+  // Show the value of whatever stat the list is currently sorted by,
+  // right next to each player, so the filter/sort choice is legible at a
+  // glance rather than having to trust the sort silently — e.g. sorting
+  // by Ownership % shows each player's actual ownership figure inline.
+  // Points and Price already have their own dedicated columns, so this is
+  // skipped for those two to avoid a redundant duplicate value.
+  const sortLabel = (SORT_OPTIONS.find(([k]) => k === f.sort) || [])[1] || "";
+  const showSortValue = f.sort !== "totalPoints" && f.sort !== "nowCost";
+  const sortValueHtml = (p) => {
+    if (!showSortValue) return "";
+    const fmt = COLUMN_FORMAT[f.sort];
+    const [val] = fmt ? fmt(p) : [p[f.sort] ?? "—"];
+    return `<span class="b-sub" style="color:var(--ink-dim)"> · ${sortLabel}: ${val}</span>`;
+  };
 
   const groups = f.pos === "ALL" ? ["GK", "DEF", "MID", "FWD"] : [f.pos];
   const posLabels = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
@@ -3355,7 +3372,7 @@ function renderBuilderList(draft) {
       html += `
         <div class="builder-row ${inSquad ? "in-squad" : ""}" data-player="${p.id}">
           ${playerAvatarHtml(p, 28)}
-          <span class="b-name">${p.webName} <span class="b-sub" style="${wouldExceedBudget ? "color:var(--rose,#e05d5d)" : ""}">${team ? team.short_name : ""}${reason ? " · " + reason : ""}</span></span>
+          <span class="b-name">${p.webName} <span class="b-sub" style="${wouldExceedBudget ? "color:var(--rose,#e05d5d)" : ""}">${team ? team.short_name : ""}${reason ? " · " + reason : ""}</span>${sortValueHtml(p)}</span>
           <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
           <span class="b-pts mono">${p.totalPoints ?? 0}</span>
           <button class="builder-add-btn ${inSquad ? "remove" : ""}" ${disabled ? "disabled" : ""} data-action="${inSquad ? "remove" : "add"}" data-player="${p.id}">${inSquad ? "×" : "+"}</button>

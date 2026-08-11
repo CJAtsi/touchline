@@ -5,3 +5,10 @@ compatibility_date = "2024-09-01"
 [assets]
 directory = "./"
 binding = "ASSETS"
+
+# Betting-odds route (/odds in touchline-proxy.js) needs a free API key
+# from https://the-odds-api.com. Set it as a secret (not committed here) —
+# run this once from your terminal after installing wrangler and logging in:
+#   wrangler secret put ODDS_API_KEY
+# then paste the key when prompted. Without it, /odds still works but
+# returns an empty list with a warning instead of real odds data.
