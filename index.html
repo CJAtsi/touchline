@@ -1046,7 +1046,7 @@ let state = {
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
-  fdrFormula: { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 },
+  fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
@@ -1535,6 +1535,7 @@ async function loadData() {
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
     await loadFormulasFromStorage();
+    await seedStartOfSeasonRatings();
     state.piRatings = computePiRatings(fixtures); // after formulas load, so any saved learning-rate/cross-influence overrides apply
     await loadManagerNotes();
     await loadH2hMatchups();
@@ -1654,6 +1655,73 @@ const PL_TABLE_LAST_SEASON = [
   { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gf: 38, ga: 75, gd: -37, points: 22 },
   { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gf: 27, ga: 68, gd: -41, points: 20 },
 ];
+// Start-of-2026/27-season Attack/Defence/Overall ratings (1-5 scale),
+// derived directly from the real 2025/26 final-table goals-for/against
+// and points above — NOT FPL's own generic strength numbers. Attack =
+// scaled goals/game; Defence = scaled (inverted) goals-conceded/game;
+// Overall = scaled points. Min-max scaled across the 17 clubs that
+// stayed up (so a real title-winning attack reads as ~5, a real bottom-
+// of-the-table defence reads as ~1). West Ham/Burnley/Wolves relegated;
+// Coventry City/Ipswich Town/Hull City promoted in their place — those
+// three have no Premier League goals data to scale from, so their
+// ratings are a deliberately conservative estimate (promoted sides
+// typically finish bottom-third) rather than fabricated stats: Coventry
+// rated highest of the three (Championship champions, well-organised
+// under Frank Lampard), Ipswich next (recent top-flight experience,
+// albeit relegated in 2024/25), Hull lowest (won promotion via play-offs,
+// least top-flight pedigree of the three). Written into state.teamOverrides
+// once per browser (see seedStartOfSeasonRatings) — after that, this table
+// is just the starting point; any further edits the user makes via "Edit
+// club strength" take over completely and this table is never reapplied.
+const START_OF_SEASON_RATINGS = {
+  ARS: { attack: 4.33, defence: 5.00, overall: 5.00 },
+  MCI: { attack: 5.00, defence: 3.93, overall: 4.36 },
+  MUN: { attack: 4.11, defence: 1.93, overall: 3.73 },
+  AVL: { attack: 2.67, defence: 2.07, overall: 3.18 },
+  LIV: { attack: 3.44, defence: 1.53, overall: 2.73 },
+  BOU: { attack: 2.89, defence: 1.40, overall: 2.45 },
+  SUN: { attack: 1.11, defence: 2.20, overall: 2.18 },
+  BHA: { attack: 2.22, defence: 2.47, overall: 2.09 },
+  BRE: { attack: 2.56, defence: 1.67, overall: 2.09 },
+  CHE: { attack: 2.89, defence: 1.67, overall: 2.00 },
+  FUL: { attack: 1.67, defence: 1.80, overall: 2.00 },
+  NEW: { attack: 2.33, defence: 1.27, overall: 1.73 },
+  EVE: { attack: 1.67, defence: 1.93, overall: 1.73 },
+  LEE: { attack: 1.89, defence: 1.13, overall: 1.55 },
+  CRY: { attack: 1.00, defence: 1.80, overall: 1.36 },
+  NFO: { attack: 1.78, defence: 1.80, overall: 1.27 },
+  TOT: { attack: 1.78, defence: 1.00, overall: 1.00 },
+  COV: { attack: 1.80, defence: 2.00, overall: 1.60 }, // promoted — estimate, see note above
+  IPS: { attack: 1.60, defence: 1.70, overall: 1.40 }, // promoted — estimate, see note above
+  HUL: { attack: 1.40, defence: 1.50, overall: 1.20 }, // promoted — estimate, see note above
+};
+// Seeds state.teamOverrides from START_OF_SEASON_RATINGS exactly once per
+// browser (guarded by the "startOfSeasonSeeded" persisted flag) so the
+// FDR ranking and scoreline model start the season anchored to real goals
+// data instead of FPL's own generic strength numbers. Never re-applies
+// after that first run, so it can't clobber anything the user edits
+// afterward via "Edit club strength" — and never overwrites a team the
+// user has ALREADY manually overridden even on that first run.
+async function seedStartOfSeasonRatings() {
+  const already = await persistGet("startOfSeasonSeeded");
+  if (already === "1") return;
+  let changed = false;
+  for (const t of state.teams) {
+    const r = START_OF_SEASON_RATINGS[t.short_name];
+    if (!r || state.teamOverrides[t.id]) continue; // no data for this club, or user already set one
+    state.teamOverrides[t.id] = { attack: r.attack, defence: r.defence, overall: r.overall };
+    changed = true;
+  }
+  if (changed) saveTeamOverrides();
+  // Also pushes the FDR weights to the new start-of-season default
+  // (attack/defence emphasised, overall de-emphasised) — this is a
+  // one-time nudge alongside the rating seed above, not a standing
+  // override; the Reset button and any further edits work normally
+  // after this.
+  state.fdrFormula = { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 };
+  saveFdrFormula();
+  persistSet("startOfSeasonSeeded", "1");
+}
 
 // Builds a live table from this season's finished fixtures. opts.venue
 // restricts each team's record to only their home or away matches (a
@@ -4227,6 +4295,7 @@ function renderRankings() {
   renderTeamOverrides();
   renderFixtureList();
   renderOddsStatus();
+  renderRankingsPresetList();
 }
 
 // ---------- Premier League table ----------
@@ -5931,7 +6000,7 @@ function setupH2hControls() {
 
 function setupRankingsControls() {
   document.getElementById("resetFdrBtn").onclick = () => {
-    state.fdrFormula = { attackWeight: 1, defenceWeight: 1, overallWeight: 0.5, homeAdvantage: 0.15 };
+    state.fdrFormula = { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 };
     saveFdrFormula();
     renderRankings();
     renderStats();
@@ -5965,42 +6034,50 @@ function renderOddsStatus() {
     el.innerHTML = `<span style="color:var(--ink-dim)">Odds status unknown</span> — reload the app to check again.`;
   }
 }
-function setupRankingsPresets() {
+// Rebuilds the "Saved setting slots" list from state.rankingsPresets and
+// (re)binds Load/Delete clicks. Pulled out of setupRankingsPresets so it
+// can also be called after loadFormulasFromStorage finishes loading the
+// persisted presets — setupRankingsPresets() itself only runs once at
+// page-init, BEFORE that async load completes, so without this a saved
+// preset looked like it "disappeared" on refresh (it hadn't — the list
+// just hadn't been told to redraw once the real data arrived).
+function renderRankingsPresetList() {
   const listEl = document.getElementById("rankingsPresetList");
+  if (!listEl) return;
+  const names = Object.keys(state.rankingsPresets);
+  listEl.innerHTML = names.length
+    ? names.map(n => `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="flex:1;font-size:13px">${n}</span>
+        <button class="dir-btn" data-preset-load="${n}">Load</button>
+        <button class="dir-btn" data-preset-delete="${n}">Delete</button>
+      </div>
+    `).join("")
+    : `<p class="foot-note" style="margin:0">No saved slots yet.</p>`;
+  listEl.querySelectorAll("[data-preset-load]").forEach(btn => {
+    btn.onclick = () => {
+      const preset = state.rankingsPresets[btn.dataset.presetLoad];
+      if (!preset) return;
+      state.fdrFormula = { ...preset.fdrFormula };
+      state.rankFormula = { ...preset.rankFormula };
+      state.modelWeights = { ...preset.modelWeights };
+      saveFdrFormula(); saveRankFormula(); saveModelWeights();
+      renderRankings();
+      renderFdrGrid();
+    };
+  });
+  listEl.querySelectorAll("[data-preset-delete]").forEach(btn => {
+    btn.onclick = () => {
+      delete state.rankingsPresets[btn.dataset.presetDelete];
+      saveRankingsPresets();
+      renderRankingsPresetList();
+    };
+  });
+}
+function setupRankingsPresets() {
   const nameInput = document.getElementById("rankingsPresetName");
   const saveBtn = document.getElementById("rankingsPresetSave");
-  if (!listEl || !saveBtn) return;
-  const renderList = () => {
-    const names = Object.keys(state.rankingsPresets);
-    listEl.innerHTML = names.length
-      ? names.map(n => `
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="flex:1;font-size:13px">${n}</span>
-          <button class="dir-btn" data-preset-load="${n}">Load</button>
-          <button class="dir-btn" data-preset-delete="${n}">Delete</button>
-        </div>
-      `).join("")
-      : `<p class="foot-note" style="margin:0">No saved slots yet.</p>`;
-    listEl.querySelectorAll("[data-preset-load]").forEach(btn => {
-      btn.onclick = () => {
-        const preset = state.rankingsPresets[btn.dataset.presetLoad];
-        if (!preset) return;
-        state.fdrFormula = { ...preset.fdrFormula };
-        state.rankFormula = { ...preset.rankFormula };
-        state.modelWeights = { ...preset.modelWeights };
-        saveFdrFormula(); saveRankFormula(); saveModelWeights();
-        renderRankings();
-        renderFdrGrid();
-      };
-    });
-    listEl.querySelectorAll("[data-preset-delete]").forEach(btn => {
-      btn.onclick = () => {
-        delete state.rankingsPresets[btn.dataset.presetDelete];
-        saveRankingsPresets();
-        renderList();
-      };
-    });
-  };
+  if (!saveBtn) return;
   saveBtn.onclick = () => {
     const name = (nameInput.value || "").trim();
     if (!name) return;
@@ -6011,9 +6088,9 @@ function setupRankingsPresets() {
     };
     saveRankingsPresets();
     nameInput.value = "";
-    renderList();
+    renderRankingsPresetList();
   };
-  renderList();
+  renderRankingsPresetList();
 }
 
 // ---------- tabs ----------
