@@ -1056,7 +1056,7 @@ let state = {
   // shape (which exact score gets picked) comes from the Weibull+copula
   // grid, tuned by weibullShape/copulaTheta below. All editable — see
   // "Edit prediction model" on the Rankings tab.
-  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -1.2, piLearningRate: 0.06, piCrossInfluence: 0.6 },
+  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.6, copulaTheta: -0.3, piLearningRate: 0.06, piCrossInfluence: 0.6 },
   piRatings: null, // computed once per data load — see computePiRatings()
   oddsData: [], oddsWarnings: [],
   fixtureRunTiers: {
@@ -1704,23 +1704,41 @@ const START_OF_SEASON_RATINGS = {
 // user has ALREADY manually overridden even on that first run.
 async function seedStartOfSeasonRatings() {
   const already = await persistGet("startOfSeasonSeeded");
-  if (already === "1") return;
-  let changed = false;
-  for (const t of state.teams) {
-    const r = START_OF_SEASON_RATINGS[t.short_name];
-    if (!r || state.teamOverrides[t.id]) continue; // no data for this club, or user already set one
-    state.teamOverrides[t.id] = { attack: r.attack, defence: r.defence, overall: r.overall };
-    changed = true;
+  if (already !== "1") {
+    let changed = false;
+    for (const t of state.teams) {
+      const r = START_OF_SEASON_RATINGS[t.short_name];
+      if (!r || state.teamOverrides[t.id]) continue; // no data for this club, or user already set one
+      state.teamOverrides[t.id] = { attack: r.attack, defence: r.defence, overall: r.overall };
+      changed = true;
+    }
+    if (changed) saveTeamOverrides();
+    // Also pushes the FDR weights to the new start-of-season default
+    // (attack/defence emphasised, overall de-emphasised) — this is a
+    // one-time nudge alongside the rating seed above, not a standing
+    // override; the Reset button and any further edits work normally
+    // after this.
+    state.fdrFormula = { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 };
+    saveFdrFormula();
+    persistSet("startOfSeasonSeeded", "1");
   }
-  if (changed) saveTeamOverrides();
-  // Also pushes the FDR weights to the new start-of-season default
-  // (attack/defence emphasised, overall de-emphasised) — this is a
-  // one-time nudge alongside the rating seed above, not a standing
-  // override; the Reset button and any further edits work normally
-  // after this.
-  state.fdrFormula = { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 };
-  saveFdrFormula();
-  persistSet("startOfSeasonSeeded", "1");
+  // Separate, independent one-time flag (not gated behind the block above,
+  // which had already run for existing users before this fix existed) —
+  // recalibrates the scoreline shape/correlation defaults. The original
+  // 1.15/-1.2 defaults were far too zero-inflated (verified against a
+  // Poisson benchmark and a dozen realistic fixture scenarios — predicted
+  // scorelines were collapsing to almost only 0-0/1-0 regardless of the
+  // actual xG gap). 1.6/-0.3 tracks real goal-scoring shape much more
+  // closely while still giving a mild Dixon-Coles-style nudge toward
+  // correlated low scores rather than an aggressive one. Only touches
+  // these two fields — leaves any other blend-weight edits alone.
+  const recalibrated = await persistGet("modelRecalibratedV2");
+  if (recalibrated !== "1") {
+    state.modelWeights.weibullShape = 1.6;
+    state.modelWeights.copulaTheta = -0.3;
+    saveModelWeights();
+    persistSet("modelRecalibratedV2", "1");
+  }
 }
 
 // Builds a live table from this season's finished fixtures. opts.venue
@@ -6034,7 +6052,7 @@ function setupRankingsControls() {
   };
   const resetModelBtn = document.getElementById("resetModelBtn");
   if (resetModelBtn) resetModelBtn.onclick = () => {
-    state.modelWeights = { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -1.2, piLearningRate: 0.06, piCrossInfluence: 0.6 };
+    state.modelWeights = { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.6, copulaTheta: -0.3, piLearningRate: 0.06, piCrossInfluence: 0.6 };
     saveModelWeights();
     renderRankings();
     renderFdrGrid();
