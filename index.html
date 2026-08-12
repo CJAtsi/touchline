@@ -4790,13 +4790,22 @@ function scorelineProbabilityGrid(homeXg, awayXg) {
     else if (c.home === c.away) draw += c.p;
     else awayWin += c.p;
   });
-  // Several scorelines often sit within a hair of each other in probability
-  // (e.g. 1-1 vs 1-0 vs 2-1) — always taking the strict top cell tends to
-  // land on the same "safe" score for most fixtures. Among cells within 8%
-  // of the top probability, prefer whichever is most consistent with the
-  // actual expected-goal gap between the two sides, so a side that's
-  // genuinely expected to win by more shows a more decisive scoreline.
-  const contenders = grid.filter(c => c.p >= grid[0].p * 0.92);
+  // Pick the actual most probable cell as the headline prediction — NOT
+  // whichever cell best matches the raw xG gap. An earlier version of
+  // this searched a wide (8%-of-top) band for the cell numerically
+  // closest to the xG difference, which systematically dragged the pick
+  // toward more extreme, less-likely scorelines whenever a side was a
+  // clear favourite (e.g. auto-picking a 2-0 over a genuinely more
+  // probable 2-1 just because 2-0's goal difference matched the xG gap
+  // more exactly) — the practical effect was heavy favourites almost
+  // always got shown as keeping a clean sheet, which isn't how football
+  // actually plays out even for the best defences. Only break a tie
+  // (multiple cells within 1% of the very top probability — a genuine
+  // statistical tie, not "close enough") in favour of the xG-consistent
+  // one, so this still adds a little differentiation without overriding
+  // what the model actually thinks is most likely.
+  const topP = grid[0].p;
+  const contenders = grid.filter(c => c.p >= topP * 0.99);
   const xgDiff = homeXg - awayXg;
   contenders.sort((a, b) => Math.abs((a.home - a.away) - xgDiff) - Math.abs((b.home - b.away) - xgDiff));
   const top = contenders[0] || grid[0];
@@ -4927,10 +4936,17 @@ function estimateScoreline(teamId, oppId, isHome) {
     teamXg = teamXg * 0.85 + h2h.avgScored * 0.15;
     oppXg = oppXg * 0.85 + h2h.avgConceded * 0.15;
   }
-  // Floor xG just above 0 — a team averaging literally 0 breaks the Poisson
-  // model's shape (everything collapses onto 0 goals for that side).
-  teamXg = Math.max(0.15, teamXg);
-  oppXg = Math.max(0.15, oppXg);
+  // Floor xG at a REALISTIC minimum, not just above zero. 0.15 (the
+  // previous floor) is below what any real Premier League side has
+  // conceded/scored per game over a full season — even historically
+  // dominant defences (peak Man City, etc.) still average roughly
+  // 0.6-0.7 goals conceded per game. 0.45 keeps a genuine gap between
+  // "elite defence" and "cast-iron shutout every week" without still
+  // letting the model degenerate toward literal 0 for every fixture
+  // involving a highly-rated side, especially pre-season when there's no
+  // empirical in-season data yet to temper the rating-formula estimate.
+  teamXg = Math.max(0.45, teamXg);
+  oppXg = Math.max(0.45, oppXg);
 
   const homeXg = isHome ? teamXg : oppXg;
   const awayXg = isHome ? oppXg : teamXg;
@@ -5037,7 +5053,18 @@ function renderFdrGrid() {
         let est = null;
         if (needsScoreline) {
           est = estimateScoreline(t.id, fx.oppId, fx.isHome);
-          if (est) { gfInRange.push(est.teamGoals); gaInRange.push(est.oppGoals); }
+          // Use the actual expected-goals MEAN (est.teamXg/oppXg) for the
+          // season-long Avg GF/Avg GA figures, not the single most-likely
+          // scoreline (est.teamGoals/oppGoals). The most-likely single
+          // score for a low-scoring fixture is very often 0 even when the
+          // true expected value is, say, 0.6 — averaging those individual
+          // "most likely" scores across a whole season systematically
+          // undercounts (this was the actual cause of several teams'
+          // season-long predicted GA reading as ~0). The per-fixture pill
+          // itself still shows the most-likely scoreline (that's what
+          // "click for a rough scoreline" should show) — only the season
+          // aggregate below uses the mean.
+          if (est) { gfInRange.push(est.teamXg); gaInRange.push(est.oppXg); }
         }
         const homeAway = fx.isHome ? "(H)" : "(a)";
         const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
