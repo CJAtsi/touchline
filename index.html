@@ -693,20 +693,32 @@
 
   <section id="tab-fdr" style="display:none">
     <h1 class="page-title">Fixture difficulty</h1>
-    <p class="page-sub">Every club's next fixtures. Pick a mode to change what each fixture pill shows and how it's coloured — using your custom weights from the Rankings tab.</p>
-
-    <div class="mode-btn-row" id="fdrModeRow" style="margin-bottom:12px"></div>
-    <div id="fdrLegendRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--ink-dim)"></div>
+    <p class="page-sub">Every club's next fixtures, colour-coded by difficulty (using your custom weights from the Rankings tab). Click a number of gameweeks to show, or scroll the grid.</p>
 
     <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--ink-dim)">From</span>
       <select id="fdrStartGw"></select>
       <span style="font-size:12px;color:var(--ink-dim)">to</span>
       <select id="fdrEndGw"></select>
-      <div class="seg" id="fdrSortSeg" style="margin-left:10px"></div>
-      <div class="seg" id="fdrViewSeg"></div>
+      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">Sort</span>
+      <select id="fdrSortBy">
+        <option value="easiest" selected>Easiest run first (FDR)</option>
+        <option value="hardest">Hardest run first (FDR)</option>
+        <option value="scorelineBest">Biggest win first (predicted)</option>
+        <option value="scorelineWorst">Biggest loss first (predicted)</option>
+        <option value="gfHigh">Most predicted goals for first</option>
+        <option value="gfLow">Fewest predicted goals for first</option>
+        <option value="gaLow">Fewest predicted goals against first</option>
+        <option value="gaHigh">Most predicted goals against first</option>
+        <option value="alpha">Alphabetical</option>
+      </select>
+      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">View</span>
+      <select id="fdrViewMode">
+        <option value="colour" selected>Fixture colour</option>
+        <option value="scoreline">Predicted scoreline</option>
+      </select>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab).</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab) as the fixture click-through.</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -715,7 +727,7 @@
     <div class="card" style="margin-top:20px">
       <div class="detail-block-title">Fixture run finder</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
+        Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can still be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
       </p>
       <div id="fixtureRunTierEditor" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px"></div>
       <div class="table-wrap"><table id="fixtureRunGrid"></table></div>
@@ -1208,7 +1220,6 @@ let state = {
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
-  fdrMode: "fdr", fdrSort: "easiest",
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
@@ -4974,68 +4985,7 @@ function frankCopulaCdf(u, v, theta) {
   const den = Math.exp(-theta) - 1;
   return -Math.log(1 + num / den) / theta;
 }
-// ---------- FDR display modes (button row, mirrors the reference UI) ----------
-// Each mode controls what number a fixture pill shows and how it's
-// coloured. `value(est, blend)` pulls the number from an already-computed
-// estimateScoreline() + blended outcome-prob result; `buckets` are the
-// legend thresholds shown above the grid (low->high, colour text is what
-// gets interpolated the same way fdrGradientColor does for plain FDR).
-const FDR_MODES = {
-  fdr: {
-    label: "FDR", icon: "🎯", glow: "rgba(255,182,72,0.55)",
-    legend: [{ t: "Easiest" }, { t: "Easy" }, { t: "Average" }, { t: "Hard" }, { t: "Hardest" }],
-  },
-  pgoals: {
-    label: "pGoals", icon: "⚽", glow: "rgba(255,63,164,0.55)",
-    value: (est) => est ? est.teamXg : null,
-    fmt: (v) => v.toFixed(2),
-    buckets: [0.80, 1.15, 1.40, 1.70, 1.90, 2.10],
-    invert: false,
-  },
-  pgoalsAgainst: {
-    label: "pGoals against", icon: "🛡️", glow: "rgba(91,163,255,0.55)",
-    value: (est) => est ? est.oppXg : null,
-    fmt: (v) => v.toFixed(2),
-    buckets: [0.80, 1.15, 1.40, 1.70, 1.90, 2.10],
-    invert: true,
-  },
-  win: {
-    label: "Win %", icon: "📈", glow: "rgba(51,214,154,0.55)",
-    value: (est, isHome) => est ? (isHome ? est.model.homeWin : est.model.awayWin) * 100 : null,
-    fmt: (v) => Math.round(v) + "%",
-    buckets: [15, 25, 35, 45, 55, 65],
-    invert: false,
-  },
-  cleansheet: {
-    label: "Clean sheet %", icon: "🔒", glow: "rgba(51,214,154,0.55)",
-    value: (est, isHome) => est ? est.model.grid.filter(c => (isHome ? c.away : c.home) === 0).reduce((s, c) => s + c.p, 0) * 100 : null,
-    fmt: (v) => Math.round(v) + "%",
-    buckets: [10, 18, 26, 34, 42, 50],
-    invert: false,
-  },
-  twoplus: {
-    label: "2+ goals", icon: "⚡", glow: "rgba(255,182,72,0.55)",
-    value: (est, isHome) => est ? est.model.grid.filter(c => (isHome ? c.home : c.away) >= 2).reduce((s, c) => s + c.p, 0) * 100 : null,
-    fmt: (v) => Math.round(v) + "%",
-    buckets: [10, 20, 30, 40, 50, 60],
-    invert: false,
-  },
-};
-Object.entries(FDR_MODES).forEach(([key, m]) => { m.key = key; });
-// Colour for a mode value against its bucket thresholds — same red->green
-// interpolation family as fdrGradientColor, just driven by the mode's own
-// scale instead of the fixed 1-5 FDR range.
-function fdrModeColor(mode, value) {
-  if (mode.key === "fdr" || value === null || value === undefined) return null;
-  const b = mode.buckets;
-  let t = 0;
-  for (let i = 0; i < b.length; i++) { if (value >= b[i]) t = (i + 1) / b.length; }
-  if (mode.invert) t = 1 - t;
-  const hue = 6 + t * 122;
-  return `hsl(${hue.toFixed(0)},70%,${(52 + t * 8).toFixed(0)}%)`;
-}
-
-
+function scorelineProbabilityGrid(homeXg, awayXg) {
   const shape = state.modelWeights.weibullShape;
   const theta = state.modelWeights.copulaTheta;
   const MAX_GOALS = 8; // 0..7 inclusive
@@ -5072,16 +5022,22 @@ function fdrModeColor(mode, value) {
     else if (c.home === c.away) draw += c.p;
     else awayWin += c.p;
   });
-  // Headline prediction is the grid's own single most-probable cell (the
-  // mode) — deliberately kept separate from the Avg GF/Avg GA season
-  // aggregate, which uses the expected-goals MEAN instead (see
-  // renderFdrGrid). The two represent different questions: "what's the
-  // single most likely scoreline in this exact match" (mode) vs "what's
-  // this team on track to average across a run of fixtures" (mean) — for
-  // a right-skewed, zero-heavy distribution these can legitimately
-  // differ, and collapsing them together hid that distinction.
-  const top = grid[0];
-  const alternates = grid.slice(1, 4);
+  // Headline prediction is now the same expected-goals mean the Avg
+  // GF/Avg GA season figures already use — rounded to the nearest whole
+  // score — NOT the grid's raw highest-probability cell (the mode).
+  // Those two routinely disagree: this distribution is right-skewed and
+  // zero-heavy at typical football scorelines, so the single most
+  // probable CELL is very often 0-0/1-0 even when the actual expected
+  // scoreline (what the mean says should happen "on average") is
+  // something like 2-1. Rounding the mean keeps the single-fixture
+  // prediction consistent with the season aggregate instead of the two
+  // silently using different logic and disagreeing with each other.
+  // Falls back to the grid's actual top cell only if the rounded-mean
+  // cell somehow isn't in the grid (shouldn't happen within MAX_GOALS).
+  const roundedHome = Math.min(MAX_GOALS - 1, Math.max(0, Math.round(homeXg)));
+  const roundedAway = Math.min(MAX_GOALS - 1, Math.max(0, Math.round(awayXg)));
+  const top = grid.find(c => c.home === roundedHome && c.away === roundedAway) || grid[0];
+  const alternates = grid.filter(c => c !== top).slice(0, 3);
   return { grid, top, alternates, homeWin, draw, awayWin };
 }
 // Blends the raw scoreline-model outcome % with Pi-ratings and (when
@@ -5263,7 +5219,7 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the single most probable result from the model; win/draw/loss % blended with Pi-ratings and real odds where available. Season Avg GF/GA (Teams/FDR tabs) use the expected-goals average instead, which can differ from this single-match pick.</p>
+    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the expected-goals average for each side, rounded to the nearest score; win/draw/loss % blended with Pi-ratings and real odds where available.</p>
     <div style="text-align:center;margin:8px 0 12px;font-size:12px">
       <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
       <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
@@ -5275,51 +5231,16 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   `;
   document.getElementById("fdrPredictModal").style.display = "flex";
 }
-function renderFdrModeRow() {
-  const row = document.getElementById("fdrModeRow");
-  row.innerHTML = Object.entries(FDR_MODES).map(([key, m]) => `
-    <button class="mode-btn${state.fdrMode === key ? " active" : ""}" data-fdr-mode="${key}" style="--mode-glow:${m.glow}">
-      <span class="mode-btn-icon">${m.icon}</span>${m.label}
-    </button>
-  `).join("");
-  row.querySelectorAll("[data-fdr-mode]").forEach(btn => {
-    btn.onclick = () => { state.fdrMode = btn.dataset.fdrMode; renderFdrModeRow(); renderFdrGrid(); };
-  });
-  const mode = FDR_MODES[state.fdrMode];
-  const legend = document.getElementById("fdrLegendRow");
-  if (mode.key === "fdr" || !mode.buckets) {
-    legend.innerHTML = mode.legend
-      ? mode.legend.map((l, i) => {
-          const hue = 6 + (i / (mode.legend.length - 1)) * 122;
-          return `<span style="background:hsl(${hue.toFixed(0)},72%,40%);color:#0b1310;padding:3px 9px;border-radius:999px;font-weight:600">${l.t}</span>`;
-        }).join("")
-      : "";
-  } else {
-    const b = mode.buckets;
-    // label i represents the bucket starting at threshold i (bucket 0 is
-    // "below the first threshold"); use a value safely inside each bucket
-    // so fdrModeColor's own threshold walk returns that bucket's colour.
-    const labels = [`<${b[0]}`, ...b.map(v => `${v}+`)];
-    const sampleValues = [b[0] - 1, ...b];
-    legend.innerHTML = labels.map((l, i) => {
-      const color = fdrModeColor(mode, sampleValues[i]);
-      return `<span style="background:${color};color:#0b1310;padding:3px 9px;border-radius:999px;font-weight:600">${l}</span>`;
-    }).join("");
-    }).join("");
-  }
-}
 function renderFdrGrid() {
   if (!state.teams.length) return;
   populateFdrStartGw();
-  renderFdrModeRow();
   const startGw = Number(document.getElementById("fdrStartGw").value);
   let endGw = Number(document.getElementById("fdrEndGw").value);
   if (endGw < startGw) endGw = startGw;
   const gwIds = state.events.map(e => e.id).filter(id => id >= startGw && id <= endGw);
   const curId = currentEventId();
-  const sortBy = state.fdrSort;
-  const mode = FDR_MODES[state.fdrMode];
-  const viewMode = state.fdrViewScoreline ? "scoreline" : "colour";
+  const sortBy = document.getElementById("fdrSortBy").value;
+  const viewMode = document.getElementById("fdrViewMode").value; // "colour" | "scoreline"
   const showGoals = true; // Avg GF/Avg GA now always shown, no toggle
   const showAvgCol = sortBy !== "alpha";
 
@@ -5375,19 +5296,11 @@ function renderFdrGrid() {
         }
         const homeAway = fx.isHome ? "(H)" : "(a)";
         const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
-        const modeVal = mode.key !== "fdr" && est ? mode.value(est, fx.isHome) : null;
-        let label, bgColor;
-        if (mode.key !== "fdr" && modeVal !== null) {
-          label = `${oppLabel}<br>${mode.fmt(modeVal)}`;
-          bgColor = fdrModeColor(mode, modeVal);
-        } else {
-          label = viewMode === "scoreline" && est
-            ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
-            : `${oppLabel} ${homeAway}`;
-          bgColor = fdrGradientColor(score);
-        }
+        const label = viewMode === "scoreline" && est
+          ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
+          : `${oppLabel} ${homeAway}`;
         const scoreTitle = `custom FDR ${score.toFixed(1)}` + (est ? `, predicted ${est.teamGoals}-${est.oppGoals}` : "");
-        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${bgColor};margin:1px auto;width:56px;font-size:9px;line-height:1.3" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
       }).join("");
       scoresInOrder.push(worstThisGw);
       return `<td style="padding:4px 4px 2px;${bg}">${html}</td>`;
@@ -5543,33 +5456,11 @@ function renderFixtureRunFinder(list, gwIds) {
   suggestionEl.innerHTML = suggestions.join("<br>");
 }
 
-const FDR_SORT_OPTIONS = [
-  { key: "easiest", label: "Easiest first" },
-  { key: "hardest", label: "Hardest first" },
-  { key: "alpha", label: "A-Z" },
-];
-function renderFdrSortSeg() {
-  document.getElementById("fdrSortSeg").innerHTML = FDR_SORT_OPTIONS.map(o =>
-    `<button class="${state.fdrSort === o.key ? "active" : ""}" data-fdr-sort="${o.key}">${o.label}</button>`
-  ).join("");
-  document.querySelectorAll("#fdrSortSeg [data-fdr-sort]").forEach(btn => {
-    btn.onclick = () => { state.fdrSort = btn.dataset.fdrSort; renderFdrSortSeg(); renderFdrGrid(); };
-  });
-}
-function renderFdrViewSeg() {
-  document.getElementById("fdrViewSeg").innerHTML = `
-    <button class="${!state.fdrViewScoreline ? "active" : ""}" data-fdr-view="colour">Opponent view</button>
-    <button class="${state.fdrViewScoreline ? "active" : ""}" data-fdr-view="scoreline">Scoreline view</button>
-  `;
-  document.querySelectorAll("#fdrViewSeg [data-fdr-view]").forEach(btn => {
-    btn.onclick = () => { state.fdrViewScoreline = btn.dataset.fdrView === "scoreline"; renderFdrViewSeg(); renderFdrGrid(); };
-  });
-}
 function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
-  renderFdrSortSeg();
-  renderFdrViewSeg();
+  document.getElementById("fdrSortBy").onchange = renderFdrGrid;
+  document.getElementById("fdrViewMode").onchange = renderFdrGrid;
   document.getElementById("fdrPredictClose").onclick = () => { document.getElementById("fdrPredictModal").style.display = "none"; };
   document.getElementById("fdrPredictModal").onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
 }
