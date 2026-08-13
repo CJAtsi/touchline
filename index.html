@@ -9,25 +9,28 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg-0: #ffffff;
-    --bg-1: #faf9f6;
-    --panel: #ffffff;
-    --panel-2: #f7f5f0;
-    --panel-3: #efece3;
-    --border: rgba(20,20,15,0.09);
-    --border-strong: rgba(160,116,42,0.5);
-    --ink: #1c1c18;
-    --ink-dim: #6b6a60;
-    --ink-faint: #8c8a7e;
-    --gold: #a8752f;
-    --gold-bright: #8a5f24;
-    --gold-soft: rgba(168,117,47,0.10);
-    --emerald: #1f7a53;
-    --emerald-dim: rgba(31,122,83,0.10);
-    --red: #b8392a;
-    --red-soft: rgba(184,57,42,0.09);
-    --blue: #2f6a99;
-    --shadow: 0 1px 2px rgba(20,20,15,0.04), 0 10px 30px -12px rgba(20,20,15,0.10);
+    --bg-0: #0a0d16;
+    --bg-1: #0c0f1a;
+    --panel: rgba(255,255,255,0.055);
+    --panel-2: rgba(255,255,255,0.085);
+    --panel-3: rgba(255,255,255,0.13);
+    --border: rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.24);
+    --ink: #f2f3f8;
+    --ink-dim: #a6acc2;
+    --ink-faint: #767c92;
+    --gold: #ffb648;
+    --gold-bright: #ffcf80;
+    --gold-soft: rgba(255,182,72,0.16);
+    --emerald: #33d69a;
+    --emerald-dim: rgba(51,214,154,0.16);
+    --red: #ff6b7a;
+    --red-soft: rgba(255,107,122,0.14);
+    --blue: #5ba3ff;
+    --pink: #ff3fa4;
+    --purple: #8b6bff;
+    --glass-blur: 20px;
+    --shadow: 0 1px 1px rgba(0,0,0,0.2), 0 20px 44px -14px rgba(0,0,0,0.55);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -37,9 +40,11 @@
     overflow-x: hidden;
     width: 100%;
     background:
-      radial-gradient(1200px 600px at 15% -10%, rgba(168,117,47,0.05), transparent 60%),
-      radial-gradient(1000px 500px at 100% 0%, rgba(31,122,83,0.03), transparent 55%),
+      radial-gradient(900px 500px at 8% -8%, rgba(255,63,164,0.16), transparent 60%),
+      radial-gradient(900px 500px at 96% 0%, rgba(91,163,255,0.13), transparent 55%),
+      radial-gradient(1100px 700px at 50% 110%, rgba(51,214,154,0.10), transparent 60%),
       var(--bg-0);
+    background-attachment: fixed;
     color: var(--ink);
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     min-height: 100vh;
@@ -66,28 +71,30 @@
   header {
     position: sticky; top: 0; z-index: 30;
     border-bottom: 1px solid var(--border);
-    background: rgba(255,255,255,0.85);
-    backdrop-filter: blur(10px);
+    background: rgba(10,13,22,0.55);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   }
   .header-inner {
     max-width: 1540px; margin: 0 auto; padding: 0 24px;
     display: flex; align-items: center; gap: 30px; height: 58px;
   }
-  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: var(--ink); }
   .brand-mark {
-    width: 22px; height: 22px; border-radius: 6px;
-    background: linear-gradient(135deg, var(--gold-bright), var(--emerald));
+    width: 24px; height: 24px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--pink), var(--purple));
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 800; color: #07100d;
+    font-size: 11px; font-weight: 800; color: #fff;
+    box-shadow: 0 3px 12px -2px rgba(255,63,164,0.55);
   }
-  nav { display: flex; gap: 3px; font-size: 14px; }
+  nav { display: flex; gap: 3px; font-size: 14px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 999px; border: 1px solid var(--border); }
   nav button {
     background: transparent; border: none; color: var(--ink-faint);
-    padding: 8px 14px; border-radius: 7px; cursor: pointer; font-size: 13.5px;
+    padding: 8px 15px; border-radius: 999px; cursor: pointer; font-size: 13px;
     font-family: inherit; font-weight: 500; transition: all 0.15s ease;
   }
-  nav button.active { background: var(--panel-2); color: var(--gold-bright); }
-  nav button:hover:not(.active) { color: var(--ink-dim); background: rgba(20,20,15,0.04); }
+  nav button.active { background: rgba(255,255,255,0.14); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 1px 4px rgba(0,0,0,0.3); }
+  nav button:hover:not(.active) { color: var(--ink-dim); background: rgba(255,255,255,0.06); }
 
   main { max-width: 1540px; margin: 0 auto; padding: 32px 24px 70px; }
   .page-title { font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
@@ -96,8 +103,9 @@
   /* dashboard summary */
   .dash-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 22px; }
   .dash-card {
-    background: linear-gradient(180deg, var(--panel-2), var(--panel));
-    border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04));
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px;
     box-shadow: var(--shadow);
   }
   .dash-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-faint); font-weight: 600; }
@@ -106,14 +114,15 @@
   .dash-sub { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
 
   .status-banner {
-    padding: 12px 15px; border-radius: 10px; font-size: 13px; margin-bottom: 18px;
+    padding: 12px 15px; border-radius: 14px; font-size: 13px; margin-bottom: 18px;
     border: 1px solid var(--border); color: var(--ink-dim); background: var(--panel);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
   }
-  .status-banner.error { border-color: var(--red); background: var(--red-soft); color: var(--red); }
-  .status-banner.loading { border-color: var(--border-strong); background: var(--gold-soft); color: var(--gold-bright); }
+  .status-banner.error { border-color: rgba(255,107,122,0.4); background: var(--red-soft); color: var(--red); }
+  .status-banner.loading { border-color: rgba(255,182,72,0.4); background: var(--gold-soft); color: var(--gold-bright); }
   .status-banner .retry-btn {
-    margin-left: 10px; background: rgba(20,20,15,0.08); border: none; color: var(--ink);
-    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit;
+    margin-left: 10px; background: rgba(255,255,255,0.1); border: none; color: var(--ink);
+    padding: 4px 10px; border-radius: 999px; cursor: pointer; font-size: 12px; font-family: inherit;
   }
   .diag-toggle { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; margin-left: 8px; opacity: 0.8; }
   .diag-list { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; }
@@ -123,43 +132,62 @@
 
   .toolbar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    padding: 13px; border: 1px solid var(--border); border-radius: 12px;
-    background: var(--panel); margin-bottom: 16px; box-shadow: var(--shadow);
+    padding: 13px; border: 1px solid var(--border); border-radius: 18px;
+    background: var(--panel); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    margin-bottom: 16px; box-shadow: var(--shadow);
   }
-  .seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
   .seg button {
     background: transparent; border: none; color: var(--ink-faint);
-    padding: 7px 13px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+    padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
     transition: all 0.15s ease;
   }
-  .seg button:hover:not(.active) { background: var(--panel-2); color: var(--ink-dim); }
-  .seg button.active { background: var(--panel-3); color: var(--gold-bright); }
+  .seg button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
+  .seg button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 
   select, input[type=text], input[type=number] {
-    background: var(--bg-1); border: 1px solid var(--border); color: var(--ink);
-    border-radius: 8px; padding: 8px 11px; font-size: 13px; font-family: inherit; outline: none;
-    transition: border-color 0.15s ease;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 999px; padding: 8px 13px; font-size: 13px; font-family: inherit; outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
   }
-  select:focus, input:focus { border-color: var(--border-strong); }
+  select:focus, input:focus { border-color: var(--border-strong); background: rgba(255,255,255,0.08); }
   .price-range { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
   .price-range input { width: 62px; }
   .search-input { flex: 1; min-width: 150px; max-width: 240px; }
   .spacer { margin-left: auto; display: flex; align-items: center; gap: 6px; }
   .dir-btn {
-    background: var(--bg-1); border: 1px solid var(--border); color: var(--ink);
-    border-radius: 8px; padding: 8px 11px; cursor: pointer; font-size: 13px;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 999px; padding: 8px 13px; cursor: pointer; font-size: 13px;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   }
-  .dir-btn:hover:not(:disabled) { background: var(--panel-3); border-color: var(--border-strong); }
+  .dir-btn:hover:not(:disabled) { background: rgba(255,255,255,0.13); border-color: var(--border-strong); }
   .dir-btn:active:not(:disabled) { transform: translateY(1px); }
   .dir-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .dir-btn.active { background: var(--gold-soft); border-color: rgba(255,182,72,0.45); color: var(--gold-bright); font-weight: 600; }
+
+  /* pill/icon mode buttons — glass, colourful, Apple-widget style */
+  .mode-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mode-btn {
+    display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.055);
+    border: 1px solid var(--border); color: var(--ink-dim); padding: 9px 15px 9px 10px;
+    border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: all 0.15s ease;
+  }
+  .mode-btn:hover:not(.active) { background: rgba(255,255,255,0.1); color: var(--ink); }
+  .mode-btn .mode-btn-icon {
+    width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .mode-btn.active { color: #fff; border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
+  .mode-btn.active .mode-btn-icon { background: rgba(255,255,255,0.22); }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
   thead th {
     text-align: right; padding: 10px 13px; color: var(--ink-dim); font-weight: 600;
-    background: var(--panel-2); white-space: nowrap; cursor: pointer; user-select: none;
+    background: rgba(255,255,255,0.045); white-space: nowrap; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    border-bottom: 1px solid var(--border);
     transition: background 0.12s ease, color 0.12s ease;
   }
   thead th:hover { color: var(--gold-bright); }
@@ -168,9 +196,12 @@
   tbody td { padding: 9px 13px; text-align: right; border-top: 1px solid var(--border); }
   tbody td.label-col { text-align: left; }
   tbody tr.player-row { cursor: pointer; transition: background 0.1s ease; }
-  tbody tr.player-row:hover { background: var(--panel-2); }
-  tbody tr.detail-row td { background: var(--bg-1); border-top: none; padding: 0; }
-  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
+  tbody tr.detail-row td { background: rgba(255,255,255,0.02); border-top: none; padding: 0; }
+  .table-wrap {
+    overflow-x: auto; border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
+    background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
   .pos-pill {
@@ -184,7 +215,11 @@
   .star-btn:hover { transform: scale(1.15); }
   .foot-note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
 
-  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 18px; box-shadow: var(--shadow); transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+  .card {
+    border: 1px solid var(--border); border-radius: 18px; background: var(--panel); padding: 18px;
+    box-shadow: var(--shadow); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
   .card:hover { border-color: var(--border-strong); }
 
   /* fixture ticker */
@@ -209,8 +244,9 @@
   .team-form input { width: 170px; }
   .btn {
     background: linear-gradient(135deg, var(--gold-bright), var(--gold)); border: none; color: #12100a;
-    padding: 9px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700; font-family: inherit;
+    padding: 9px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; font-family: inherit;
     transition: filter 0.15s ease, transform 0.1s ease;
+    box-shadow: 0 6px 18px -6px rgba(255,182,72,0.45);
   }
   .btn:hover:not(:disabled) { filter: brightness(1.08); }
   .btn:active:not(:disabled) { transform: translateY(1px); }
@@ -222,7 +258,8 @@
 
   .squad-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 11px; }
   .squad-card {
-    border: 1px solid var(--border); border-radius: 10px; padding: 11px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 14px; padding: 11px; background: rgba(255,255,255,0.055);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
     position: relative; transition: border-color 0.15s ease, transform 0.12s ease;
   }
   .squad-card:hover { transform: translateY(-1px); }
@@ -233,11 +270,11 @@
   }
   .empty-state {
     text-align: center; padding: 46px 20px; color: var(--ink-faint); font-size: 13px;
-    border: 1px dashed var(--border); border-radius: 12px; background: var(--panel-2);
+    border: 1px dashed var(--border); border-radius: 18px; background: rgba(255,255,255,0.03);
   }
   .note-input {
-    width: 100%; background: var(--bg-1); border: 1px solid var(--border); color: var(--ink);
-    border-radius: 8px; padding: 7px 9px; font-size: 12px; font-family: inherit; margin-top: 8px; resize: vertical;
+    width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 12px; padding: 7px 9px; font-size: 12px; font-family: inherit; margin-top: 8px; resize: vertical;
   }
 
   /* planner */
@@ -247,7 +284,7 @@
   .pos-builder-head .count.full { color: var(--emerald); }
   .picked-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .picked-chip {
-    display: flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.08); border: 1px solid var(--border);
     border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 12px;
   }
   .picked-chip button { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; padding: 0 2px; }
@@ -256,11 +293,14 @@
     display: flex; justify-content: space-between; align-items: center; padding: 5px 9px;
     border-radius: 6px; font-size: 12.5px; cursor: pointer;
   }
-  .search-result-row:hover { background: var(--panel-2); }
+  .search-result-row:hover { background: rgba(255,255,255,0.07); }
   .search-result-row.disabled { opacity: 0.4; cursor: not-allowed; }
-  .gw-row { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; background: var(--panel); }
+  .gw-row {
+    border: 1px solid var(--border); border-radius: 16px; margin-bottom: 10px; overflow: hidden;
+    background: var(--panel); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
   .gw-row-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; flex-wrap: wrap; }
-  .gw-row-head:hover { background: var(--panel-2); }
+  .gw-row-head:hover { background: rgba(255,255,255,0.05); }
   .gw-label { font-weight: 600; min-width: 70px; }
   .gw-proj { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--gold-bright); }
   .gw-cum { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-faint); }
@@ -272,17 +312,17 @@
   .gw-row-body { padding: 16px; border-top: 1px solid var(--border); }
   .chip-btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
   .chip-btn {
-    background: var(--bg-1); border: 1px solid var(--border); color: var(--ink-dim);
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink-dim);
     padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: inherit;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
-  .chip-btn:hover:not(.active):not(:disabled) { background: var(--panel-3); color: var(--ink); border-color: var(--border-strong); }
+  .chip-btn:hover:not(.active):not(:disabled) { background: rgba(255,255,255,0.12); color: var(--ink); border-color: var(--border-strong); }
   .chip-btn:active:not(:disabled) { transform: translateY(1px); }
-  .chip-btn.active { background: var(--gold-soft); border-color: var(--border-strong); color: var(--gold-bright); font-weight: 600; }
+  .chip-btn.active { background: var(--gold-soft); border-color: rgba(255,182,72,0.4); color: var(--gold-bright); font-weight: 600; }
   .chip-btn:disabled { opacity: 0.35; cursor: not-allowed; }
   .swap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 12px; }
   .swap-card {
-    border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; background: var(--bg-1);
+    border: 1px solid var(--border); border-radius: 12px; padding: 9px 11px; background: rgba(255,255,255,0.05);
     display: flex; justify-content: space-between; align-items: center; gap: 8px;
   }
   .swap-card.captain-pick { border-color: var(--gold); }
@@ -306,28 +346,32 @@
   .builder-filters input[type=text] { flex: 1; min-width: 120px; }
   .builder-count {
     background: var(--emerald-dim); color: var(--emerald); font-size: 12px; font-weight: 700;
-    padding: 7px 10px; border-radius: 8px; text-align: center;
+    padding: 7px 10px; border-radius: 999px; text-align: center;
   }
-  .builder-list { max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+  .builder-list {
+    max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: 16px; background: var(--panel);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
   .builder-pos-head {
     position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
-    background: var(--panel-2); padding: 7px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    background: rgba(20,24,38,0.9); padding: 7px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.04em; color: var(--ink-dim); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
   }
   .builder-row {
     display: flex; align-items: center; gap: 9px; padding: 8px 12px; border-bottom: 1px solid var(--border);
     font-size: 13px; transition: background 0.12s ease;
   }
-  .builder-row:hover { background: var(--panel-2); }
+  .builder-row:hover { background: rgba(255,255,255,0.05); }
   .builder-row:last-child { border-bottom: none; }
   .builder-row.in-squad { background: var(--gold-soft); }
-  .builder-row.in-squad:hover { background: var(--gold-soft); filter: brightness(0.97); }
+  .builder-row.in-squad:hover { background: var(--gold-soft); filter: brightness(1.1); }
   .builder-row .b-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .builder-row .b-sub { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
   .builder-row .b-price { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-dim); width: 44px; text-align: right; }
   .builder-row .b-pts { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-faint); width: 34px; text-align: right; }
   .builder-add-btn {
-    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--panel);
+    width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--border-strong); background: rgba(255,255,255,0.08);
     color: var(--gold-bright); font-size: 15px; line-height: 1; cursor: pointer; flex-shrink: 0;
   }
   .builder-add-btn.remove { color: var(--red); border-color: var(--red); }
@@ -336,13 +380,13 @@
   .builder-topbar { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   .builder-pill { background: var(--emerald-dim); color: var(--emerald); font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 999px; font-family: "JetBrains Mono", monospace; }
   .builder-pill.over { background: var(--red-soft); color: var(--red); }
-  .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
-  .view-toggle button { background: var(--panel); border: none; padding: 6px 14px; font-size: 12.5px; cursor: pointer; color: var(--ink-dim); font-family: inherit; }
-  .view-toggle button.active { background: var(--gold-soft); color: var(--gold-bright); font-weight: 700; }
+  .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-left: auto; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
+  .view-toggle button { background: transparent; border: none; padding: 6px 14px; border-radius: 999px; font-size: 12.5px; cursor: pointer; color: var(--ink-dim); font-family: inherit; }
+  .view-toggle button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); font-weight: 700; }
   .builder-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .builder-actions .btn-secondary {
-    background: var(--panel); border: 1px solid var(--border-strong); color: var(--ink); padding: 9px 16px;
-    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border-strong); color: var(--ink); padding: 9px 16px;
+    border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
   }
   .squad-list-view { display: flex; flex-direction: column; gap: 4px; }
   .squad-list-view .builder-pos-head { border-radius: 8px; }
@@ -381,13 +425,14 @@
     display: flex; align-items: center; justify-content: center; padding: 20px;
   }
   .pitch-modal-card {
-    background: var(--panel, #fff); border-radius: 14px; padding: 18px; width: 100%; max-width: 320px;
+    background: rgba(18,22,36,0.85); border: 1px solid var(--border); border-radius: 20px; padding: 18px; width: 100%; max-width: 320px;
     box-shadow: var(--shadow); max-height: 80vh; overflow-y: auto;
+    backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
   }
   .pitch-modal-card .chip-btn { width: 100%; text-align: left; padding: 10px 12px; }
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
-    border-radius: 10px; background: var(--panel-2); flex-wrap: wrap;
+    border-radius: 16px; background: rgba(255,255,255,0.04); flex-wrap: wrap;
   }
   .bench-strip .bench-label { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; width: 100%; text-align: center; }
 
@@ -411,12 +456,12 @@
   .rank-score { font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--ink-dim); width: 46px; text-align: right; }
 
   /* stats theme switcher */
-  .theme-seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+  .theme-seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 14px; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
   .theme-seg button {
-    background: transparent; border: none; color: var(--ink-faint); padding: 8px 16px; font-size: 13px;
+    background: transparent; border: none; color: var(--ink-faint); padding: 8px 16px; border-radius: 999px; font-size: 13px;
     font-weight: 600; cursor: pointer; font-family: inherit; flex: 1;
   }
-  .theme-seg button.active { background: var(--panel-3); color: var(--gold-bright); }
+  .theme-seg button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 
   /* ---------- Mobile ---------- */
   @media (max-width: 640px) {
@@ -531,6 +576,9 @@
         <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
         <button class="dir-btn" id="showSelectedStatsBtn" type="button">Show selected (0)</button>
         <button class="dir-btn" id="addSelectedToGroupBtn" type="button">+ Add selected to group</button>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap">
+          <input type="checkbox" id="statsHeatmapToggle" /> 🔥 Heatmap
+        </label>
       </div>
     </div>
     <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
@@ -629,7 +677,12 @@
     </div>
 
     <div class="card" style="margin-top:20px">
-      <div class="detail-block-title">Team stats — form, goals, and shots/xG/possession/CBIT and more</div>
+      <div class="detail-block-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Team stats — form, goals, and shots/xG/possession/CBIT and more</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap;font-weight:400">
+          <input type="checkbox" id="teamsHeatmapToggle" /> 🔥 Heatmap
+        </label>
+      </div>
       <p class="foot-note" id="clubStatsNote" style="margin-top:-4px;margin-bottom:10px"></p>
       <div class="table-wrap"><table>
         <thead><tr id="clubStatsHeadRow"></tr></thead>
@@ -640,32 +693,20 @@
 
   <section id="tab-fdr" style="display:none">
     <h1 class="page-title">Fixture difficulty</h1>
-    <p class="page-sub">Every club's next fixtures, colour-coded by difficulty (using your custom weights from the Rankings tab). Click a number of gameweeks to show, or scroll the grid.</p>
+    <p class="page-sub">Every club's next fixtures. Pick a mode to change what each fixture pill shows and how it's coloured — using your custom weights from the Rankings tab.</p>
+
+    <div class="mode-btn-row" id="fdrModeRow" style="margin-bottom:12px"></div>
+    <div id="fdrLegendRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--ink-dim)"></div>
 
     <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--ink-dim)">From</span>
       <select id="fdrStartGw"></select>
       <span style="font-size:12px;color:var(--ink-dim)">to</span>
       <select id="fdrEndGw"></select>
-      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">Sort</span>
-      <select id="fdrSortBy">
-        <option value="easiest" selected>Easiest run first (FDR)</option>
-        <option value="hardest">Hardest run first (FDR)</option>
-        <option value="scorelineBest">Biggest win first (predicted)</option>
-        <option value="scorelineWorst">Biggest loss first (predicted)</option>
-        <option value="gfHigh">Most predicted goals for first</option>
-        <option value="gfLow">Fewest predicted goals for first</option>
-        <option value="gaLow">Fewest predicted goals against first</option>
-        <option value="gaHigh">Most predicted goals against first</option>
-        <option value="alpha">Alphabetical</option>
-      </select>
-      <span style="font-size:12px;color:var(--ink-dim);margin-left:10px">View</span>
-      <select id="fdrViewMode">
-        <option value="colour" selected>Fixture colour</option>
-        <option value="scoreline">Predicted scoreline</option>
-      </select>
+      <div class="seg" id="fdrSortSeg" style="margin-left:10px"></div>
+      <div class="seg" id="fdrViewSeg"></div>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a rough scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. "Predicted scoreline" sorting/view uses the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab) as the fixture click-through.</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab).</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -674,7 +715,7 @@
     <div class="card" style="margin-top:20px">
       <div class="detail-block-title">Fixture run finder</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can still be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
+        Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
       </p>
       <div id="fixtureRunTierEditor" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px"></div>
       <div class="table-wrap"><table id="fixtureRunGrid"></table></div>
@@ -1037,6 +1078,126 @@ function activeColumns() {
   return cols;
 }
 
+// ---------- generic heatmap coloring (Player stats + Teams tab) ----------
+// Pulls a plain number out of whatever a column normally renders (reusing
+// COLUMN_FORMAT so it stays in sync with however a cell is actually
+// displayed), so heatmap shading always matches what's on screen.
+function numericColValue(key, p) {
+  if (COLUMN_FORMAT[key]) {
+    const v = Number(String(COLUMN_FORMAT[key](p)[0]).replace(/[^0-9.-]/g, ""));
+    return Number.isNaN(v) ? null : v;
+  }
+  const v = p[key];
+  return typeof v === "number" ? v : null;
+}
+// Red (low) -> yellow -> green (high) background tint, low-alpha so the
+// existing text colour/theme still reads on top of it. `invert` flips the
+// scale for stats where lower is better (e.g. goals conceded).
+function heatmapBg(value, min, max, invert) {
+  if (value === null || value === undefined || Number.isNaN(value) || min === max || min === null || max === null) return "";
+  let t = (value - min) / (max - min);
+  t = Math.max(0, Math.min(1, t));
+  if (invert) t = 1 - t;
+  const hue = 10 + t * 110; // 10=red -> 55=amber -> 120=green
+  return `background:hsla(${hue.toFixed(0)},70%,42%,0.32);`;
+}
+// Builds { key: {min,max} } for a set of numeric columns across a set of
+// rows, where getVal(row, key) returns the number for that row/column.
+function computeHeatmapRanges(rows, keys, getVal) {
+  const ranges = {};
+  keys.forEach(key => {
+    let min = Infinity, max = -Infinity;
+    rows.forEach(row => {
+      const v = getVal(row, key);
+      if (typeof v === "number" && !Number.isNaN(v)) { if (v < min) min = v; if (v > max) max = v; }
+    });
+    ranges[key] = (min === Infinity) ? { min: null, max: null } : { min, max };
+  });
+  return ranges;
+}
+// A handful of columns where a LOWER number is the better outcome — heatmap
+// should shade these in reverse (low=green) so "good" always reads green.
+const HEATMAP_INVERT_KEYS = new Set([
+  "goalsConceded", "goalsConcededPer90", "xgc90", "penaltiesMissed", "ga",
+]);
+
+// ---------- FM-style custom attributes (freeform, not tied to any data) ----------
+function getPlayerAttributes(playerId) { return state.playerAttributes[playerId] || {}; }
+function setPlayerAttribute(playerId, key, value) {
+  if (!state.playerAttributes[playerId]) state.playerAttributes[playerId] = {};
+  const v = Math.max(1, Math.min(20, Math.round(Number(value) || 1)));
+  state.playerAttributes[playerId][key] = v;
+  savePlayerAttributes();
+}
+function addAttributeDef(label) {
+  const clean = label.trim();
+  if (!clean) return;
+  const key = "attr_" + clean.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/(^_|_$)/g, "") + "_" + Date.now().toString(36);
+  state.attributeDefs.push({ key, label: clean });
+  saveAttributeDefs();
+}
+function removeAttributeDef(key) {
+  state.attributeDefs = state.attributeDefs.filter(a => a.key !== key);
+  saveAttributeDefs();
+  // also strip the now-orphaned value from every player so old data can't
+  // resurface if the same key is ever reused
+  Object.values(state.playerAttributes).forEach(obj => { delete obj[key]; });
+  savePlayerAttributes();
+}
+function saveAttributeDefs() { persistSet("attributeDefs", JSON.stringify(state.attributeDefs)); }
+function savePlayerAttributes() { persistSet("playerAttributes", JSON.stringify(state.playerAttributes)); }
+function attributeEditorHtml(playerId) {
+  const vals = getPlayerAttributes(playerId);
+  const rows = state.attributeDefs.map(a => `
+    <div class="attr-row" style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <span style="flex:1;font-size:12px;color:var(--ink-dim)">${a.label}</span>
+      <input type="range" min="1" max="20" step="1" value="${vals[a.key] || 10}" data-attr-slider="${a.key}" data-attr-player="${playerId}" style="width:110px" />
+      <input type="number" min="1" max="20" step="1" value="${vals[a.key] || 10}" data-attr-num="${a.key}" data-attr-player="${playerId}" class="mono" style="width:46px" />
+    </div>
+  `).join("");
+  return `
+    <div class="attr-editor">
+      ${rows || `<div style="font-size:12px;color:var(--ink-faint)">No attributes defined yet — add one below.</div>`}
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input type="text" placeholder="New attribute name…" data-attr-new-name style="flex:1" />
+        <button class="dir-btn" type="button" data-attr-add>+ Add</button>
+      </div>
+      ${state.attributeDefs.length ? `<div style="margin-top:6px;font-size:11px;color:var(--ink-faint)">Remove: ${state.attributeDefs.map(a => `<a href="#" data-attr-remove="${a.key}" style="color:var(--ink-faint);margin-right:8px">${a.label} ✕</a>`).join("")}</div>` : ""}
+    </div>
+  `;
+}
+function wireAttributeEditor(container, playerId) {
+  container.querySelectorAll("[data-attr-slider]").forEach(el => {
+    el.oninput = () => {
+      const key = el.dataset.attrSlider;
+      container.querySelector(`[data-attr-num="${key}"][data-attr-player="${playerId}"]`).value = el.value;
+      setPlayerAttribute(playerId, key, el.value);
+    };
+  });
+  container.querySelectorAll("[data-attr-num]").forEach(el => {
+    el.onchange = () => {
+      const key = el.dataset.attrNum;
+      const v = Math.max(1, Math.min(20, Math.round(Number(el.value) || 1)));
+      el.value = v;
+      container.querySelector(`[data-attr-slider="${key}"][data-attr-player="${playerId}"]`).value = v;
+      setPlayerAttribute(playerId, key, v);
+    };
+  });
+  const addBtn = container.querySelector("[data-attr-add]");
+  if (addBtn) addBtn.onclick = () => {
+    const input = container.querySelector("[data-attr-new-name]");
+    addAttributeDef(input.value);
+    renderStats();
+  };
+  container.querySelectorAll("[data-attr-remove]").forEach(el => {
+    el.onclick = (e) => {
+      e.preventDefault();
+      removeAttributeDef(el.dataset.attrRemove);
+      renderStats();
+    };
+  });
+}
+
 let state = {
   teams: [], players: [], teamsById: {}, events: [], fixturesByTeam: {},
   shortlist: [], expandedId: null,
@@ -1047,6 +1208,7 @@ let state = {
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
+  fdrMode: "fdr", fdrSort: "easiest",
   rankFormula: { squadWeight: 1, strengthWeight: 1 },
   teamOverrides: {},
   strengthRanges: null,
@@ -1079,6 +1241,19 @@ let state = {
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
   showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowStatsTable: false,
+  statsHeatmap: false, teamsHeatmap: false,
+  // FM-style 1-20 custom attributes. attributeDefs is a global, user-editable
+  // list of attribute names (any wording, not tied to any real data source or
+  // calculation — purely a personal rating scratchpad). playerAttributes maps
+  // playerId -> { attrKey: 1-20 value }. Nothing here feeds the prediction
+  // model or any other formula — it's freeform, always editable regardless
+  // of what real data is or isn't loaded for that player.
+  attributeDefs: [
+    { key: "pace", label: "Pace" }, { key: "passing", label: "Passing" },
+    { key: "finishing", label: "Finishing" }, { key: "positioning", label: "Positioning" },
+    { key: "physicality", label: "Physicality" }, { key: "workrate", label: "Work rate" },
+  ],
+  playerAttributes: {},
 };
 
 // ---------- data fetching ----------
@@ -2378,6 +2553,12 @@ function renderStats() {
   document.querySelectorAll("#headRow th[data-key]").forEach(th => {
     th.classList.toggle("sorted", th.dataset.key === state.filters.sort);
   });
+  // Heatmap ranges computed over exactly the rows/columns currently on
+  // screen (respects filters/theme), so shading is always relative to
+  // what you're actually looking at, not the whole player pool.
+  const heatRanges = state.statsHeatmap
+    ? computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p))
+    : null;
   const body = document.getElementById("playerBody");
   body.innerHTML = "";
   if (list.length === 0) {
@@ -2390,11 +2571,16 @@ function renderStats() {
       const tr = document.createElement("tr");
       tr.className = "player-row";
       const themeCells = cols.map(([key]) => {
+        let heatStyle = "";
+        if (heatRanges && heatRanges[key]) {
+          const r = heatRanges[key];
+          heatStyle = heatmapBg(numericColValue(key, p), r.min, r.max, HEATMAP_INVERT_KEYS.has(key));
+        }
         if (COLUMN_FORMAT[key]) {
           const [text, style] = COLUMN_FORMAT[key](p);
-          return `<td class="mono" style="${style}">${text}</td>`;
+          return `<td class="mono" style="${heatStyle}${style}">${text}</td>`;
         }
-        return `<td class="mono">—</td>`;
+        return `<td class="mono" style="${heatStyle}">—</td>`;
       }).join("");
       const unproven = (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0;
       tr.innerHTML = `
@@ -2453,11 +2639,16 @@ function renderStats() {
               <div class="detail-block-title">Points heatmap (by gameweek)</div>
               <div id="heatmap-stats-${p.id}"></div>
             </div>
+            <div>
+              <div class="detail-block-title">Custom attributes (1-20, your own ratings — not used in any calculation)</div>
+              <div id="attrs-stats-${p.id}">${attributeEditorHtml(p.id)}</div>
+            </div>
           </div>
         `;
         dtr.appendChild(td);
         body.appendChild(dtr);
         renderPlayerHeatmapInto(document.getElementById(`heatmap-stats-${p.id}`), p.id);
+        wireAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id);
       }
     }
     body.querySelectorAll(".star-btn").forEach(btn => {
@@ -4150,6 +4341,14 @@ async function loadFormulasFromStorage() {
     const raw = await persistGet("rankingsPresets");
     if (raw) state.rankingsPresets = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("attributeDefs");
+    if (raw) state.attributeDefs = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("playerAttributes");
+    if (raw) state.playerAttributes = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
@@ -4424,13 +4623,17 @@ function renderClubStatsTable() {
   headRow.querySelectorAll("th[data-cstat-sort]").forEach(th => {
     if (th.dataset.cstatSort === key) th.textContent += dir === "asc" ? " ▲" : " ▼";
   });
+  const heatRanges = state.teamsHeatmap
+    ? computeHeatmapRanges(rows, allCols.map(c => c.key), (row, key) => (typeof row.stats[key] === "number" ? row.stats[key] : null))
+    : null;
   body.innerHTML = rows.map(({ team, stats }) => `
     <tr>
       <td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name}</td>
       ${allCols.map(c => {
         const v = stats[c.key];
         const display = v === null || v === undefined ? "—" : (Number.isInteger(v) ? v : v.toFixed(c.key === "possession" ? 1 : 2));
-        return `<td class="mono">${display}</td>`;
+        const heatStyle = heatRanges ? heatmapBg(v, heatRanges[c.key].min, heatRanges[c.key].max, HEATMAP_INVERT_KEYS.has(c.key)) : "";
+        return `<td class="mono" style="${heatStyle}">${display}</td>`;
       }).join("")}
     </tr>
   `).join("");
@@ -4771,7 +4974,68 @@ function frankCopulaCdf(u, v, theta) {
   const den = Math.exp(-theta) - 1;
   return -Math.log(1 + num / den) / theta;
 }
-function scorelineProbabilityGrid(homeXg, awayXg) {
+// ---------- FDR display modes (button row, mirrors the reference UI) ----------
+// Each mode controls what number a fixture pill shows and how it's
+// coloured. `value(est, blend)` pulls the number from an already-computed
+// estimateScoreline() + blended outcome-prob result; `buckets` are the
+// legend thresholds shown above the grid (low->high, colour text is what
+// gets interpolated the same way fdrGradientColor does for plain FDR).
+const FDR_MODES = {
+  fdr: {
+    label: "FDR", icon: "🎯", glow: "rgba(255,182,72,0.55)",
+    legend: [{ t: "Easiest" }, { t: "Easy" }, { t: "Average" }, { t: "Hard" }, { t: "Hardest" }],
+  },
+  pgoals: {
+    label: "pGoals", icon: "⚽", glow: "rgba(255,63,164,0.55)",
+    value: (est) => est ? est.teamXg : null,
+    fmt: (v) => v.toFixed(2),
+    buckets: [0.80, 1.15, 1.40, 1.70, 1.90, 2.10],
+    invert: false,
+  },
+  pgoalsAgainst: {
+    label: "pGoals against", icon: "🛡️", glow: "rgba(91,163,255,0.55)",
+    value: (est) => est ? est.oppXg : null,
+    fmt: (v) => v.toFixed(2),
+    buckets: [0.80, 1.15, 1.40, 1.70, 1.90, 2.10],
+    invert: true,
+  },
+  win: {
+    label: "Win %", icon: "📈", glow: "rgba(51,214,154,0.55)",
+    value: (est, isHome) => est ? (isHome ? est.model.homeWin : est.model.awayWin) * 100 : null,
+    fmt: (v) => Math.round(v) + "%",
+    buckets: [15, 25, 35, 45, 55, 65],
+    invert: false,
+  },
+  cleansheet: {
+    label: "Clean sheet %", icon: "🔒", glow: "rgba(51,214,154,0.55)",
+    value: (est, isHome) => est ? est.model.grid.filter(c => (isHome ? c.away : c.home) === 0).reduce((s, c) => s + c.p, 0) * 100 : null,
+    fmt: (v) => Math.round(v) + "%",
+    buckets: [10, 18, 26, 34, 42, 50],
+    invert: false,
+  },
+  twoplus: {
+    label: "2+ goals", icon: "⚡", glow: "rgba(255,182,72,0.55)",
+    value: (est, isHome) => est ? est.model.grid.filter(c => (isHome ? c.home : c.away) >= 2).reduce((s, c) => s + c.p, 0) * 100 : null,
+    fmt: (v) => Math.round(v) + "%",
+    buckets: [10, 20, 30, 40, 50, 60],
+    invert: false,
+  },
+};
+Object.entries(FDR_MODES).forEach(([key, m]) => { m.key = key; });
+// Colour for a mode value against its bucket thresholds — same red->green
+// interpolation family as fdrGradientColor, just driven by the mode's own
+// scale instead of the fixed 1-5 FDR range.
+function fdrModeColor(mode, value) {
+  if (mode.key === "fdr" || value === null || value === undefined) return null;
+  const b = mode.buckets;
+  let t = 0;
+  for (let i = 0; i < b.length; i++) { if (value >= b[i]) t = (i + 1) / b.length; }
+  if (mode.invert) t = 1 - t;
+  const hue = 6 + t * 122;
+  return `hsl(${hue.toFixed(0)},70%,${(52 + t * 8).toFixed(0)}%)`;
+}
+
+
   const shape = state.modelWeights.weibullShape;
   const theta = state.modelWeights.copulaTheta;
   const MAX_GOALS = 8; // 0..7 inclusive
@@ -4808,22 +5072,16 @@ function scorelineProbabilityGrid(homeXg, awayXg) {
     else if (c.home === c.away) draw += c.p;
     else awayWin += c.p;
   });
-  // Headline prediction is now the same expected-goals mean the Avg
-  // GF/Avg GA season figures already use — rounded to the nearest whole
-  // score — NOT the grid's raw highest-probability cell (the mode).
-  // Those two routinely disagree: this distribution is right-skewed and
-  // zero-heavy at typical football scorelines, so the single most
-  // probable CELL is very often 0-0/1-0 even when the actual expected
-  // scoreline (what the mean says should happen "on average") is
-  // something like 2-1. Rounding the mean keeps the single-fixture
-  // prediction consistent with the season aggregate instead of the two
-  // silently using different logic and disagreeing with each other.
-  // Falls back to the grid's actual top cell only if the rounded-mean
-  // cell somehow isn't in the grid (shouldn't happen within MAX_GOALS).
-  const roundedHome = Math.min(MAX_GOALS - 1, Math.max(0, Math.round(homeXg)));
-  const roundedAway = Math.min(MAX_GOALS - 1, Math.max(0, Math.round(awayXg)));
-  const top = grid.find(c => c.home === roundedHome && c.away === roundedAway) || grid[0];
-  const alternates = grid.filter(c => c !== top).slice(0, 3);
+  // Headline prediction is the grid's own single most-probable cell (the
+  // mode) — deliberately kept separate from the Avg GF/Avg GA season
+  // aggregate, which uses the expected-goals MEAN instead (see
+  // renderFdrGrid). The two represent different questions: "what's the
+  // single most likely scoreline in this exact match" (mode) vs "what's
+  // this team on track to average across a run of fixtures" (mean) — for
+  // a right-skewed, zero-heavy distribution these can legitimately
+  // differ, and collapsing them together hid that distinction.
+  const top = grid[0];
+  const alternates = grid.slice(1, 4);
   return { grid, top, alternates, homeWin, draw, awayWin };
 }
 // Blends the raw scoreline-model outcome % with Pi-ratings and (when
@@ -5005,7 +5263,7 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the expected-goals average for each side, rounded to the nearest score; win/draw/loss % blended with Pi-ratings and real odds where available.</p>
+    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the single most probable result from the model; win/draw/loss % blended with Pi-ratings and real odds where available. Season Avg GF/GA (Teams/FDR tabs) use the expected-goals average instead, which can differ from this single-match pick.</p>
     <div style="text-align:center;margin:8px 0 12px;font-size:12px">
       <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
       <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
@@ -5017,16 +5275,51 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   `;
   document.getElementById("fdrPredictModal").style.display = "flex";
 }
+function renderFdrModeRow() {
+  const row = document.getElementById("fdrModeRow");
+  row.innerHTML = Object.entries(FDR_MODES).map(([key, m]) => `
+    <button class="mode-btn${state.fdrMode === key ? " active" : ""}" data-fdr-mode="${key}" style="--mode-glow:${m.glow}">
+      <span class="mode-btn-icon">${m.icon}</span>${m.label}
+    </button>
+  `).join("");
+  row.querySelectorAll("[data-fdr-mode]").forEach(btn => {
+    btn.onclick = () => { state.fdrMode = btn.dataset.fdrMode; renderFdrModeRow(); renderFdrGrid(); };
+  });
+  const mode = FDR_MODES[state.fdrMode];
+  const legend = document.getElementById("fdrLegendRow");
+  if (mode.key === "fdr" || !mode.buckets) {
+    legend.innerHTML = mode.legend
+      ? mode.legend.map((l, i) => {
+          const hue = 6 + (i / (mode.legend.length - 1)) * 122;
+          return `<span style="background:hsl(${hue.toFixed(0)},72%,40%);color:#0b1310;padding:3px 9px;border-radius:999px;font-weight:600">${l.t}</span>`;
+        }).join("")
+      : "";
+  } else {
+    const b = mode.buckets;
+    // label i represents the bucket starting at threshold i (bucket 0 is
+    // "below the first threshold"); use a value safely inside each bucket
+    // so fdrModeColor's own threshold walk returns that bucket's colour.
+    const labels = [`<${b[0]}`, ...b.map(v => `${v}+`)];
+    const sampleValues = [b[0] - 1, ...b];
+    legend.innerHTML = labels.map((l, i) => {
+      const color = fdrModeColor(mode, sampleValues[i]);
+      return `<span style="background:${color};color:#0b1310;padding:3px 9px;border-radius:999px;font-weight:600">${l}</span>`;
+    }).join("");
+    }).join("");
+  }
+}
 function renderFdrGrid() {
   if (!state.teams.length) return;
   populateFdrStartGw();
+  renderFdrModeRow();
   const startGw = Number(document.getElementById("fdrStartGw").value);
   let endGw = Number(document.getElementById("fdrEndGw").value);
   if (endGw < startGw) endGw = startGw;
   const gwIds = state.events.map(e => e.id).filter(id => id >= startGw && id <= endGw);
   const curId = currentEventId();
-  const sortBy = document.getElementById("fdrSortBy").value;
-  const viewMode = document.getElementById("fdrViewMode").value; // "colour" | "scoreline"
+  const sortBy = state.fdrSort;
+  const mode = FDR_MODES[state.fdrMode];
+  const viewMode = state.fdrViewScoreline ? "scoreline" : "colour";
   const showGoals = true; // Avg GF/Avg GA now always shown, no toggle
   const showAvgCol = sortBy !== "alpha";
 
@@ -5082,11 +5375,19 @@ function renderFdrGrid() {
         }
         const homeAway = fx.isHome ? "(H)" : "(a)";
         const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
-        const label = viewMode === "scoreline" && est
-          ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
-          : `${oppLabel} ${homeAway}`;
+        const modeVal = mode.key !== "fdr" && est ? mode.value(est, fx.isHome) : null;
+        let label, bgColor;
+        if (mode.key !== "fdr" && modeVal !== null) {
+          label = `${oppLabel}<br>${mode.fmt(modeVal)}`;
+          bgColor = fdrModeColor(mode, modeVal);
+        } else {
+          label = viewMode === "scoreline" && est
+            ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
+            : `${oppLabel} ${homeAway}`;
+          bgColor = fdrGradientColor(score);
+        }
         const scoreTitle = `custom FDR ${score.toFixed(1)}` + (est ? `, predicted ${est.teamGoals}-${est.oppGoals}` : "");
-        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${fdrGradientColor(score)};margin:1px auto;width:56px;font-size:9px" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${bgColor};margin:1px auto;width:56px;font-size:9px;line-height:1.3" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
       }).join("");
       scoresInOrder.push(worstThisGw);
       return `<td style="padding:4px 4px 2px;${bg}">${html}</td>`;
@@ -5242,11 +5543,33 @@ function renderFixtureRunFinder(list, gwIds) {
   suggestionEl.innerHTML = suggestions.join("<br>");
 }
 
+const FDR_SORT_OPTIONS = [
+  { key: "easiest", label: "Easiest first" },
+  { key: "hardest", label: "Hardest first" },
+  { key: "alpha", label: "A-Z" },
+];
+function renderFdrSortSeg() {
+  document.getElementById("fdrSortSeg").innerHTML = FDR_SORT_OPTIONS.map(o =>
+    `<button class="${state.fdrSort === o.key ? "active" : ""}" data-fdr-sort="${o.key}">${o.label}</button>`
+  ).join("");
+  document.querySelectorAll("#fdrSortSeg [data-fdr-sort]").forEach(btn => {
+    btn.onclick = () => { state.fdrSort = btn.dataset.fdrSort; renderFdrSortSeg(); renderFdrGrid(); };
+  });
+}
+function renderFdrViewSeg() {
+  document.getElementById("fdrViewSeg").innerHTML = `
+    <button class="${!state.fdrViewScoreline ? "active" : ""}" data-fdr-view="colour">Opponent view</button>
+    <button class="${state.fdrViewScoreline ? "active" : ""}" data-fdr-view="scoreline">Scoreline view</button>
+  `;
+  document.querySelectorAll("#fdrViewSeg [data-fdr-view]").forEach(btn => {
+    btn.onclick = () => { state.fdrViewScoreline = btn.dataset.fdrView === "scoreline"; renderFdrViewSeg(); renderFdrGrid(); };
+  });
+}
 function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
-  document.getElementById("fdrSortBy").onchange = renderFdrGrid;
-  document.getElementById("fdrViewMode").onchange = renderFdrGrid;
+  renderFdrSortSeg();
+  renderFdrViewSeg();
   document.getElementById("fdrPredictClose").onclick = () => { document.getElementById("fdrPredictModal").style.display = "none"; };
   document.getElementById("fdrPredictModal").onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
 }
@@ -6161,6 +6484,14 @@ document.getElementById("preferKitsToggle").onchange = (e) => {
   state.preferKits = e.target.checked;
   persistSet("preferKits", state.preferKits ? "1" : "0");
   renderStats(); renderShortlist(); renderPlanner(); renderH2H();
+};
+document.getElementById("statsHeatmapToggle").onchange = (e) => {
+  state.statsHeatmap = e.target.checked;
+  renderStats();
+};
+document.getElementById("teamsHeatmapToggle").onchange = (e) => {
+  state.teamsHeatmap = e.target.checked;
+  renderClubStatsTable();
 };
 setupPlannerControls();
 setupTableControls();
