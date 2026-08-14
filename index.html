@@ -29,7 +29,8 @@
     --blue: #5ba3ff;
     --pink: #ff3fa4;
     --purple: #8b6bff;
-    --glass-blur: 20px;
+    --glass-blur: 28px;
+    --radius-lg: 22px;
     --shadow: 0 1px 1px rgba(0,0,0,0.2), 0 20px 44px -14px rgba(0,0,0,0.55);
   }
   * { box-sizing: border-box; }
@@ -96,30 +97,31 @@
   nav button.active { background: rgba(255,255,255,0.14); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 1px 4px rgba(0,0,0,0.3); }
   nav button:hover:not(.active) { color: var(--ink-dim); background: rgba(255,255,255,0.06); }
 
-  /* Vertical hover-expand toolbar (nextXI.app-style side nav) */
+  /* Vertical hover-expand toolbar (nextXI.app-style side nav) — floating, detached from the edge */
   #tabs.side-toolbar {
-    position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+    position: fixed; left: 14px; top: 14px; bottom: 14px; z-index: 50;
     display: flex; flex-direction: column; gap: 2px;
-    width: 58px; padding: 64px 8px 16px; border-radius: 0;
-    background: rgba(10,13,22,0.75);
+    width: 58px; padding: 18px 8px 16px; border-radius: 24px;
+    background: rgba(10,13,22,0.65);
     backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    border: none; border-right: 1px solid var(--border);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08);
     overflow: hidden; transition: width 0.18s ease, box-shadow 0.18s ease;
   }
-  #tabs.side-toolbar:hover { width: 208px; box-shadow: 8px 0 30px -8px rgba(0,0,0,0.5); }
+  #tabs.side-toolbar:hover { width: 208px; box-shadow: 8px 8px 40px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.08); }
   #tabs.side-toolbar button {
     display: flex; align-items: center; gap: 12px;
-    padding: 10px 9px; border-radius: 10px; white-space: nowrap;
+    padding: 10px 9px; border-radius: 14px; white-space: nowrap;
     justify-content: flex-start; width: 100%; text-align: left;
   }
   #tabs.side-toolbar button .tb-icon { flex: 0 0 22px; font-size: 16px; text-align: center; }
   #tabs.side-toolbar button .tb-label { opacity: 0; transition: opacity 0.15s ease; }
   #tabs.side-toolbar:hover button .tb-label { opacity: 1; }
-  body { padding-left: 58px; }
+  body { padding-left: 90px; }
   @media (max-width: 640px) {
-    #tabs.side-toolbar { position: static; width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; border-right: none; border-bottom: 1px solid var(--border); }
-    #tabs.side-toolbar:hover { width: 100%; box-shadow: none; }
+    #tabs.side-toolbar { position: static; left: auto; top: auto; bottom: auto; width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; margin: 10px; border-radius: 18px; }
+    #tabs.side-toolbar:hover { width: 100%; box-shadow: var(--shadow); }
     #tabs.side-toolbar button .tb-label { opacity: 1; }
     body { padding-left: 0; }
   }
@@ -160,9 +162,9 @@
 
   .toolbar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    padding: 13px; border: 1px solid var(--border); border-radius: 18px;
-    background: var(--panel); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
-    margin-bottom: 16px; box-shadow: var(--shadow);
+    padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: var(--panel); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    margin-bottom: 16px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
   .seg button {
@@ -227,8 +229,8 @@
   tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
   tbody tr.detail-row td { background: rgba(255,255,255,0.02); border-top: none; padding: 0; }
   .table-wrap {
-    overflow-x: auto; border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow);
-    background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
@@ -244,8 +246,9 @@
   .foot-note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
 
   .card {
-    border: 1px solid var(--border); border-radius: 18px; background: var(--panel); padding: 18px;
-    box-shadow: var(--shadow); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); padding: 18px;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
   .card:hover { border-color: var(--border-strong); }
@@ -377,8 +380,9 @@
     padding: 7px 10px; border-radius: 999px; text-align: center;
   }
   .builder-list {
-    max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: 16px; background: var(--panel);
-    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .builder-pos-head {
     position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
@@ -405,6 +409,11 @@
   .builder-add-btn.remove { color: var(--red); border-color: var(--red); }
   .builder-add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   .builder-right { position: sticky; top: 78px; }
+  .builder-pitch-card {
+    border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); padding: 14px;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  }
   .builder-topbar { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   .builder-pill { background: var(--emerald-dim); color: var(--emerald); font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 999px; font-family: "JetBrains Mono", monospace; }
   .builder-pill.over { background: var(--red-soft); color: var(--red); }
@@ -427,8 +436,8 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 340' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='324'/%3E%3Ccircle cx='200' cy='332' r='55'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3C/g%3E%3C/svg%3E");
     background-size: 100% 100%, 100% 100%;
     background-repeat: no-repeat, no-repeat;
-    border-radius: 14px; padding: 18px 12px 14px; box-shadow: var(--shadow);
-    display: flex; flex-direction: column; gap: 16px; margin-bottom: 14px;
+    border-radius: 16px; padding: 18px 12px 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), var(--shadow);
+    display: flex; flex-direction: column; gap: 16px; margin-bottom: 0;
   }
   .pitch-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
   .pitch-slot {
@@ -438,7 +447,8 @@
   .pitch-slot:hover { transform: translateY(-2px); }
   .pitch-slot .name-tag {
     background: rgba(7,15,12,0.82); color: #fff; font-size: 10.5px; font-weight: 600;
-    padding: 2px 6px; border-radius: 4px; text-align: center; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 2px 8px; border-radius: 999px; text-align: center; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
   .pitch-slot .pts-tag { font-size: 9.5px; color: rgba(255,255,255,0.85); font-family: "JetBrains Mono", monospace; }
   .pitch-slot .cap-mark {
@@ -3769,7 +3779,7 @@ function renderSquadBuilder(draft) {
             <button data-view="list" class="${state.builderView === "list" ? "active" : ""}">List</button>
           </div>
         </div>
-        <div id="builderPitchArea"></div>
+        <div class="builder-pitch-card"><div id="builderPitchArea"></div></div>
         <p class="foot-note" style="margin-top:10px">Step through gameweeks with the dropdown above to see each one's fixture and lineup. Click a starting player on the pitch to make them captain for that gameweek. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
         <div class="builder-actions">
           <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
