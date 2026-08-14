@@ -2805,6 +2805,20 @@ const SHORTLIST_STATS_COLUMNS = (() => {
   });
   return cols;
 })();
+// Grouping used purely for the header row's theme-coloured super-header
+// (visual only — doesn't affect sort/filter/data).
+const SHORTLIST_STATS_GROUPS = (() => {
+  const seen = new Set();
+  const groups = [{ label: "Overview", keys: FIXED_COLUMNS.map(c => c[0]) }];
+  FIXED_COLUMNS.forEach(c => seen.add(c[0]));
+  Object.values(STAT_THEMES).forEach(theme => {
+    const keys = theme.columns.map(([key]) => key).filter(key => !seen.has(key));
+    keys.forEach(key => seen.add(key));
+    if (keys.length) groups.push({ label: theme.label, keys });
+  });
+  return groups;
+})();
+const SHORTLIST_GROUP_COLORS = ["#e0529a", "#7c6cf0", "#3cd25a", "#e0a94f", "#4fc0e0", "#e05d5d", "#a05de0"];
 let shortlistStatsSort = { key: "totalPoints", dir: "desc" };
 function buildMiniStatsTableEl(items) {
   const wrap = document.createElement("div");
@@ -2818,19 +2832,26 @@ function buildMiniStatsTableEl(items) {
     if (Number.isNaN(av)) av = 0; if (Number.isNaN(bv)) bv = 0;
     return shortlistStatsSort.dir === "desc" ? bv - av : av - bv;
   });
-  const head = `<tr>
-    <th class="label-col">Player</th>
-    ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer">${label}<span style="display:inline-block;width:12px;text-align:left">${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? "↓" : "↑") : ""}</span></th>`).join("")}
+  const groupKeyToColor = {};
+  SHORTLIST_STATS_GROUPS.forEach((g, gi) => g.keys.forEach(k => { groupKeyToColor[k] = SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length]; }));
+  const groupHeadRow = `<tr class="sl-group-row">
+    <th class="label-col" style="background:transparent;border-bottom:none"></th>
+    ${SHORTLIST_STATS_GROUPS.map((g, gi) => `<th colspan="${g.keys.length}" style="background:${SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length]}22;color:${SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length]};font-size:10px;text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:3px 4px;border-bottom:1px solid ${SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length]}55">${g.label}</th>`).join("")}
+    <th class="label-col" style="background:transparent;border-bottom:none"></th>
+  </tr>`;
+  const head = `${groupHeadRow}<tr>
+    <th class="label-col" style="position:sticky;left:0;background:var(--panel,#1a1a22);z-index:2">Player</th>
+    ${SHORTLIST_STATS_COLUMNS.map(([key, label]) => `<th data-sl-sort="${key}" style="cursor:pointer;border-left:2px solid ${groupKeyToColor[key]}33">${label}<span style="display:inline-block;width:12px;text-align:left">${shortlistStatsSort.key === key ? (shortlistStatsSort.dir === "desc" ? "↓" : "↑") : ""}</span></th>`).join("")}
     <th class="label-col">Notes</th>
   </tr>`;
-  const rows = sorted.map(({ item, p }) => {
+  const rows = sorted.map(({ item, p }, i) => {
     const team = state.teamsById[p.teamId];
-    return `<tr>
-      <td class="label-col">${playerAvatarHtml(p, 22)} ${p.webName} <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
+    return `<tr style="${i % 2 ? "background:var(--panel-2,#1e1e26)" : ""}">
+      <td class="label-col" style="position:sticky;left:0;background:${i % 2 ? "var(--panel-2,#1e1e26)" : "var(--panel,#1a1a22)"};z-index:1">${playerAvatarHtml(p, 22)} ${p.webName} <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
       ${SHORTLIST_STATS_COLUMNS.map(([key]) => {
         const fmt = COLUMN_FORMAT[key];
         const [text, style] = fmt ? fmt(p) : [p[key] ?? "–", ""];
-        return `<td class="mono" style="${style}">${text}</td>`;
+        return `<td class="mono" style="${style};border-left:2px solid ${groupKeyToColor[key]}22;font-size:11.5px">${text}</td>`;
       }).join("")}
       <td style="min-width:160px"><textarea class="note-input" rows="1" placeholder="Notes…" data-sl-note="${p.id}">${item.note || ""}</textarea></td>
     </tr>`;
