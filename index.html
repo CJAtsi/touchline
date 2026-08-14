@@ -127,6 +127,45 @@
   }
 
   main { max-width: 1540px; margin: 0 auto; padding: 32px 24px 70px; }
+  .scout-theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .scout-theme-pill {
+    background: transparent; border: 1px solid var(--border); color: var(--ink-dim);
+    padding: 9px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    transition: all 0.15s ease;
+  }
+  .scout-theme-pill:hover { background: rgba(255,255,255,0.06); }
+  .scout-theme-pill.active { background: color-mix(in srgb, var(--tc) 22%, transparent); border-color: var(--tc); color: var(--tc); box-shadow: 0 0 0 1px var(--tc) inset; }
+  .scout-pos-block { margin-bottom: 22px; }
+  .scout-pos-heading { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  .scout-pos-sub { font-size: 11px; font-weight: 500; color: var(--ink-faint); margin-left: 4px; }
+  .scout-empty-note { font-size: 12.5px; color: var(--ink-dim); background: rgba(255,255,255,0.04); border: 1px dashed var(--border-strong); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; }
+  .scout-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .scout-card-grid-dim { opacity: 0.72; }
+  .scout-card {
+    border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: var(--panel);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .scout-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+  .scout-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .scout-score-ring { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+  .scout-score-ring-inner {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--panel-2, #1a1a22);
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+  }
+  .scout-card-name { font-weight: 700; font-size: 13.5px; margin-top: 2px; }
+  .scout-card-sub { font-size: 11px; color: var(--ink-faint); margin: 2px 0 6px; }
+  .scout-card-reasons { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; }
+  .top-tabs-row { display: flex; gap: 4px; margin-left: 24px; }
+  .top-tabs-row button {
+    background: transparent; border: 1px solid transparent; color: var(--ink-faint);
+    padding: 7px 10px; border-radius: 999px; cursor: pointer; font-size: 15px; line-height: 1;
+    font-family: inherit; transition: all 0.15s ease;
+  }
+  .top-tabs-row button.active { background: rgba(255,255,255,0.12); border-color: var(--border); color: var(--ink); }
+  .top-tabs-row button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
+  @media (max-width: 900px) { .top-tabs-row { display: none; } }
   .page-title { font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
   .page-sub { font-size: 13.5px; color: var(--ink-dim); margin: 0 0 24px; max-width: 640px; line-height: 1.5; }
 
@@ -179,7 +218,9 @@
     background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink);
     border-radius: 999px; padding: 8px 13px; font-size: 13px; font-family: inherit; outline: none;
     transition: border-color 0.15s ease, background 0.15s ease;
+    color-scheme: dark;
   }
+  select option { background: #14161f; color: var(--ink); }
   select:focus, input:focus { border-color: var(--border-strong); background: rgba(255,255,255,0.08); }
   .price-range { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
   .price-range input { width: 62px; }
@@ -222,6 +263,13 @@
   }
   thead th:hover { color: var(--gold-bright); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
+  /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at */
+  .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child {
+    position: sticky; left: 0; z-index: 3; background: #14161fee;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
+  }
+  .table-wrap table thead th.label-col:first-child { z-index: 4; }
   thead th.sorted { color: var(--gold-bright); }
   tbody td { padding: 9px 13px; text-align: right; border-top: 1px solid var(--border); }
   tbody td.label-col { text-align: left; }
@@ -556,6 +604,7 @@
 <header>
   <div class="header-inner">
     <div class="brand"><span class="brand-mark">T</span>Touchline</div>
+    <div id="topTabs" class="top-tabs-row"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);white-space:nowrap;margin-left:auto">
       <input type="checkbox" id="preferKitsToggle" /> Show kits instead of photos
     </label>
@@ -1025,37 +1074,79 @@ const FIXED_COLUMNS = [["totalPoints", "Pts"], ["form", "Form"], ["epNext", "Nex
 const STAT_THEMES = {
   overview: {
     label: "Overview",
-    columns: [["minutes", "Mins"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["goalsScored", "G"], ["assists", "A"],
-      ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["pointsPer90", "Pts/90"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["bonus", "Bon"]],
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Value", ["selectedByPercent", "netTransfers", "ppm", "ppm90"]],
+      ["Output", ["goalsScored", "assists", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
+    ],
+    columns: [["minutes", "Mins"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"],
+      ["goalsScored", "G"], ["assists", "A"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
   },
   attacking: {
     label: "Attacking",
-    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"],
-      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Goals & assists", ["goalsScored", "assists", "goalsPer90", "assistsPer90"]],
+      ["Expected", ["expectedGoals", "expectedAssists", "expectedGoalInvolvements", "xg90", "xa90", "xgi90"]],
+      ["Team share", ["teamGoalShare", "teamXgiShare"]],
+      ["Underlying", ["threat", "creativity", "penaltiesMissed"]],
+    ],
+    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
+      ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
+      ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Clean sheets & goals", ["cleanSheets", "goalsConceded", "goalsConcededPer90", "xgc90"]],
+      ["Defensive actions", ["saves90", "defensiveContribution", "defensiveContributionPer90"]],
+      ["Bonus", ["bps"]],
+    ],
     columns: [["minutes", "Mins"], ["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
       ["saves90", "Sv/90"], ["defensiveContribution", "DefCon"], ["defensiveContributionPer90", "DefCon/90"], ["bps", "BPS"]],
   },
   advanced: {
     label: "Deeper stats",
-    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Underlying", ["influence", "creativity", "threat"]],
+      ["Expected /90", ["xg90", "xa90", "xgi90"]],
+      ["Set pieces", ["penaltiesOrder", "directFreekicksOrder", "cornersOrder"]],
+    ],
+    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   creativity: {
     label: "Shots & creativity",
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Shot & chance creation", ["dsShots", "dsKeyPasses", "dsXGChain", "dsXGBuildup"]],
+    ],
     columns: [["minutes", "Mins"], ["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
   },
   cbit: {
     label: "CBIT (defensive)",
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["CBIT", ["dsTackles", "dsInterceptions", "dsBlocks", "dsClearances"]],
+      ["Aerial", ["dsAerialsWon", "dsAerialWinPct"]],
+    ],
     columns: [["minutes", "Mins"], ["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
   },
   per90: {
     label: "Per 90",
-    columns: [["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["xg90", "xG/90"], ["xa90", "xA/90"],
-      ["xgi90", "xGI/90"], ["goalsConcededPer90", "GA/90"], ["bpsPer90", "BPS/90"], ["ictPer90", "ICT/90"],
-      ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"], ["ppm90", "Pts/£m/90"]],
+    groups: [
+      ["Playing time", ["minutes"]],
+      ["Points & output /90", ["pointsPer90", "goalsPer90", "assistsPer90", "ppm90"]],
+      ["Expected /90", ["xg90", "xa90", "xgi90"]],
+      ["Defensive /90", ["goalsConcededPer90", "bpsPer90"]],
+      ["ICT /90", ["ictPer90", "influencePer90", "creativityPer90", "threatPer90"]],
+    ],
+    columns: [["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["ppm90", "Pts/£m/90"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["goalsConcededPer90", "GA/90"], ["bpsPer90", "BPS/90"],
+      ["ictPer90", "ICT/90"], ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"]],
   },
 };
 
@@ -2564,13 +2655,21 @@ function buildStatsHeader() {
   headRow.querySelectorAll("th[data-key]:not([data-fixed])").forEach(th => th.remove());
   document.getElementById("headGroupRow")?.remove();
   const themeKeys = Object.keys(STAT_THEMES);
-  const themeIdx = themeKeys.indexOf(state.statsTheme);
-  const themeColor = SHORTLIST_GROUP_COLORS[(themeIdx + 1) % SHORTLIST_GROUP_COLORS.length]; // +1 keeps Overview's color reserved
+  const theme = STAT_THEMES[state.statsTheme];
   const cols = activeColumns();
+  const colLabelByKey = Object.fromEntries(cols);
+  // Build group->colour and key->group-index maps from the theme's sub-groups
+  // (falls back to one "Stats" group if a theme has no groups defined, so
+  // no column is ever left ungrouped).
+  const groups = (theme.groups && theme.groups.length) ? theme.groups : [["Stats", cols.map(([k]) => k)]];
+  const keyToGroupIdx = {};
+  groups.forEach(([, keys], gi) => keys.forEach(k => { keyToGroupIdx[k] = gi; }));
   cols.forEach(([key, label]) => {
     const th = document.createElement("th");
     th.textContent = label; th.dataset.key = key;
-    th.style.borderLeft = `2px solid ${themeColor}55`;
+    const gi = keyToGroupIdx[key] ?? 0;
+    const color = SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length];
+    th.style.borderLeft = `2px solid ${color}55`;
     th.onclick = () => {
       if (state.filters.sort === key) state.filters.dir = state.filters.dir === "desc" ? "asc" : "desc";
       else { state.filters.sort = key; state.filters.dir = "desc"; }
@@ -2580,14 +2679,21 @@ function buildStatsHeader() {
     };
     headRow.appendChild(th);
   });
-  // Themed super-header above the column names — groups the currently
-  // active theme's columns under one coloured band (per user's request
-  // to visually gather same-theme columns together).
+  // Themed sub-group super-header — one coloured band per group within the
+  // active theme (e.g. "Expected /90" vs "Set pieces" within Deeper stats),
+  // so every visible column sits under a labelled group, not just one band
+  // for the whole theme.
   const groupRow = document.createElement("tr");
   groupRow.id = "headGroupRow";
   const fixedCount = 8; // FIXED_SORTABLE length
-  groupRow.innerHTML = `<th colspan="${fixedCount}" style="background:transparent;border-bottom:none"></th>` +
-    `<th colspan="${cols.length}" style="background:${themeColor}22;color:${themeColor};font-size:10px;text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:3px 4px;border-bottom:1px solid ${themeColor}55">${STAT_THEMES[state.statsTheme].label}</th>`;
+  let cells = `<th colspan="${fixedCount}" style="background:transparent;border-bottom:none"></th>`;
+  groups.forEach(([label, keys], gi) => {
+    const presentCount = keys.filter(k => colLabelByKey[k] !== undefined).length;
+    if (!presentCount) return;
+    const color = SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length];
+    cells += `<th colspan="${presentCount}" style="background:${color}22;color:${color};font-size:10px;text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:3px 4px;border-bottom:1px solid ${color}55">${label}</th>`;
+  });
+  groupRow.innerHTML = cells;
   headRow.parentElement.insertBefore(groupRow, headRow);
 }
 
@@ -2628,22 +2734,26 @@ function gwFixtureHtml(teamId, gwId) {
 // "base" reproduces the original algorithm unchanged.
 const SCOUT_THEMES = {
   base: {
-    label: "Best overall", short: "Overall",
+    label: "Best overall", short: "⭐ Overall", color: "#e0a94f",
     weights: {},
   },
   value: {
-    label: "Best value (cheap)", short: "💰 Value",
+    label: "Best value (cheap)", short: "💰 Value", color: "#3cd25a",
     maxPrice: { GK: 4.5, DEF: 4.5, MID: 6.0, FWD: 6.0 },
     weights: { pointsPerMillion: 2.5 },
-    extraMetric: ["pointsPerMillion", "Pts/£m", 1],
+    extraMetrics: [["pointsPerMillion", "Pts/£m", 1]],
   },
   defcon: {
-    label: "Defensive specialist", short: "🛡️ DefCon",
-    positions: ["GK", "DEF"],
+    label: "Defensive specialist", short: "🛡️ DefCon", color: "#4fc0e0",
     weights: { defensiveContributionPer90: 2.5, cbit: 2, cleanSheets: 1.5, goalsConcededPer90: 0.5, saves90: 1 },
+    // GK/DEF get defensive metrics natively; MID/FWD get DefCon/90 + CBIT
+    // bolted on as extra metrics so tackling midfielders/forwards can surface too.
+    extraMetrics: [["defensiveContributionPer90", "DefCon/90", 1], ["cbit", "CBIT", 1]],
+    extraMetricsPositions: ["MID", "FWD"],
+    minScoreForPositions: { MID: 0.4, FWD: 0.4 }, // below this, say so rather than list weak options
   },
   differential: {
-    label: "Low-owned differential", short: "🔍 Differential",
+    label: "Low-owned differential", short: "🔍 Differential", color: "#a05de0",
     filter: p => (p.selectedByPercent || 0) < 10,
     weights: {},
   },
@@ -2666,7 +2776,10 @@ function scoutMetricsFor(pos, themeKey = "base") {
     if (state.players.some(p => p.dsShots != null)) m.push(["dsShots", "Shots", 1]);
   }
   m = m.map(([key, label, dir]) => [key, label, dir, theme.weights[key] || 1]);
-  if (theme.extraMetric) m.push([...theme.extraMetric, theme.weights[theme.extraMetric[0]] || 1]);
+  const extras = (theme.extraMetrics || []).filter(([key]) => !m.some(mm => mm[0] === key));
+  if (!theme.extraMetricsPositions || theme.extraMetricsPositions.includes(pos)) {
+    extras.forEach(([key, label, dir]) => m.push([key, label, dir, theme.weights[key] || 1]));
+  }
   return m;
 }
 function computeScoutList(pos, themeKey = "base") {
@@ -2683,7 +2796,7 @@ function computeScoutList(pos, themeKey = "base") {
     maxes[key] = Math.max(1, ...vals);
     mins[key] = Math.min(...vals, 0);
   }
-  return pool.map(p => {
+  const ranked = pool.map(p => {
     const parts = metrics.map(([key, label, dir, weight]) => {
       const v = scoutMetricValue(p, key);
       const norm = dir > 0 ? v / maxes[key] : (maxes[key] - mins[key] > 0 ? 1 - (v - mins[key]) / (maxes[key] - mins[key]) : 0);
@@ -2694,13 +2807,16 @@ function computeScoutList(pos, themeKey = "base") {
     const reasons = [...parts].sort((a, b) => b.norm * b.weight - a.norm * a.weight).slice(0, 2)
       .map(part => `${part.label} ${Number.isInteger(part.v) ? part.v : part.v.toFixed(2)}`);
     return { p, score, reasons };
-  }).sort((a, b) => b.score - a.score).slice(0, 8);
+  }).sort((a, b) => b.score - a.score);
+  const minScore = theme.minScoreForPositions && theme.minScoreForPositions[pos];
+  if (minScore != null && (!ranked.length || ranked[0].score < minScore)) return { weak: true, list: ranked.slice(0, 8) };
+  return { weak: false, list: ranked.slice(0, 8) };
 }
 function renderScoutThemeRow() {
   const el = document.getElementById("scoutThemeRow");
   if (!el) return;
   el.innerHTML = Object.entries(SCOUT_THEMES).map(([key, t]) =>
-    `<button class="dir-btn ${state.scoutTheme === key ? "active" : ""}" data-scout-theme="${key}" title="${t.label}">${t.short}</button>`
+    `<button class="scout-theme-pill ${state.scoutTheme === key ? "active" : ""}" data-scout-theme="${key}" style="--tc:${t.color}" title="${t.label}">${t.short}</button>`
   ).join("");
   el.querySelectorAll("[data-scout-theme]").forEach(btn => {
     btn.onclick = () => { state.scoutTheme = btn.dataset.scoutTheme; renderScoutThemeRow(); renderScoutPanel(); };
@@ -2716,32 +2832,45 @@ function renderScoutPanel() {
   }
   const themeKey = state.scoutTheme || "base";
   const theme = SCOUT_THEMES[themeKey];
-  const POS_LABEL = { GK: "goalkeepers", DEF: "defenders", MID: "midfielders", FWD: "forwards" };
-  const priceNote = theme.maxPrice ? ` (≤ shown price cap per position)` : "";
+  const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  const POS_ICON = { GK: "🧤", DEF: "🛡️", MID: "🎯", FWD: "⚡" };
   const body = ["GK", "DEF", "MID", "FWD"].map(pos => {
-    const list = computeScoutList(pos, themeKey);
-    if (list === null) return ""; // theme doesn't apply to this position
-    const metricLabels = scoutMetricsFor(pos, themeKey).map(([, label]) => label).join(", ");
-    const capNote = theme.maxPrice && theme.maxPrice[pos] != null ? ` · £${theme.maxPrice[pos].toFixed(1)}m or under` : "";
+    const result = computeScoutList(pos, themeKey);
+    if (result === null) return "";
+    const { weak, list } = result;
+    const capNote = theme.maxPrice && theme.maxPrice[pos] != null ? ` · £${theme.maxPrice[pos].toFixed(1)}m cap` : "";
     return `
-    <div class="card" style="margin-bottom:12px">
-      <div class="detail-block-title">Standout ${POS_LABEL[pos]} — ${theme.label}${capNote} — ranked on ${metricLabels}${priceNote}</div>
-      ${list.length ? list.map(({ p, score, reasons }) => `
-        <div class="builder-row">
-          ${playerAvatarHtml(p, 28)}
-          <span class="b-name">${p.webName} <span class="b-sub">${state.teamsById[p.teamId]?.short_name || ""} · ${fmtPrice(p.nowCost)}${p.selectedByPercent < 10 ? " · 🔍 under the radar" : ""} · ${reasons.join(", ")}</span></span>
-          <span class="b-pts mono" title="Composite score vs position">${(score * 100).toFixed(0)}</span>
-          <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-scout-star="${p.id}" title="${isShortlisted(p.id) ? "Remove from shortlist" : "Add to shortlist"}">★</button>
-        </div>
-      `).join("") : `<p class="foot-note">No ${POS_LABEL[pos]} match this theme's criteria yet.</p>`}
-    </div>
-  `;
+    <div class="scout-pos-block">
+      <div class="scout-pos-heading"><span>${POS_ICON[pos]}</span> ${POS_LABEL[pos]}<span class="scout-pos-sub">${theme.label}${capNote}</span></div>
+      ${weak
+        ? `<div class="scout-empty-note">No strong ${theme.label.toLowerCase()} options among ${POS_LABEL[pos].toLowerCase()} right now — the underlying numbers just aren't there this season. Showing the closest anyway, but treat with caution:</div>
+           <div class="scout-card-grid scout-card-grid-dim">${list.slice(0, 3).map(x => scoutCardHtml(x, theme)).join("")}</div>`
+        : list.length
+          ? `<div class="scout-card-grid">${list.map(x => scoutCardHtml(x, theme)).join("")}</div>`
+          : `<p class="foot-note">No ${POS_LABEL[pos].toLowerCase()} match this theme's criteria yet.</p>`
+      }
+    </div>`;
   }).join("");
-  panel.innerHTML = `<div id="scoutThemeRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>${body}`;
+  panel.innerHTML = `<div id="scoutThemeRow" class="scout-theme-row"></div>${body}`;
   renderScoutThemeRow();
   panel.querySelectorAll("[data-scout-star]").forEach(btn => {
     btn.onclick = () => { toggleShortlist(Number(btn.dataset.scoutStar), true); renderScoutPanel(); };
   });
+}
+function scoutCardHtml({ p, score, reasons }, theme) {
+  const pct = Math.round(score * 100);
+  const ring = `conic-gradient(${theme.color} ${pct * 3.6}deg, rgba(255,255,255,0.08) 0deg)`;
+  return `
+    <div class="scout-card">
+      <div class="scout-card-top">
+        <div class="scout-score-ring" style="background:${ring}"><div class="scout-score-ring-inner">${pct}</div></div>
+        ${playerAvatarHtml(p, 44)}
+        <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-scout-star="${p.id}" title="${isShortlisted(p.id) ? "Remove from shortlist" : "Add to shortlist"}">★</button>
+      </div>
+      <div class="scout-card-name">${p.webName}</div>
+      <div class="scout-card-sub">${state.teamsById[p.teamId]?.short_name || ""} · ${fmtPrice(p.nowCost)}${p.selectedByPercent < 10 ? " · 🔍" : ""}</div>
+      <div class="scout-card-reasons">${reasons.join(" · ")}</div>
+    </div>`;
 }
 
 function renderStats() {
@@ -2905,23 +3034,31 @@ function renderStats() {
 const SHORTLIST_STATS_COLUMNS = (() => {
   const seen = new Set(FIXED_COLUMNS.map(c => c[0]));
   const cols = [...FIXED_COLUMNS];
+  const labelByKey = {};
+  Object.values(STAT_THEMES).forEach(theme => theme.columns.forEach(([k, l]) => { labelByKey[k] = labelByKey[k] || l; }));
   Object.values(STAT_THEMES).forEach(theme => {
-    theme.columns.forEach(([key, label]) => {
-      if (!seen.has(key)) { seen.add(key); cols.push([key, label]); }
-    });
+    const themeGroups = (theme.groups && theme.groups.length) ? theme.groups : [[theme.label, theme.columns.map(c => c[0])]];
+    themeGroups.forEach(([, keys]) => keys.forEach(key => {
+      if (!seen.has(key)) { seen.add(key); cols.push([key, labelByKey[key] || key]); }
+    }));
   });
   return cols;
 })();
 // Grouping used purely for the header row's theme-coloured super-header
-// (visual only — doesn't affect sort/filter/data).
+// (visual only — doesn't affect sort/filter/data). Uses each theme's own
+// sub-groups (e.g. "Expected /90" vs "Set pieces") rather than one band
+// per whole theme, so every column sits under a specific labelled group.
 const SHORTLIST_STATS_GROUPS = (() => {
   const seen = new Set();
   const groups = [{ label: "Overview", keys: FIXED_COLUMNS.map(c => c[0]) }];
   FIXED_COLUMNS.forEach(c => seen.add(c[0]));
   Object.values(STAT_THEMES).forEach(theme => {
-    const keys = theme.columns.map(([key]) => key).filter(key => !seen.has(key));
-    keys.forEach(key => seen.add(key));
-    if (keys.length) groups.push({ label: theme.label, keys });
+    const themeGroups = (theme.groups && theme.groups.length) ? theme.groups : [[theme.label, theme.columns.map(c => c[0])]];
+    themeGroups.forEach(([label, keys]) => {
+      const fresh = keys.filter(key => !seen.has(key));
+      fresh.forEach(key => seen.add(key));
+      if (fresh.length) groups.push({ label, keys: fresh });
+    });
   });
   return groups;
 })();
@@ -6745,8 +6882,10 @@ function setupRankingsPresets() {
 
 // ---------- tabs ----------
 const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "fdr", "h2h", "rankings"];
+const TAB_ICONS = { stats: "📈", shortlist: "⭐", team: "👤", planner: "✏️", table: "🏟️", fdr: "📅", h2h: "⚔️", rankings: "🏆" };
+const TAB_LABELS = { stats: "Player stats", shortlist: "Shortlist", team: "My team", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", rankings: "Rankings" };
 function switchTab(name) {
-  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
     document.getElementById("tab-" + n).style.display = n === name ? "block" : "none";
   });
@@ -6755,6 +6894,9 @@ function setupTabs() {
   document.querySelectorAll("#tabs button").forEach(btn => {
     btn.onclick = () => switchTab(btn.dataset.tab);
   });
+  const topTabs = document.getElementById("topTabs");
+  topTabs.innerHTML = TAB_NAMES.map(n => `<button data-tab="${n}" title="${TAB_LABELS[n]}" ${n === "stats" ? 'class="active"' : ""}>${TAB_ICONS[n]}</button>`).join("");
+  topTabs.querySelectorAll("button").forEach(btn => { btn.onclick = () => switchTab(btn.dataset.tab); });
   document.getElementById("loadTeamBtn").onclick = loadMyTeam;
   document.getElementById("teamIdInput").addEventListener("keydown", e => { if (e.key === "Enter") loadMyTeam(); });
 }
