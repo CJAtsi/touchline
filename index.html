@@ -516,23 +516,23 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 340' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='324'/%3E%3Ccircle cx='200' cy='332' r='55'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3C/g%3E%3C/svg%3E");
     background-size: 100% 100%, 100% 100%;
     background-repeat: no-repeat, no-repeat;
-    border-radius: 16px; padding: 18px 12px 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), var(--shadow);
-    display: flex; flex-direction: column; gap: 16px; margin-bottom: 0;
-    width: 100%; aspect-ratio: 3 / 4; justify-content: space-evenly; box-sizing: border-box;
+    border-radius: 16px; padding: 14px 10px 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), var(--shadow);
+    display: flex; flex-direction: column; gap: 10px; margin: 0 auto;
+    width: 100%; max-width: 460px; aspect-ratio: 3 / 4; justify-content: space-evenly; box-sizing: border-box;
   }
-  @media (max-width: 640px) { .pitch { aspect-ratio: 3 / 3.6; } }
-  .pitch-row { display: flex; justify-content: space-evenly; align-items: flex-start; gap: 6px; flex-wrap: nowrap; }
+  @media (max-width: 640px) { .pitch { aspect-ratio: 3 / 3.6; max-width: 380px; } }
+  .pitch-row { display: flex; justify-content: space-evenly; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }
   .pitch-slot {
-    display: flex; flex-direction: column; align-items: center; gap: 4px; width: 108px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; width: 80px; cursor: pointer;
     transition: transform 0.12s ease;
   }
   .pitch-slot:hover { transform: translateY(-2px); }
   .pitch-slot .name-tag {
-    background: rgba(7,15,12,0.85); color: #fff; font-size: 12px; font-weight: 700;
-    padding: 3px 9px; border-radius: 999px; text-align: center; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: rgba(7,15,12,0.85); color: #fff; font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 999px; text-align: center; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .pitch-slot .pts-tag { font-size: 11px; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
+  .pitch-slot .pts-tag { font-size: 9.5px; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
   .pitch-slot .cap-mark {
     font-size: 10px; font-weight: 800; line-height: 1;
     background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
@@ -592,10 +592,10 @@
     h1, .page-title { font-size: 19px; }
     .page-sub { font-size: 12.5px; max-width: 100%; }
     table { min-width: 640px; font-size: 12px; }
-    .pitch-slot { max-width: 72px; }
-    .pitch-slot img, .pitch-slot svg { width: 40px !important; height: 40px !important; }
-    .name-tag { font-size: 10px; max-width: 70px; padding: 2px 5px; }
-    .pts-tag { font-size: 10px; }
+    .pitch-slot { max-width: 58px; }
+    .pitch-slot img, .pitch-slot svg { width: 30px !important; height: 30px !important; }
+    .name-tag { font-size: 9px; max-width: 56px; padding: 1px 4px; }
+    .pts-tag { font-size: 9px; }
     .pitch-row { gap: 4px; }
     .builder-filters { flex-wrap: wrap; }
     .builder-filters select, .builder-filters input, .search-input { max-width: 100%; flex: 1 1 100%; }
@@ -617,8 +617,8 @@
     }
   }
   @media (max-width: 400px) {
-    .pitch-slot { max-width: 58px; }
-    .pitch-slot img, .pitch-slot svg { width: 34px !important; height: 34px !important; }
+    .pitch-slot { max-width: 48px; }
+    .pitch-slot img, .pitch-slot svg { width: 26px !important; height: 26px !important; }
   }
 </style>
 </head>
@@ -664,6 +664,8 @@
       </select>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Min minutes <input type="number" id="projMinMinutes" value="90" style="width:64px" /></label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projHeatmapToggle" /> Heatmap</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projSimpleToggle" /> Simple view (pts/game only)</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projAssume90Toggle" /> Assume 90 mins (ceiling)</label>
     </div>
     <div id="projectionsBody"></div>
   </section>
@@ -2005,7 +2007,7 @@ function transformPlayer(e) {
     costChangeEvent: e.cost_change_event ?? 0, valueSeasonRaw: e.value_season,
     inDreamteam: !!e.in_dreamteam, dreamteamCount: e.dreamteam_count ?? 0,
     starts: e.starts ?? 0,
-    minsPerStart: (e.starts ?? 0) > 0 ? e.minutes / e.starts : 0,
+    minsPerStart: (e.starts ?? 0) > 0 ? Math.min(90, e.minutes / e.starts) : 0,
     ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
     ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / Math.max(e.minutes, 180)) * 90) / (e.now_cost / 10) : 0,
     pointsPer90: e.minutes > 0 ? (e.total_points / Math.max(e.minutes, 180)) * 90 : 0,
@@ -3645,26 +3647,28 @@ function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
 // when set (most reliable live injury signal), then fold in this-season
 // rotation risk via minutes-per-start (a player who only gets 35 mins when
 // he does play is a real appearance-points risk even if "available").
-function projStartProb(p) {
+// `assume90` (the "if they got 90 minutes" ceiling mode) bypasses all of
+// this and just returns 1 — for sizing up players who haven't had the
+// opportunity yet (new signings, guys returning from injury, etc).
+function projStartProb(p, assume90) {
+  if (assume90) return 1;
   let base;
   if (typeof p.chanceOfPlaying === "number") base = p.chanceOfPlaying / 100;
   else if (p.status === "a") base = p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
   else if (p.status === "d") base = 0.5;
   else base = 0.03; // injured/suspended/unavailable
-  // Rotation-risk shave: below ~70 mins/start on average, trim probability
-  // proportionally (a guy who's regularly hooked at 60' is less nailed on
-  // than his raw availability status suggests) — floors at a 0.6x factor.
   if (p.starts > 0 && p.minsPerStart < 70) {
     const shave = Math.max(0.6, p.minsPerStart / 70);
     base *= shave;
   }
   return Math.max(0, Math.min(1, base));
 }
-function projMinsFactor(p) {
+function projMinsFactor(p, assume90) {
+  if (assume90) return 1;
   if (p.starts === 0) return p.minutes > 0 ? 0.4 : 0;
   return Math.max(0.35, Math.min(1, p.minsPerStart / 80));
 }
-function projAppearancePts(p, startProb, minsFactor) {
+function projAppearancePts(startProb, minsFactor) {
   const fullGameShare = minsFactor >= 0.75 ? 1 : minsFactor;
   return startProb * (1 * (1 - fullGameShare) + 2 * fullGameShare);
 }
@@ -3682,12 +3686,15 @@ function teamContributionShare(p) {
   if (teamTotal <= 0) return 0;
   return ((p.expectedGoalInvolvements || 0) / teamTotal) * 100;
 }
-// ---- DefCon: realistic probability of clearing the FPL DefCon threshold ----
-// (10 defensive actions for DEF, 12 for MID/FWD), not a raw percentile —
-// modelled as Poisson(lambda = this player's DefCon/90, scaled to expected
-// minutes) with a team-style multiplier so high-engagement/pressing teams
-// (whose players collectively rack up more tackles+interceptions+clearances
-// league-wide) get a bump independent of the individual's own rate.
+// ---- DefCon: realistic, GAME-DEPENDENT probability of clearing the FPL
+// DefCon threshold (10 for DEF, 12 for MID/FWD) — modelled as
+// Poisson(lambda) where lambda is this player's own DefCon/90 rate, scaled
+// by expected minutes, a TEAM-STYLE multiplier (some teams generate more
+// defensive actions league-wide — high-press/deep-block systems), AND a
+// per-fixture multiplier: a tougher opponent (higher FDR against you) means
+// more time spent defending, so more tackles/interceptions/clearances on
+// the night — this used to be a flat season-long rate regardless of who
+// you were playing, which is exactly the bit that needed fixing.
 const DEFCON_THRESHOLD = { GK: 99, DEF: 10, MID: 12, FWD: 12 };
 function poissonPmf(k, lambda) {
   if (lambda <= 0) return k === 0 ? 1 : 0;
@@ -3696,7 +3703,6 @@ function poissonPmf(k, lambda) {
   return Math.exp(logP);
 }
 function poissonSf(lambda, k) {
-  // P(X >= k)
   if (k <= 0) return 1;
   let cdf = 0;
   for (let i = 0; i < k; i++) cdf += poissonPmf(i, lambda);
@@ -3720,28 +3726,40 @@ function teamStyleMultiplier(teamId) {
   if (!teamAvg || !_leagueDefConAvg) return 1;
   return Math.max(0.8, Math.min(1.25, teamAvg / _leagueDefConAvg));
 }
-function defConProbability(p, minsFactor) {
+// Fixture-strength multiplier for DefCon specifically: a HARDER fixture
+// (higher FDR against you, i.e. facing a stronger side) means more time
+// spent defending → more defensive actions. Modest range (0.85-1.2x) since
+// this is a secondary effect on top of the player's own underlying rate.
+function fixtureDefConMultiplier(fdrScore) {
+  if (fdrScore === null || fdrScore === undefined) return 1;
+  return 0.85 + (fdrScore - 1) * (0.35 / 4);
+}
+function defConProbability(p, minsFactor, fdrScore) {
   if (p.position === "GK") return 0;
   const threshold = DEFCON_THRESHOLD[p.position];
-  const lambda = (p.defensiveContributionPer90 || 0) * minsFactor * teamStyleMultiplier(p.teamId);
+  const lambda = (p.defensiveContributionPer90 || 0) * minsFactor * teamStyleMultiplier(p.teamId) * fixtureDefConMultiplier(fdrScore);
   return poissonSf(lambda, threshold);
 }
-// ---- Bonus: compare this player's BPS rate against the pool of likely
-// starters in the SAME fixture (both teams), so it's relative to who he's
-// actually sharing that match with, not the whole league. Decimal expected
-// value, not a flat 0/1/2/3 guess.
+// ---- Bonus: exactly 3+2+1=6 bonus points are awarded per real match, so
+// this is modelled as a Plackett-Luce-style ranking over the pool of likely
+// starters in THIS fixture (both teams, ≥300 mins this season) by expected
+// BPS output, then the raw rank-decay weights are rescaled so they sum to
+// 6 across the whole pool — meaning it's mathematically impossible for
+// every likely player to be predicted a big bonus haul in the same game,
+// which is what was happening before.
 function expectedBonusForFixture(p, fx, minsFactor) {
   if (!fx) return 0;
   const oppTeamId = fx.oppId;
   const pool = state.players.filter(x => (x.teamId === p.teamId || x.teamId === oppTeamId) && x.minutes >= 300);
   if (!pool.length) return 0;
-  const sorted = [...pool].sort((a, b) => (b.bpsPer90 || 0) - (a.bpsPer90 || 0));
-  const rank = sorted.findIndex(x => x.id === p.id);
-  if (rank === -1) return 0;
-  // Smooth decay from rank 1 — top spot worth ~3, decaying towards 0,
-  // scaled by how likely he actually plays meaningful minutes.
-  const weight = 3 * Math.exp(-0.35 * rank);
-  return weight * minsFactor;
+  const weighted = pool.map(x => ({ id: x.id, score: (x.bpsPer90 || 0) * projMinsFactor(x, false) }))
+    .sort((a, b) => b.score - a.score);
+  const rank = weighted.findIndex(x => x.id === p.id);
+  if (rank === -1 || weighted[rank].score <= 0) return 0;
+  const rawEV = weighted.map((_, i) => 3 * Math.exp(-0.35 * i));
+  const totalRaw = rawEV.reduce((s, v) => s + v, 0) || 1;
+  const scale = 6 / totalRaw;
+  return rawEV[rank] * scale * Math.max(minsFactor, 0.3);
 }
 // ---- Underlying-stats-driven attacking points: xG90/xA90 output, scaled
 // by expected minutes and by how weak the fixture's opponent is (reuses the
@@ -3755,25 +3773,25 @@ function underlyingAttackPts(p, fdrScore, minsFactor, startProb) {
   return ((p.xg90 || 0) * goalPts + (p.xa90 || 0) * 3) * minsFactor * fixtureMult * startProb;
 }
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
-function computeProjectionRow(p, fromGw, toGw) {
+function computeProjectionRow(p, fromGw, toGw, assume90) {
   const gws = [];
   for (let g = fromGw; g <= toGw; g++) gws.push(g);
   const fixtures = gws.map(g => ({ gw: g, fx: (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g) })).filter(x => x.fx);
   let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0;
   const fixtureLabels = [];
+  const startProb = projStartProb(p, assume90);
+  const minsFactor = projMinsFactor(p, assume90);
   fixtures.forEach(({ gw, fx }) => {
     const opp = state.teamsById[fx.oppId];
     const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
     const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
     const teamXg = est ? est.teamXg : null;
     const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
-    const startProb = projStartProb(p);
-    const minsFactor = projMinsFactor(p);
-    const seasonProj = projectPoints(p, gw);
-    const appearancePts = projAppearancePts(p, startProb, minsFactor);
+    const seasonProj = assume90 ? Math.max(projectPoints(p, gw), p.pointsPer90 || 0) : projectPoints(p, gw);
+    const appearancePts = projAppearancePts(startProb, minsFactor);
     const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
     const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
-    const defConProb = defConProbability(p, minsFactor);
+    const defConProb = defConProbability(p, minsFactor, fdrScore);
     const defConPts = defConProb * 2;
     const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
     const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
@@ -3788,9 +3806,10 @@ function computeProjectionRow(p, fromGw, toGw) {
   });
   const cnt = fixtures.length || 1;
   return {
-    p, fixtures: fixtureLabels,
+    p, fixtures: fixtureLabels, gwCount: fixtures.length,
     proj: projTotal,
-    startProb: projStartProb(p) * 100,
+    projPerGame: fixtures.length ? projTotal / fixtures.length : 0,
+    startProb: startProb * 100,
     minsPerStart: p.minsPerStart,
     teamXg: fixtures.length ? teamXgSum / cnt : null,
     csPct: fixtures.length ? csSum / cnt : null,
@@ -3800,7 +3819,6 @@ function computeProjectionRow(p, fromGw, toGw) {
     avgFdr: fixtures.length ? fdrSum / cnt : null,
   };
 }
-const PROJ_SORT_KEYS = { proj: 1, startProb: 1, minsPerStart: 1, teamXg: 1, csPct: 1, contribution: 1, defConPct: 1, bonusExp: 1 };
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
@@ -3821,49 +3839,78 @@ function renderProjectionsTab() {
   const posFilter = state.projPosFilter || "ALL";
   const minMinutes = state.projMinMinutes ?? 90;
   const heatOn = !!state.projHeatmap;
+  const simpleView = !!state.projSimpleView;
+  const assume90 = !!state.projAssume90;
   const sortKey = state.projSortKey || "proj";
   const sortDir = state.projSortDir || "desc";
   let pool = state.players.filter(p => p.minutes >= minMinutes && (posFilter === "ALL" || p.position === posFilter));
-  let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw));
-  rows.sort((a, b) => (a[sortKey] ?? -Infinity) < (b[sortKey] ?? -Infinity) ? 1 : -1);
+  let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw, assume90));
+  const effSortKey = simpleView && sortKey !== "projPerGame" ? "proj" : sortKey;
+  rows.sort((a, b) => (a[effSortKey] ?? -Infinity) < (b[effSortKey] ?? -Infinity) ? 1 : -1);
   if (sortDir === "asc") rows.reverse();
-  const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp"];
-  const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
-  const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
-  body.innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th class="label-col">Player</th><th>Fixture(s)</th>
-        ${colLabel("proj", "Proj pts")}
-        ${colLabel("startProb", "Start%")}
-        ${colLabel("minsPerStart", "Mins/start")}
-        ${colLabel("teamXg", "Team xG")}
-        ${colLabel("csPct", "CS%")}
-        ${colLabel("contribution", "Team contrib%")}
-        ${colLabel("defConPct", "DefCon%")}
-        ${colLabel("bonusExp", "Exp. bonus")}
-      </tr></thead>
-      <tbody>${rows.map(r => {
-        const p = r.p;
-        const fixLabel = r.fixtures.length
-          ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
-          : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
-        const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
-        return `<tr>
-          <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
-          <td>${fixLabel}</td>
-          ${cell("proj", r.proj, r.proj.toFixed(1))}
-          ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
-          <td class="mono" style="text-align:center">${r.minsPerStart ? Math.round(r.minsPerStart) : "—"}</td>
-          ${cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—")}
-          ${cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—")}
-          ${cell("contribution", r.contribution, r.contribution.toFixed(1) + "%")}
-          ${cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%")}
-          ${cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2))}
-        </tr>`;
-      }).join("")}</tbody>
-    </table></div>
-  `;
+
+  if (simpleView) {
+    const heatKeys = ["projPerGame"];
+    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
+    const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+    body.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th class="label-col">Player</th><th>Fixture(s)</th>
+          ${colLabel("projPerGame", "Proj pts / game")}
+        </tr></thead>
+        <tbody>${rows.map(r => {
+          const p = r.p;
+          const fixLabel = r.fixtures.length
+            ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
+            : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+          return `<tr>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
+            <td>${fixLabel}</td>
+            <td class="mono" style="text-align:center;font-weight:700;${heatOn && ranges ? heatmapBg(r.projPerGame, ranges.projPerGame.min, ranges.projPerGame.max, false) : ""}">${r.projPerGame.toFixed(1)}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>
+    `;
+  } else {
+    const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp"];
+    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
+    const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+    body.innerHTML = `
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th class="label-col">Player</th><th>Fixture(s)</th>
+          ${colLabel("proj", "Proj pts")}
+          ${colLabel("startProb", "Start%")}
+          ${colLabel("minsPerStart", "Mins/start")}
+          ${colLabel("teamXg", "Team xG")}
+          ${colLabel("csPct", "CS%")}
+          ${colLabel("contribution", "Team contrib%")}
+          ${colLabel("defConPct", "DefCon%")}
+          ${colLabel("bonusExp", "Exp. bonus")}
+        </tr></thead>
+        <tbody>${rows.map(r => {
+          const p = r.p;
+          const fixLabel = r.fixtures.length
+            ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
+            : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+          const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
+          return `<tr>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
+            <td>${fixLabel}</td>
+            ${cell("proj", r.proj, r.proj.toFixed(1))}
+            ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
+            <td class="mono" style="text-align:center">${r.minsPerStart ? Math.round(r.minsPerStart) : "—"}</td>
+            ${cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—")}
+            ${cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—")}
+            ${cell("contribution", r.contribution, r.contribution.toFixed(1) + "%")}
+            ${cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%")}
+            ${cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2))}
+          </tr>`;
+        }).join("")}</tbody>
+      </table></div>
+    `;
+  }
   body.querySelectorAll("[data-proj-sort]").forEach(th => {
     th.onclick = () => {
       const key = th.dataset.projSort;
@@ -3879,12 +3926,17 @@ function setupProjectionsControls() {
   const posSelect = document.getElementById("projPosFilter");
   const minInput = document.getElementById("projMinMinutes");
   const heatToggle = document.getElementById("projHeatmapToggle");
+  const simpleToggle = document.getElementById("projSimpleToggle");
+  const assume90Toggle = document.getElementById("projAssume90Toggle");
   fromSelect.onchange = () => { state.projFromGw = Number(fromSelect.value); renderProjectionsTab(); };
   toSelect.onchange = () => { state.projToGw = Number(toSelect.value); renderProjectionsTab(); };
   posSelect.onchange = () => { state.projPosFilter = posSelect.value; renderProjectionsTab(); };
   minInput.onchange = () => { state.projMinMinutes = Number(minInput.value) || 0; renderProjectionsTab(); };
   heatToggle.onchange = (e) => { state.projHeatmap = e.target.checked; renderProjectionsTab(); };
+  simpleToggle.onchange = (e) => { state.projSimpleView = e.target.checked; renderProjectionsTab(); };
+  assume90Toggle.onchange = (e) => { state.projAssume90 = e.target.checked; renderProjectionsTab(); };
 }
+
 
 
 // Chooses a valid starting XI (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD) maximizing
@@ -4608,7 +4660,7 @@ function renderBuilderPitch(draft) {
     if (!x) {
       return `
         <div class="pitch-slot placeholder-slot" data-placeholder-pos="${posHint}" title="Click to add a ${posHint}">
-          ${playerAvatarHtml(null, 52)}
+          ${playerAvatarHtml(null, 40)}
           <div class="name-tag" style="opacity:0.7">Trialist</div>
         </div>
       `;
@@ -4617,7 +4669,7 @@ function renderBuilderPitch(draft) {
     return `
       <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
         ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
-        ${playerAvatarHtml(x.p, 52)}
+        ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
         ${gwFixtureHtml(x.p.teamId, gwId)}
@@ -4638,7 +4690,7 @@ function renderBuilderPitch(draft) {
           return `
             <div class="pitch-slot placeholder-slot" data-placeholder-pos="${pos}" title="Click to add a ${pos}">
               <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
-              ${playerAvatarHtml(null, 52)}
+              ${playerAvatarHtml(null, 40)}
               <div class="name-tag" style="opacity:0.7">Trialist</div>
             </div>
           `;
@@ -4648,7 +4700,7 @@ function renderBuilderPitch(draft) {
         return `
           <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
             <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
-            ${playerAvatarHtml(x.p, 52)}
+            ${playerAvatarHtml(x.p, 40)}
             <div class="name-tag">${x.p.webName}</div>
             <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
             ${gwFixtureHtml(x.p.teamId, gwId)}
@@ -4912,7 +4964,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     return `
       <div class="pitch-slot" data-player="${x.p.id}">
         ${isCaptainSlot ? `<span class="cap-mark">${log.chip === "TC" ? "3×" : "C"}</span>` : isViceSlot ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
-        ${playerAvatarHtml(x.p, 52)}
+        ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         ${fdrBadge}
         <div class="pts-tag">${x.proj.toFixed(1)} pts</div>
