@@ -626,6 +626,7 @@
 
 <nav id="tabs" class="side-toolbar">
   <button data-tab="stats" class="active"><span class="tb-icon">📈</span><span class="tb-label">Player stats</span></button>
+  <button data-tab="projections"><span class="tb-icon">🔮</span><span class="tb-label">Projections</span></button>
   <button data-tab="shortlist"><span class="tb-icon">⭐</span><span class="tb-label">Shortlist</span></button>
   <button data-tab="team"><span class="tb-icon">👤</span><span class="tb-label">My team</span></button>
   <button data-tab="planner"><span class="tb-icon">✏️</span><span class="tb-label">Planner</span></button>
@@ -647,6 +648,23 @@
 
 <main>
   <div id="statusBanner" class="status-banner loading">Loading live data from the FPL API…</div>
+
+  <section id="tab-projections" style="display:none">
+    <h1 class="page-title">Projections</h1>
+    <p class="page-sub">Predicts what actually drives points for the selected gameweek — projected points, chance of starting, the team's expected goals/clean-sheet%, this player's share of the team's attacking output, and likelihood of hitting DefCon/bonus thresholds. Uses expected-data + opponent strength, same prediction engine as FDR/Rankings.</p>
+    <div class="toolbar" style="margin-bottom:12px">
+      <select id="projGwSelect"></select>
+      <select id="projPosFilter">
+        <option value="ALL">All positions</option>
+        <option value="GK">GK</option>
+        <option value="DEF">DEF</option>
+        <option value="MID">MID</option>
+        <option value="FWD">FWD</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Min minutes <input type="number" id="projMinMinutes" value="90" style="width:64px" /></label>
+    </div>
+    <div id="projectionsBody"></div>
+  </section>
 
   <section id="tab-stats">
     <h1 class="page-title">Player stats</h1>
@@ -3617,6 +3635,128 @@ function projectPoints(player, gwId) {
 
 function topN(arr, n) { return [...arr].sort((a, b) => b.proj - a.proj).slice(0, n); }
 function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
+
+// ---------- Projections tab ----------
+// Start/appearance probability: prefer FPL's own chance_of_playing_next_round
+// when set, otherwise fall back to a simple status-based estimate.
+function projStartProb(p) {
+  if (typeof p.chanceOfPlaying === "number") return p.chanceOfPlaying / 100;
+  if (p.status === "a") return p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
+  if (p.status === "d") return 0.5;
+  return 0.03; // injured/suspended/unavailable
+}
+// Rough per-90-based points floor once on the pitch, so start probability
+// can be turned into an appearance-points expectation (1 pt <60 mins, 2 pt 60+).
+function projAppearancePts(p) {
+  const avgMins = p.starts > 0 ? p.minutes / p.starts : (p.minutes > 0 ? p.minutes / Math.max(1, p.starts) : 0);
+  const startProb = projStartProb(p);
+  const fullGameShare = avgMins >= 60 ? 1 : avgMins / 60;
+  return startProb * (1 * (1 - fullGameShare) + 2 * fullGameShare);
+}
+// Team's share of squad xG+xA output this player accounts for — cached per
+// team since it needs summing across every player on that team.
+let _teamXgiTotals = null;
+function teamContributionShare(p) {
+  if (!_teamXgiTotals) {
+    _teamXgiTotals = {};
+    state.players.forEach(x => {
+      _teamXgiTotals[x.teamId] = (_teamXgiTotals[x.teamId] || 0) + (x.expectedGoalInvolvements || 0);
+    });
+  }
+  const teamTotal = _teamXgiTotals[p.teamId] || 0;
+  if (teamTotal <= 0) return 0;
+  return ((p.expectedGoalInvolvements || 0) / teamTotal) * 100;
+}
+// DefCon likelihood: percentile-rank this player's DefCon/90 against same
+// position peers — a stand-in for "how likely to clear the DefCon points
+// threshold this week" since FPL doesn't publish the raw threshold-crossing rate.
+function defConLikelihood(p) {
+  const pool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90).map(x => x.defensiveContributionPer90 || 0);
+  return percentileRank(p.defensiveContributionPer90 || 0, pool);
+}
+function bonusPotential(p) {
+  const pool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90).map(x => x.bpsPer90 || 0);
+  return percentileRank(p.bpsPer90 || 0, pool);
+}
+function computeProjectionRow(p, gwId) {
+  const fx = (state.fixturesByTeam[p.teamId] || []).find(f => f.event === gwId);
+  let opp = null, fdrScore = null, csPct = null, teamXg = null;
+  if (fx) {
+    opp = state.teamsById[fx.oppId];
+    fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
+    const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
+    if (est) {
+      teamXg = est.teamXg;
+      csPct = FDR_MODES.cleansheet.value(est, fx.isHome);
+    }
+  }
+  return {
+    p, fx, opp, fdrScore, csPct, teamXg,
+    proj: projectPoints(p, gwId),
+    startProb: projStartProb(p) * 100,
+    appearancePts: projAppearancePts(p),
+    contribution: teamContributionShare(p),
+    defConLikelihood: defConLikelihood(p),
+    bonusPotential: bonusPotential(p),
+  };
+}
+function renderProjectionsTab() {
+  const body = document.getElementById("projectionsBody");
+  if (!body) return;
+  _teamXgiTotals = null; // recompute fresh each render
+  const gwSelect = document.getElementById("projGwSelect");
+  if (gwSelect && !gwSelect.options.length) {
+    const upcoming = getHorizonGws(6);
+    gwSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
+    state.projGw = upcoming[0];
+    gwSelect.value = state.projGw;
+  }
+  const gwId = state.projGw || Number(gwSelect?.value) || (state.events.find(e => e.is_next) || state.events[0]).id;
+  const posFilter = state.projPosFilter || "ALL";
+  const minMinutes = state.projMinMinutes ?? 90;
+  let pool = state.players.filter(p => p.minutes >= minMinutes && (posFilter === "ALL" || p.position === posFilter));
+  const rows = pool.map(p => computeProjectionRow(p, gwId)).sort((a, b) => b.proj - a.proj);
+  const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConLikelihood", "bonusPotential"];
+  const ranges = computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]);
+  body.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th class="label-col">Player</th><th>Opponent</th>
+        <th data-sort="proj">Proj pts</th>
+        <th data-sort="startProb">Start%</th>
+        <th data-sort="teamXg">Team xG</th>
+        <th data-sort="csPct">CS%</th>
+        <th data-sort="contribution">Team contrib%</th>
+        <th data-sort="defConLikelihood">DefCon likelihood</th>
+        <th data-sort="bonusPotential">Bonus potential</th>
+      </tr></thead>
+      <tbody>${rows.map(r => {
+        const p = r.p;
+        const fixLabel = r.fx ? `${r.opp ? r.opp.short_name : "?"} ${r.fx.isHome ? "(H)" : "(A)"}` : "No fixture";
+        const fdrStyle = r.fdrScore !== null ? `background:${fdrGradientColor(r.fdrScore)};color:#0b1310;` : "";
+        return `<tr>
+          <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${p.teamShort} · ${p.positionShort}</div></div></td>
+          <td><span class="fdr-pill" style="width:auto;padding:2px 7px;${fdrStyle}">${fixLabel}</span></td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.proj, ranges.proj.min, ranges.proj.max, false)}">${r.proj.toFixed(1)}</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.startProb, ranges.startProb.min, ranges.startProb.max, false)}">${Math.round(r.startProb)}%</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.teamXg, ranges.teamXg.min, ranges.teamXg.max, false)}">${r.teamXg !== null ? r.teamXg.toFixed(2) : "—"}</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.csPct, ranges.csPct.min, ranges.csPct.max, false)}">${r.csPct !== null ? Math.round(r.csPct) + "%" : "—"}</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.contribution, ranges.contribution.min, ranges.contribution.max, false)}">${r.contribution.toFixed(1)}%</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.defConLikelihood, ranges.defConLikelihood.min, ranges.defConLikelihood.max, false)}">${r.defConLikelihood}</td>
+          <td class="mono" style="text-align:center;${heatmapBg(r.bonusPotential, ranges.bonusPotential.min, ranges.bonusPotential.max, false)}">${r.bonusPotential}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>
+  `;
+}
+function setupProjectionsControls() {
+  const gwSelect = document.getElementById("projGwSelect");
+  const posSelect = document.getElementById("projPosFilter");
+  const minInput = document.getElementById("projMinMinutes");
+  gwSelect.onchange = () => { state.projGw = Number(gwSelect.value); renderProjectionsTab(); };
+  posSelect.onchange = () => { state.projPosFilter = posSelect.value; renderProjectionsTab(); };
+  minInput.onchange = () => { state.projMinMinutes = Number(minInput.value) || 0; renderProjectionsTab(); };
+}
 
 // Chooses a valid starting XI (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD) maximizing
 // projected points, then applies captain/chip effects.
@@ -7137,14 +7277,15 @@ function setupRankingsPresets() {
 }
 
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "shortlist", "team", "planner", "table", "fdr", "h2h", "rankings"];
-const TAB_ICONS = { stats: "📈", shortlist: "⭐", team: "👤", planner: "✏️", table: "🏟️", fdr: "📅", h2h: "⚔️", rankings: "🏆" };
-const TAB_LABELS = { stats: "Player stats", shortlist: "Shortlist", team: "My team", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", rankings: "Rankings" };
+const TAB_NAMES = ["stats", "projections", "shortlist", "team", "planner", "table", "fdr", "h2h", "rankings"];
+const TAB_ICONS = { stats: "📈", projections: "🔮", shortlist: "⭐", team: "👤", planner: "✏️", table: "🏟️", fdr: "📅", h2h: "⚔️", rankings: "🏆" };
+const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", rankings: "Rankings" };
 function switchTab(name) {
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
     document.getElementById("tab-" + n).style.display = n === name ? "block" : "none";
   });
+  if (name === "projections") renderProjectionsTab();
 }
 function setupTabs() {
   document.querySelectorAll("#tabs button").forEach(btn => {
@@ -7159,6 +7300,7 @@ function setupTabs() {
 
 buildToolbarStatics();
 setupTabs();
+setupProjectionsControls();
 (async () => {
   const saved = await persistGet("preferKits");
   state.preferKits = saved === "1";
