@@ -519,20 +519,25 @@
     border-radius: 16px; padding: 14px 10px 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), var(--shadow);
     display: flex; flex-direction: column; gap: 10px; margin: 0 auto;
     width: 100%; max-width: 460px; aspect-ratio: 3 / 4; justify-content: space-evenly; box-sizing: border-box;
+    container-type: inline-size; container-name: pitch; /* locks players' size to a % of the pitch itself, not the viewport */
   }
   @media (max-width: 640px) { .pitch { aspect-ratio: 3 / 3.6; max-width: 380px; } }
   .pitch-row { display: flex; justify-content: space-evenly; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }
   .pitch-slot {
-    display: flex; flex-direction: column; align-items: center; gap: 3px; width: 80px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; width: 19cqw; cursor: pointer;
     transition: transform 0.12s ease;
   }
   .pitch-slot:hover { transform: translateY(-2px); }
+  /* Avatar/kit size is a % of the pitch's own width (container query units),
+     not a fixed px from JS — so it keeps the same on-pitch proportion at
+     any pitch size instead of the kit shrinking/growing out of step. */
+  .pitch .player-photo, .pitch .kit-fallback { width: 13cqw !important; height: auto !important; }
   .pitch-slot .name-tag {
-    background: rgba(7,15,12,0.85); color: #fff; font-size: 10px; font-weight: 700;
-    padding: 2px 7px; border-radius: 999px; text-align: center; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: rgba(7,15,12,0.85); color: #fff; font-size: 2.6cqw; font-weight: 700;
+    padding: 0.5cqw 1.8cqw; border-radius: 999px; text-align: center; max-width: 19cqw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .pitch-slot .pts-tag { font-size: 9.5px; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
+  .pitch-slot .pts-tag { font-size: 2.4cqw; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
   .pitch-slot .cap-mark {
     font-size: 10px; font-weight: 800; line-height: 1;
     background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
@@ -663,9 +668,20 @@
         <option value="FWD">FWD</option>
       </select>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Min minutes <input type="number" id="projMinMinutes" value="90" style="width:64px" /></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Max £ <input type="number" step="0.5" id="projMaxPrice" placeholder="budget" style="width:64px" /></label>
+      <select id="projFormFilter">
+        <option value="ALL">All players</option>
+        <option value="NEW">New / no Prem data yet</option>
+        <option value="BREAKOUT">Potential breakouts (low mins, high underlying)</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Rotation-risk floor (mins/start) <input type="number" id="projRotationThreshold" value="70" style="width:56px" /></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projFullSeasonToggle" /> Full season</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projHeatmapToggle" /> Heatmap</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projSimpleToggle" /> Simple view (pts/game only)</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projAssume90Toggle" /> Assume 90 mins (ceiling)</label>
+    </div>
+    <div class="toolbar" id="projColumnToggles" style="margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <span style="font-size:11px;color:var(--ink-faint)">Columns:</span>
     </div>
     <div id="projectionsBody"></div>
   </section>
@@ -1336,6 +1352,51 @@ function computeFcAttributes(p) {
     { label: "Physical", value: physical },
   ];
 }
+const COMPARE_COLORS = ["#e0529a", "#3ba7ff", "#ffcf4d", "#3cd25a"];
+function colorForIndex(i) { return COMPARE_COLORS[i % COMPARE_COLORS.length]; }
+// Builds {label,value}[] (0-99 scale, matching radarChartSvg's expected range)
+// for a given compare tab, so the overlay radar can re-render per-theme.
+function radarAttrsForTab(p, tab, allPlayers) {
+  if (tab === "per90") {
+    return COMPARE_PER90_ROWS.map(([key, label, dir]) => {
+      const vals = allPlayers.map(pl => comparisonRowValue(pl, key));
+      const max = Math.max(...vals, 0.0001);
+      const raw = comparisonRowValue(p, key);
+      const scaled = dir > 0 ? (raw / max) * 99 : (max > 0 ? (1 - raw / max) * 99 : 0);
+      return { label, value: Math.max(1, Math.round(scaled)) };
+    });
+  }
+  return computeFcAttributes(p); // "radar" tab default (FC attributes, already 1-99)
+}
+// Overlaid multi-player radar — same axes, one translucent polygon per
+// player in that player's colour, plus a small colour-coded legend.
+function overlayRadarSvg(players, tab, size = 260) {
+  const allAttrs = players.map(p => radarAttrsForTab(p, tab, players));
+  const labels = allAttrs[0] ? allAttrs[0].map(a => a.label) : [];
+  const n = labels.length;
+  if (!n) return "";
+  const cx = size / 2, cy = size / 2, r = size / 2 - 30;
+  const angleFor = i => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const ptFor = (i, frac) => { const a = angleFor(i); return [cx + Math.cos(a) * r * frac, cy + Math.sin(a) * r * frac]; };
+  const rings = [0.25, 0.5, 0.75, 1].map(frac =>
+    `<polygon points="${labels.map((_, i) => ptFor(i, frac).join(",")).join(" ")}" fill="none" stroke="var(--panel-3,#333)" stroke-width="1" />`
+  ).join("");
+  const spokes = labels.map((_, i) => { const [x, y] = ptFor(i, 1); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--panel-3,#333)" stroke-width="1" />`; }).join("");
+  const polys = allAttrs.map((attrs, pi) => {
+    const color = colorForIndex(pi);
+    const pts = attrs.map((a, i) => ptFor(i, Math.max(0.04, a.value / 99)));
+    return `<polygon points="${pts.map(p => p.join(",")).join(" ")}" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-width="2" />`;
+  }).join("");
+  const labelEls = labels.map((label, i) => {
+    const [x, y] = ptFor(i, 1.22);
+    return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="var(--ink-dim,#aaa)">${label}</text>`;
+  }).join("");
+  const legend = players.map((p, pi) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--ink-dim)"><span style="width:10px;height:10px;border-radius:3px;background:${colorForIndex(pi)};display:inline-block"></span>${p.webName}</span>`).join("");
+  return `<div style="text-align:center">
+    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${rings}${spokes}${polys}${labelEls}</svg>
+    <div style="margin-top:4px">${legend}</div>
+  </div>`;
+}
 function radarChartSvg(attrs, size = 220, color = "var(--pink,#e0529a)") {
   const cx = size / 2, cy = size / 2, r = size / 2 - 28, n = attrs.length;
   const angleFor = i => (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -1377,9 +1438,13 @@ const COMPARE_PER90_ROWS = [
   ["pointsPer90", "Points/90", 1],
 ];
 function comparisonRowValue(p, key) { return Number(p[key]) || 0; }
+function compareColgroup(players) {
+  return `<colgroup><col style="width:140px" />${players.map(() => `<col />`).join("")}</colgroup>`;
+}
 function buildComparisonTableHtml(players, tab) {
   if (tab === "per90") {
-    return `<table style="width:100%;border-collapse:collapse">
+    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      ${compareColgroup(players)}
       <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
       <tbody>${COMPARE_PER90_ROWS.map(([key, label, dir]) => {
         const vals = players.map(p => comparisonRowValue(p, key));
@@ -1394,7 +1459,8 @@ function buildComparisonTableHtml(players, tab) {
   if (tab === "attributes") {
     const attrRows = players.map(p => computeFcAttributes(p));
     const labels = attrRows[0] ? attrRows[0].map(a => a.label) : [];
-    return `<table style="width:100%;border-collapse:collapse">
+    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      ${compareColgroup(players)}
       <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
       <tbody>${labels.map((label, i) => {
         const vals = attrRows.map(row => row[i].value);
@@ -1414,6 +1480,7 @@ function buildComparisonTableHtml(players, tab) {
   if (posRows.length) sections.push({ label: `${posKey} stats`, rows: posRows });
   else sections.push({ label: "Note", note: "Comparing across different positions — showing shared points/output stats only." });
   sections.push({ label: "Points & output", rows: COMPARE_POINTS_ROWS });
+  const colgroup = compareColgroup(players);
   const body = sections.map(sec => {
     if (sec.note) return `<tr><td colspan="${players.length + 1}" style="font-size:11px;color:var(--ink-faint);padding:8px 4px">${sec.note}</td></tr>`;
     return `<tr><td colspan="${players.length + 1}" style="font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);padding:8px 4px 3px;border-top:1px solid var(--border)">${sec.label}</td></tr>` +
@@ -1426,7 +1493,8 @@ function buildComparisonTableHtml(players, tab) {
         </tr>`;
       }).join("");
   }).join("");
-  return `<table style="width:100%;border-collapse:collapse">
+  return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    ${colgroup}
     <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
@@ -1451,16 +1519,21 @@ function openPlayerProfileCompare(ids) {
           <h2 style="margin:0">Player profile comparison</h2>
           <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
         </div>
-        <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center">
-          ${players.map(p => `
-            <div style="min-width:250px;flex:1;text-align:center">
+        <div style="display:grid;grid-template-columns:140px repeat(${players.length},1fr);gap:18px;align-items:start">
+          <div></div>
+          ${players.map((p, pi) => `
+            <div style="text-align:center">
               ${playerAvatarHtml(p, 64)}
               <div style="font-weight:600;margin-top:6px;margin-bottom:2px">${p.webName}</div>
               <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
-              ${activeTab === "radar" ? radarChartSvg(computeFcAttributes(p)) : ""}
+              ${activeTab !== "attributes" ? radarChartSvg(radarAttrsForTab(p, activeTab, players), 200, colorForIndex(pi)) : ""}
             </div>
           `).join("")}
         </div>
+        ${players.length > 1 && activeTab !== "attributes" ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);text-align:center;margin-bottom:6px">Head-to-head overlay${activeTab === "per90" ? " · Per-90" : ""}</div>
+          ${overlayRadarSvg(players, activeTab, 260)}
+        </div>` : ""}
         <div class="theme-seg" style="margin-top:16px">
           ${COMPARE_TABS.map(([id, label]) => `<button data-compare-tab="${id}" class="${id === activeTab ? "active" : ""}">${label}</button>`).join("")}
         </div>
@@ -3650,23 +3723,25 @@ function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
 // `assume90` (the "if they got 90 minutes" ceiling mode) bypasses all of
 // this and just returns 1 — for sizing up players who haven't had the
 // opportunity yet (new signings, guys returning from injury, etc).
-function projStartProb(p, assume90) {
+function projStartProb(p, assume90, rotationThreshold) {
   if (assume90) return 1;
+  const floor = rotationThreshold || 70;
   let base;
   if (typeof p.chanceOfPlaying === "number") base = p.chanceOfPlaying / 100;
   else if (p.status === "a") base = p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
   else if (p.status === "d") base = 0.5;
   else base = 0.03; // injured/suspended/unavailable
-  if (p.starts > 0 && p.minsPerStart < 70) {
-    const shave = Math.max(0.6, p.minsPerStart / 70);
+  if (p.starts > 0 && p.minsPerStart < floor) {
+    const shave = Math.max(0.6, p.minsPerStart / floor);
     base *= shave;
   }
   return Math.max(0, Math.min(1, base));
 }
-function projMinsFactor(p, assume90) {
+function projMinsFactor(p, assume90, rotationThreshold) {
   if (assume90) return 1;
+  const floor = rotationThreshold || 70;
   if (p.starts === 0) return p.minutes > 0 ? 0.4 : 0;
-  return Math.max(0.35, Math.min(1, p.minsPerStart / 80));
+  return Math.max(0.35, Math.min(1, p.minsPerStart / (floor + 10)));
 }
 function projAppearancePts(startProb, minsFactor) {
   const fullGameShare = minsFactor >= 0.75 ? 1 : minsFactor;
@@ -3773,21 +3848,31 @@ function underlyingAttackPts(p, fdrScore, minsFactor, startProb) {
   return ((p.xg90 || 0) * goalPts + (p.xa90 || 0) * 3) * minsFactor * fixtureMult * startProb;
 }
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
-function computeProjectionRow(p, fromGw, toGw, assume90) {
+// provenAbilityWeight: how much weight goes on the player's own season-long
+// scoring rate (pointsPerGame — a large-sample, "proven ability" number)
+// vs the per-fixture underlying model (xG/xA/DefCon/bonus scaled to THIS
+// fixture). Defaults to 0.8/0.2 so small-sample recent form/single fixtures
+// don't overreact a projection. NOTE: this is still season-to-date data —
+// pulling in true prior-season history needs a separate per-player FPL
+// element-summary fetch that isn't wired up yet (flagged, not done).
+function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, provenAbilityWeight) {
   const gws = [];
   for (let g = fromGw; g <= toGw; g++) gws.push(g);
   const fixtures = gws.map(g => ({ gw: g, fx: (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g) })).filter(x => x.fx);
   let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0;
   const fixtureLabels = [];
-  const startProb = projStartProb(p, assume90);
-  const minsFactor = projMinsFactor(p, assume90);
+  const startProb = projStartProb(p, assume90, rotationThreshold);
+  const minsFactor = projMinsFactor(p, assume90, rotationThreshold);
+  const provenW = provenAbilityWeight ?? 0.8;
+  const provenAbility = p.pointsPerGame || p.pointsPer90 || 0; // season-long rate, large sample
   fixtures.forEach(({ gw, fx }) => {
     const opp = state.teamsById[fx.oppId];
     const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
     const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
     const teamXg = est ? est.teamXg : null;
     const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
-    const seasonProj = assume90 ? Math.max(projectPoints(p, gw), p.pointsPer90 || 0) : projectPoints(p, gw);
+    const fixtureMult = fdrScore !== null ? fdrToMultiplier(fdrScore) : 1;
+    const provenProj = assume90 ? Math.max(provenAbility, p.pointsPer90 || 0) * fixtureMult : provenAbility * fixtureMult * startProb;
     const appearancePts = projAppearancePts(startProb, minsFactor);
     const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
     const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
@@ -3795,7 +3880,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90) {
     const defConPts = defConProb * 2;
     const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
     const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
-    const finalProj = seasonProj * 0.45 + underlyingProj * 0.55;
+    const finalProj = provenProj * provenW + underlyingProj * (1 - provenW);
     projTotal += finalProj;
     if (teamXg !== null) { teamXgSum += teamXg; n++; }
     if (csPct !== null) csSum += csPct;
@@ -3819,14 +3904,19 @@ function computeProjectionRow(p, fromGw, toGw, assume90) {
     avgFdr: fixtures.length ? fdrSum / cnt : null,
   };
 }
+const PROJ_OPTIONAL_COLS = [
+  ["minsPerStart", "Mins/start"], ["teamXg", "Team xG"], ["csPct", "CS%"],
+  ["contribution", "Team contrib%"], ["defConPct", "DefCon%"], ["bonusExp", "Exp. bonus"],
+];
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
   _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; // recompute fresh each render
   const fromSelect = document.getElementById("projFromGw");
   const toSelect = document.getElementById("projToGw");
+  const fullSeason = !!state.projFullSeason;
   if (fromSelect && !fromSelect.options.length) {
-    const upcoming = getHorizonGws(8);
+    const upcoming = getHorizonGws(fullSeason ? 38 : 8);
     fromSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
     toSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
     state.projFromGw = upcoming[0];
@@ -3834,17 +3924,27 @@ function renderProjectionsTab() {
     fromSelect.value = state.projFromGw;
     toSelect.value = state.projToGw;
   }
-  const fromGw = state.projFromGw || Number(fromSelect?.value);
-  const toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
+  let fromGw = state.projFromGw || Number(fromSelect?.value);
+  let toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
+  if (fullSeason) {
+    const all = getHorizonGws(38);
+    fromGw = all[0]; toGw = all[all.length - 1];
+  }
   const posFilter = state.projPosFilter || "ALL";
   const minMinutes = state.projMinMinutes ?? 90;
+  const maxPrice = state.projMaxPrice;
+  const formFilter = state.projFormFilter || "ALL";
+  const rotationThreshold = state.projRotationThreshold ?? 70;
   const heatOn = !!state.projHeatmap;
   const simpleView = !!state.projSimpleView;
   const assume90 = !!state.projAssume90;
   const sortKey = state.projSortKey || "proj";
   const sortDir = state.projSortDir || "desc";
   let pool = state.players.filter(p => p.minutes >= minMinutes && (posFilter === "ALL" || p.position === posFilter));
-  let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw, assume90));
+  if (maxPrice) pool = pool.filter(p => (p.nowCost || 0) <= maxPrice);
+  if (formFilter === "NEW") pool = pool.filter(p => (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0);
+  if (formFilter === "BREAKOUT") pool = pool.filter(p => (p.minutes || 0) > 0 && (p.minutes || 0) < 900 && ((p.xg90 || 0) + (p.xa90 || 0)) > 0.35);
+  let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, state.projProvenWeight));
   const effSortKey = simpleView && sortKey !== "projPerGame" ? "proj" : sortKey;
   rows.sort((a, b) => (a[effSortKey] ?? -Infinity) < (b[effSortKey] ?? -Infinity) ? 1 : -1);
   if (sortDir === "asc") rows.reverse();
@@ -3873,39 +3973,41 @@ function renderProjectionsTab() {
       </table></div>
     `;
   } else {
+    if (!state.projColumns) state.projColumns = Object.fromEntries(PROJ_OPTIONAL_COLS.map(([k]) => [k, true]));
+    const cols = state.projColumns;
     const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp"];
     const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
     const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+    const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
     body.innerHTML = `
       <div class="table-wrap"><table>
         <thead><tr>
           <th class="label-col">Player</th><th>Fixture(s)</th>
           ${colLabel("proj", "Proj pts")}
           ${colLabel("startProb", "Start%")}
-          ${colLabel("minsPerStart", "Mins/start")}
-          ${colLabel("teamXg", "Team xG")}
-          ${colLabel("csPct", "CS%")}
-          ${colLabel("contribution", "Team contrib%")}
-          ${colLabel("defConPct", "DefCon%")}
-          ${colLabel("bonusExp", "Exp. bonus")}
+          ${cols.minsPerStart ? colLabel("minsPerStart", "Mins/start") : ""}
+          ${cols.teamXg ? colLabel("teamXg", "Team xG") : ""}
+          ${cols.csPct ? colLabel("csPct", "CS%") : ""}
+          ${cols.contribution ? colLabel("contribution", "Team contrib%") : ""}
+          ${cols.defConPct ? colLabel("defConPct", "DefCon%") : ""}
+          ${cols.bonusExp ? colLabel("bonusExp", "Exp. bonus") : ""}
         </tr></thead>
         <tbody>${rows.map(r => {
           const p = r.p;
           const fixLabel = r.fixtures.length
             ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
             : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
-          const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
           return `<tr>
             <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
             <td>${fixLabel}</td>
             ${cell("proj", r.proj, r.proj.toFixed(1))}
             ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
-            <td class="mono" style="text-align:center">${r.minsPerStart ? Math.round(r.minsPerStart) : "—"}</td>
-            ${cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—")}
-            ${cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—")}
-            ${cell("contribution", r.contribution, r.contribution.toFixed(1) + "%")}
-            ${cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%")}
-            ${cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2))}
+            ${cols.minsPerStart ? `<td class="mono" style="text-align:center">${r.minsPerStart ? Math.round(r.minsPerStart) : "—"}</td>` : ""}
+            ${cols.teamXg ? cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—") : ""}
+            ${cols.csPct ? cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—") : ""}
+            ${cols.contribution ? cell("contribution", r.contribution, r.contribution.toFixed(1) + "%") : ""}
+            ${cols.defConPct ? cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%") : ""}
+            ${cols.bonusExp ? cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2)) : ""}
           </tr>`;
         }).join("")}</tbody>
       </table></div>
@@ -3925,6 +4027,10 @@ function setupProjectionsControls() {
   const toSelect = document.getElementById("projToGw");
   const posSelect = document.getElementById("projPosFilter");
   const minInput = document.getElementById("projMinMinutes");
+  const maxPriceInput = document.getElementById("projMaxPrice");
+  const formSelect = document.getElementById("projFormFilter");
+  const rotationInput = document.getElementById("projRotationThreshold");
+  const fullSeasonToggle = document.getElementById("projFullSeasonToggle");
   const heatToggle = document.getElementById("projHeatmapToggle");
   const simpleToggle = document.getElementById("projSimpleToggle");
   const assume90Toggle = document.getElementById("projAssume90Toggle");
@@ -3932,9 +4038,29 @@ function setupProjectionsControls() {
   toSelect.onchange = () => { state.projToGw = Number(toSelect.value); renderProjectionsTab(); };
   posSelect.onchange = () => { state.projPosFilter = posSelect.value; renderProjectionsTab(); };
   minInput.onchange = () => { state.projMinMinutes = Number(minInput.value) || 0; renderProjectionsTab(); };
+  maxPriceInput.onchange = () => { state.projMaxPrice = Number(maxPriceInput.value) || null; renderProjectionsTab(); };
+  formSelect.onchange = () => { state.projFormFilter = formSelect.value; renderProjectionsTab(); };
+  rotationInput.onchange = () => { state.projRotationThreshold = Number(rotationInput.value) || 70; renderProjectionsTab(); };
+  fullSeasonToggle.onchange = (e) => {
+    state.projFullSeason = e.target.checked;
+    if (fromSelect) fromSelect.innerHTML = ""; // force GW-select rebuild for the new horizon
+    renderProjectionsTab();
+  };
   heatToggle.onchange = (e) => { state.projHeatmap = e.target.checked; renderProjectionsTab(); };
   simpleToggle.onchange = (e) => { state.projSimpleView = e.target.checked; renderProjectionsTab(); };
   assume90Toggle.onchange = (e) => { state.projAssume90 = e.target.checked; renderProjectionsTab(); };
+  const colContainer = document.getElementById("projColumnToggles");
+  if (colContainer && !colContainer.dataset.built) {
+    colContainer.dataset.built = "1";
+    if (!state.projColumns) state.projColumns = Object.fromEntries(PROJ_OPTIONAL_COLS.map(([k]) => [k, true]));
+    PROJ_OPTIONAL_COLS.forEach(([key, label]) => {
+      const wrap = document.createElement("label");
+      wrap.style.cssText = "display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink-dim)";
+      wrap.innerHTML = `<input type="checkbox" ${state.projColumns[key] ? "checked" : ""} data-proj-col="${key}" /> ${label}`;
+      wrap.querySelector("input").onchange = (e) => { state.projColumns[key] = e.target.checked; renderProjectionsTab(); };
+      colContainer.appendChild(wrap);
+    });
+  }
 }
 
 
@@ -4842,6 +4968,12 @@ function renderGwSimulator(draft) {
   if (horizon.length === 0) {
     body.innerHTML = '<div class="empty-state">No upcoming gameweeks found in the fixture data yet.</div>';
     return;
+  }
+  // Default to a pitch preview of the next gameweek (not a bare list) —
+  // matches the compare view's "see the squad" feel instead of requiring a
+  // click into an accordion row before showing anything visual.
+  if (state.plannerExpandedGw === undefined || state.plannerExpandedGw === null) {
+    state.plannerExpandedGw = horizon[0];
   }
   const timeline = getSquadTimeline(draft, horizon);
 
@@ -6385,17 +6517,22 @@ function computeFixtureRunFullSeasonData() {
   const list = state.teams.map(t => {
     const byGw = {};
     for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
-    const scoresInOrder = allGwIds.map(gwId => {
+    const scoresInOrder = [], xgInOrder = [], csInOrder = [];
+    allGwIds.forEach(gwId => {
       const fixtures = byGw[gwId] || [];
-      if (!fixtures.length) return null;
-      let worst = -Infinity;
+      if (!fixtures.length) { scoresInOrder.push(null); xgInOrder.push(null); csInOrder.push(null); return; }
+      let worst = -Infinity, xgSum = 0, csSum = 0, n = 0;
       for (const fx of fixtures) {
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         if (score > worst) worst = score;
+        const est = estimateScoreline(t.id, fx.oppId, fx.isHome);
+        if (est) { xgSum += est.teamXg; csSum += FDR_MODES.cleansheet.value(est, fx.isHome); n++; }
       }
-      return worst;
+      scoresInOrder.push(worst);
+      xgInOrder.push(n ? xgSum / n : null);
+      csInOrder.push(n ? csSum / n : null);
     });
-    return { t, scoresInOrder };
+    return { t, scoresInOrder, xgInOrder, csInOrder };
   }).sort((a, b) => a.t.name.localeCompare(b.t.name));
   return { list, gwIds: allGwIds };
 }
@@ -6407,7 +6544,10 @@ function computeFixtureRunFullSeasonData() {
 // For each team, finds the longest window (>= tier.minLen games) whose
 // average FDR satisfies the tier; among equal-length windows, prefers the
 // lowest average. Returns null for a team/tier if no window qualifies.
-function bestFixtureRun(scoresInOrder, gwIds, minLen, maxAvg) {
+// Also reports the average predicted team xG and clean-sheet% across the
+// window (not just the FDR score) — a run can look "easy" on FDR alone
+// but be low-scoring, or vice versa, so both signals matter.
+function bestFixtureRun(scoresInOrder, gwIds, minLen, maxAvg, xgInOrder, csInOrder) {
   const n = scoresInOrder.length;
   let best = null;
   for (let start = 0; start < n; start++) {
@@ -6424,6 +6564,15 @@ function bestFixtureRun(scoresInOrder, gwIds, minLen, maxAvg) {
         best = { start, end, len, avg, startGw: gwIds[start], endGw: gwIds[end] };
       }
     }
+  }
+  if (best && xgInOrder && csInOrder) {
+    let xgSum = 0, csSum = 0, xn = 0, cn = 0;
+    for (let i = best.start; i <= best.end; i++) {
+      if (xgInOrder[i] !== null) { xgSum += xgInOrder[i]; xn++; }
+      if (csInOrder[i] !== null) { csSum += csInOrder[i]; cn++; }
+    }
+    best.avgXg = xn ? xgSum / xn : null;
+    best.avgCs = cn ? csSum / cn : null;
   }
   return best;
 }
@@ -6464,12 +6613,15 @@ function renderFixtureRunFinder() {
   const tiers = state.fixtureRunTiers;
   const tierKeys = Object.keys(tiers);
   const head = `<tr><th class="label-col">Club</th>${tierKeys.map(k => `<th>${tiers[k].label}</th>`).join("")}</tr>`;
-  const perTeamRuns = list.map(({ t, scoresInOrder }) => {
+  const perTeamRuns = list.map(({ t, scoresInOrder, xgInOrder, csInOrder }) => {
     const runs = {};
-    for (const k of tierKeys) runs[k] = bestFixtureRun(scoresInOrder, gwIds, tiers[k].minLen, tiers[k].maxAvg);
+    for (const k of tierKeys) runs[k] = bestFixtureRun(scoresInOrder, gwIds, tiers[k].minLen, tiers[k].maxAvg, xgInOrder, csInOrder);
     return { t, runs };
   });
-  const fmtRun = (r) => r ? `GW${r.startGw}–GW${r.endGw} <span class="mono" style="color:var(--ink-dim)">(${r.len} games, avg ${r.avg.toFixed(1)})</span>` : `<span style="color:var(--ink-faint)">–</span>`;
+  // Goals/clean-sheet info alongside the FDR average, so a run that looks
+  // "easy" on fixture difficulty alone but is actually low-scoring (or vice
+  // versa) doesn't get missed.
+  const fmtRun = (r) => r ? `GW${r.startGw}–GW${r.endGw} <span class="mono" style="color:var(--ink-dim)">(${r.len} games, avg ${r.avg.toFixed(1)} FDR${r.avgXg !== null ? `, ${r.avgXg.toFixed(2)} xG/gm` : ""}${r.avgCs !== null ? `, ${Math.round(r.avgCs)}% CS` : ""})</span>` : `<span style="color:var(--ink-faint)">–</span>`;
   const rows = perTeamRuns.map(({ t, runs }) =>
     `<tr><td class="label-col" style="display:flex;align-items:center;gap:8px">${kitSvg(t.id, 20)}${t.name}</td>${tierKeys.map(k => `<td style="font-size:12px">${fmtRun(runs[k])}</td>`).join("")}</tr>`
   ).join("");
@@ -6484,6 +6636,62 @@ function renderFixtureRunFinder() {
     return `${tiers[k].label}: target <strong>${top.t.name}</strong> (GW${top.runs[k].startGw}–GW${top.runs[k].endGw}, ${top.runs[k].len} games, avg ${top.runs[k].avg.toFixed(1)} FDR).`;
   });
   suggestionEl.innerHTML = suggestions.join("<br>");
+  renderFdrFunFacts(list);
+}
+
+// ---------- Fun facts: auto-generated highlights from the same real +
+// predicted data already powering the grid above (clean-sheet streaks,
+// scoring streaks, standout upcoming runs) — a quick "did you know" strip
+// rather than a table you have to read yourself.
+function computeTeamFunFacts(t, xgInOrder, csInOrder, gwIds) {
+  const facts = [];
+  const fx = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null && (f.team_h === t.id || f.team_a === t.id))
+    .sort((a, b) => (b.event || 0) - (a.event || 0));
+  // Clean-sheet streak (real, most recent games first)
+  let csStreak = 0;
+  for (const f of fx) {
+    const isHome = f.team_h === t.id;
+    const ga = isHome ? f.team_a_score : f.team_h_score;
+    if (ga === 0) csStreak++; else break;
+  }
+  // Scoring streak (real)
+  let scoreStreak = 0;
+  for (const f of fx) {
+    const isHome = f.team_h === t.id;
+    const gf = isHome ? f.team_h_score : f.team_a_score;
+    if (gf > 0) scoreStreak++; else break;
+  }
+  if (csStreak >= 2) facts.push(`🧤 ${t.name} have kept a clean sheet in <strong>${csStreak} straight games</strong>.`);
+  if (scoreStreak >= 3) facts.push(`⚽ ${t.name} have scored in <strong>${scoreStreak} straight games</strong>.`);
+  // Upcoming clean-sheet potential over next 3 fixtures with data
+  const upcomingCs = [];
+  for (let i = 0; i < csInOrder.length && upcomingCs.length < 3; i++) {
+    if (csInOrder[i] !== null) upcomingCs.push(csInOrder[i]);
+  }
+  if (upcomingCs.length >= 2) {
+    const avgCs = upcomingCs.reduce((s, v) => s + v, 0) / upcomingCs.length;
+    if (avgCs >= 45) facts.push(`🛡️ ${t.name}'s next ${upcomingCs.length} fixtures average <strong>${Math.round(avgCs)}% predicted clean-sheet chance</strong> — a defensive-assets watch.`);
+  }
+  // Upcoming attacking potential
+  const upcomingXg = [];
+  for (let i = 0; i < xgInOrder.length && upcomingXg.length < 3; i++) {
+    if (xgInOrder[i] !== null) upcomingXg.push(xgInOrder[i]);
+  }
+  if (upcomingXg.length >= 2) {
+    const avgXg = upcomingXg.reduce((s, v) => s + v, 0) / upcomingXg.length;
+    if (avgXg >= 1.6) facts.push(`🔥 ${t.name} are projected <strong>${avgXg.toFixed(2)} xG/game</strong> over their next ${upcomingXg.length} fixtures — an attacking watch.`);
+  }
+  return facts;
+}
+function renderFdrFunFacts(list) {
+  const el = document.getElementById("fdrFunFacts");
+  if (!el) return;
+  const allFacts = [];
+  list.forEach(({ t, xgInOrder, csInOrder }) => {
+    allFacts.push(...computeTeamFunFacts(t, xgInOrder, csInOrder, []));
+  });
+  if (!allFacts.length) { el.innerHTML = `<p class="foot-note">No standout streaks or projections yet — check back once more games are in the books.</p>`; return; }
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">${allFacts.map(f => `<div class="foot-note" style="font-size:12.5px">${f}</div>`).join("")}</div>`;
 }
 
 const FDR_SORT_OPTIONS = [
@@ -6584,15 +6792,16 @@ const FORMATIONS_H2H = {
 function h2hPitchSlotHtml(entry, teamA, pos, idx, opts) {
   const editable = !!opts;
   const isEditing = editable && opts.editPos === pos && opts.editSlot === idx;
+  const dragAttrs = editable ? `draggable="true" data-h2h-drag-pos="${pos}" data-h2h-drag-idx="${idx}"` : "";
   const clickAttrs = editable ? `data-h2h-pitch-slot="1" data-h2h-pitch-pos="${pos}" data-h2h-pitch-slot-idx="${idx}" style="cursor:pointer;${isEditing ? "outline:3px solid var(--gold-bright);border-radius:8px;" : ""}"` : "";
   if (!entry) {
-    return `<div class="pitch-slot placeholder-slot" ${clickAttrs}><div class="name-tag" style="opacity:0.6">Empty</div></div>`;
+    return `<div class="pitch-slot placeholder-slot" ${clickAttrs} ${dragAttrs}><div class="name-tag" style="opacity:0.6">Empty</div></div>`;
   }
   const { p } = entry;
   const isA = p.teamId === teamA.id;
   const outline = isEditing ? "3px solid var(--gold-bright)" : `2px solid ${isA ? "var(--gold-bright)" : "var(--blue, #4a9eff)"}`;
   return `
-    <div class="pitch-slot" ${clickAttrs} style="${editable ? "cursor:pointer;" : ""}outline:${outline};border-radius:8px">
+    <div class="pitch-slot" ${clickAttrs} ${dragAttrs} style="${editable ? "cursor:grab;" : ""}outline:${outline};border-radius:8px">
       ${playerAvatarHtml(p, 40)}
       <div class="name-tag">${p.webName}</div>
       <div class="pts-tag mono">${p.totalPoints ?? 0}pts</div>
@@ -6709,8 +6918,8 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
   }
 
   const intro = isCombined
-    ? `Best combined XI by real season points — click any player on the pitch, or use the position/slot buttons below, to override the pick for that spot. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`
-    : `Click any player on the pitch — or use the position/slot buttons below — to pick or change who fills that spot. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`;
+    ? `Best combined XI by real season points — click any player on the pitch, or use the position/slot buttons below, to override the pick for that spot. Drag a player onto another slot to swap them. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`
+    : `Click any player on the pitch — or use the position/slot buttons below — to pick or change who fills that spot. Drag a player onto another slot to swap them, and use the Formation dropdown to change shape. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`;
   const resetLabel = isCombined ? "Reset to auto (by points)" : "Reset draft";
   const formationSelectId = isCombined ? "h2hFormationSelect" : "h2hDraftFormationSelect";
   const resetBtnId = isCombined ? "h2hCombinedReset" : "h2hDraftReset";
@@ -6780,6 +6989,29 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
         if (nextSlot === -1) nextSlot = editSlot;
       }
       state[posStateKey] = nextPos; state[slotStateKey] = nextSlot;
+      renderH2H();
+    };
+  });
+  // Drag-and-drop: drag one pitch slot onto another to swap who's in each
+  // spot (including across position rows) — the same tactical-board feel
+  // as dragging players around a formation, on top of the click picker.
+  let dragSrc = null;
+  body.querySelectorAll("[data-h2h-drag-pos]").forEach(el => {
+    el.ondragstart = (e) => {
+      dragSrc = { pos: el.dataset.h2hDragPos, idx: Number(el.dataset.h2hDragIdx) };
+      e.dataTransfer.effectAllowed = "move";
+    };
+    el.ondragover = (e) => { e.preventDefault(); };
+    el.ondrop = (e) => {
+      e.preventDefault();
+      if (!dragSrc) return;
+      const destPos = el.dataset.h2hDragPos, destIdx = Number(el.dataset.h2hDragIdx);
+      if (dragSrc.pos === destPos && dragSrc.idx === destIdx) return;
+      const srcVal = saved.picks[dragSrc.pos][dragSrc.idx];
+      saved.picks[dragSrc.pos][dragSrc.idx] = saved.picks[destPos][destIdx];
+      saved.picks[destPos][destIdx] = srcVal;
+      dragSrc = null;
+      saveFn();
       renderH2H();
     };
   });
@@ -7301,13 +7533,50 @@ function renderH2H() {
   const aHome = customFdr(teamA.id, teamB.id, true).toFixed(1);
   const bHome = customFdr(teamB.id, teamA.id, true).toFixed(1);
   const rivalry = rivalryName(teamA, teamB);
+  const tableA = computeLiveTable(state.allFixtures, {})?.find(r => r.teamId === teamA.id) || null;
+  const tableB = computeLiveTable(state.allFixtures, {})?.find(r => r.teamId === teamB.id) || null;
+  const formStrA = teamRecentForm(teamA.id, 5), formStrB = teamRecentForm(teamB.id, 5);
+  const formPillsHtml = (str) => str ? [...str].map(r => `<span class="pos-pill" style="width:20px;text-align:center;padding:2px 0;font-weight:800;background:${r === "W" ? "#3cd25a33;color:#3cd25a" : r === "L" ? "#e0529a33;color:#e0529a" : "#e0a94f33;color:#e0a94f"}">${r}</span>`).join("") : `<span class="foot-note">No matches yet</span>`;
+  const barPct = (a, b) => { const tot = a + b; return tot > 0 ? Math.round((a / tot) * 100) : 50; };
+  const attackPct = barPct(defaultFieldRating(teamA.id, "attack"), defaultFieldRating(teamB.id, "attack"));
+  const defPct = barPct(defaultFieldRating(teamA.id, "defence"), defaultFieldRating(teamB.id, "defence"));
+  const overallPct = barPct(defaultFieldRating(teamA.id, "overall"), defaultFieldRating(teamB.id, "overall"));
+  const statBar = (label, pct, valA, valB) => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:3px"><span class="mono">${valA}</span><span>${label}</span><span class="mono">${valB}</span></div>
+      <div style="height:8px;border-radius:999px;overflow:hidden;display:flex;background:var(--panel-3,#333)">
+        <div style="width:${pct}%;background:var(--gold-bright)"></div>
+        <div style="width:${100 - pct}%;background:var(--pink)"></div>
+      </div>
+    </div>`;
+  const heroHtml = `
+    <div class="card" style="margin-bottom:16px;background:linear-gradient(135deg, rgba(224,169,79,0.08), rgba(224,82,154,0.08));position:relative;overflow:hidden">
+      ${rivalry ? `<div style="text-align:center;font-size:11px;color:var(--gold-bright);letter-spacing:.05em;text-transform:uppercase;margin-bottom:6px">🔥 ${rivalry}</div>` : ""}
+      <div style="display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:16px">
+        <div style="text-align:center">${kitSvg(teamA.id, 54)}<div style="font-weight:800;font-size:16px;margin-top:6px">${teamA.name}</div><div style="margin-top:4px">${formPillsHtml(formStrA)}</div></div>
+        <div style="font-size:22px;font-weight:800;color:var(--ink-faint)">VS</div>
+        <div style="text-align:center">${kitSvg(teamB.id, 54)}<div style="font-weight:800;font-size:16px;margin-top:6px">${teamB.name}</div><div style="margin-top:4px">${formPillsHtml(formStrB)}</div></div>
+      </div>
+      <div style="display:flex;gap:24px;justify-content:center;flex-wrap:wrap;margin-bottom:14px">
+        <div style="text-align:center"><div class="stat-value mono" style="font-size:22px">${tableA?.points ?? "—"}</div><div class="foot-note">points (${tableA ? `${tableA.won}W ${tableA.drawn}D ${tableA.lost}L` : "—"})</div></div>
+        <div style="text-align:center"><div class="stat-value mono" style="font-size:22px">${tableA ? `${tableA.gf}:${tableA.ga}` : "—"}</div><div class="foot-note">goals for:against</div></div>
+        <div style="text-align:center"><div class="stat-value mono" style="font-size:22px">${tableB ? `${tableB.gf}:${tableB.ga}` : "—"}</div><div class="foot-note">goals for:against</div></div>
+        <div style="text-align:center"><div class="stat-value mono" style="font-size:22px">${tableB?.points ?? "—"}</div><div class="foot-note">points (${tableB ? `${tableB.won}W ${tableB.drawn}D ${tableB.lost}L` : "—"})</div></div>
+      </div>
+      <div style="max-width:420px;margin:0 auto">
+        ${statBar("Attack rating", attackPct, defaultFieldRating(teamA.id, "attack").toFixed(1), defaultFieldRating(teamB.id, "attack").toFixed(1))}
+        ${statBar("Defence rating", defPct, defaultFieldRating(teamA.id, "defence").toFixed(1), defaultFieldRating(teamB.id, "defence").toFixed(1))}
+        ${statBar("Overall rating", overallPct, defaultFieldRating(teamA.id, "overall").toFixed(1), defaultFieldRating(teamB.id, "overall").toFixed(1))}
+      </div>
+      <p class="foot-note" style="margin-top:8px;text-align:center">Custom FDR if hosting: ${teamA.name} ${aHome} · ${teamB.name} ${bHome} (your weights from the Rankings tab).</p>
+    </div>
+  `;
 
   body.innerHTML = `
+    ${heroHtml}
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">This season's meetings (real data)</div>
-      ${rivalry ? `<p class="foot-note" style="margin-bottom:6px">🔥 ${rivalry}</p>` : ""}
       <div class="fixture-list">${meetingsHtml}</div>
-      <p class="foot-note" style="margin-top:8px">Custom FDR if hosting: ${teamA.name} ${aHome} · ${teamB.name} ${bHome} (your weights from the Rankings tab).</p>
       <p class="foot-note" style="margin-top:4px;color:var(--ink-faint)">Multi-season head-to-head history isn't exposed by the FPL API, so only this season's meetings are shown above as real data.</p>
     </div>
 
@@ -7425,8 +7694,14 @@ function renderRankingsPresetList() {
       state.fdrFormula = { ...preset.fdrFormula };
       state.rankFormula = { ...preset.rankFormula };
       state.modelWeights = { ...preset.modelWeights };
-      saveFdrFormula(); saveRankFormula(); saveModelWeights();
+      // Per-team Attack/Defence/Overall overrides are part of "everything" a
+      // slot should restore — without this, loading a slot brought back the
+      // formulas but silently left whatever team sliders were set at the time.
+      state.teamOverrides = preset.teamOverrides ? JSON.parse(JSON.stringify(preset.teamOverrides)) : {};
+      saveFdrFormula(); saveRankFormula(); saveModelWeights(); saveTeamOverrides();
+      computeTeamTiers();
       renderRankings();
+      renderTeamOverrides();
       renderFdrGrid();
     };
   });
@@ -7449,6 +7724,7 @@ function setupRankingsPresets() {
       fdrFormula: { ...state.fdrFormula },
       rankFormula: { ...state.rankFormula },
       modelWeights: { ...state.modelWeights },
+      teamOverrides: JSON.parse(JSON.stringify(state.teamOverrides || {})),
     };
     saveRankingsPresets();
     nameInput.value = "";
