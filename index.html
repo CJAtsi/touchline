@@ -280,12 +280,12 @@
   .mode-btn.active { color: #fff; border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
   .mode-btn.active .mode-btn-icon { background: rgba(255,255,255,0.22); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
   thead th {
-    text-align: right; padding: 10px 13px; color: var(--ink-dim); font-weight: 600;
-    background: rgba(255,255,255,0.045); white-space: nowrap; cursor: pointer; user-select: none;
-    font-family: "JetBrains Mono", monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
-    border-bottom: 1px solid var(--border);
+    text-align: right; padding: 7px 6px; color: var(--ink-dim); font-weight: 600;
+    background: rgba(255,255,255,0.045); white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
+    font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em;
+    border-bottom: 1px solid var(--border); line-height: 1.25;
     transition: background 0.12s ease, color 0.12s ease;
   }
   thead th:hover { color: var(--gold-bright); }
@@ -298,14 +298,19 @@
   }
   .table-wrap table thead th.label-col:first-child { z-index: 4; }
   thead th.sorted { color: var(--gold-bright); }
-  tbody td { padding: 9px 13px; text-align: right; border-top: 1px solid var(--border); }
+  tbody td { padding: 7px 6px; text-align: right; border-top: 1px solid var(--border); font-size: 11.5px; }
   tbody td.label-col { text-align: left; }
   tbody tr.player-row { cursor: pointer; transition: background 0.1s ease; }
   tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
   tbody tr.detail-row td { background: rgba(255,255,255,0.02); border-top: none; padding: 0; }
   .table-wrap {
-    overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    overflow-x: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
     background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  }
+  @media (max-width: 900px) {
+    table { font-size: 10.5px; }
+    thead th { font-size: 8.5px; padding: 6px 4px; }
+    tbody td { padding: 6px 4px; font-size: 10px; }
   }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
@@ -513,21 +518,21 @@
     background-repeat: no-repeat, no-repeat;
     border-radius: 16px; padding: 18px 12px 14px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), var(--shadow);
     display: flex; flex-direction: column; gap: 16px; margin-bottom: 0;
-    width: 100%; aspect-ratio: 3 / 4; justify-content: space-between; box-sizing: border-box;
+    width: 100%; aspect-ratio: 3 / 4; justify-content: space-evenly; box-sizing: border-box;
   }
   @media (max-width: 640px) { .pitch { aspect-ratio: 3 / 3.6; } }
-  .pitch-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .pitch-row { display: flex; justify-content: space-evenly; align-items: flex-start; gap: 6px; flex-wrap: nowrap; }
   .pitch-slot {
-    display: flex; flex-direction: column; align-items: center; gap: 3px; width: 84px; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 4px; width: 108px; cursor: pointer;
     transition: transform 0.12s ease;
   }
   .pitch-slot:hover { transform: translateY(-2px); }
   .pitch-slot .name-tag {
-    background: rgba(7,15,12,0.82); color: #fff; font-size: 10.5px; font-weight: 600;
-    padding: 2px 8px; border-radius: 999px; text-align: center; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: rgba(7,15,12,0.85); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; text-align: center; max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
-  .pitch-slot .pts-tag { font-size: 9.5px; color: rgba(255,255,255,0.85); font-family: "JetBrains Mono", monospace; }
+  .pitch-slot .pts-tag { font-size: 11px; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
   .pitch-slot .cap-mark {
     font-size: 10px; font-weight: 800; line-height: 1;
     background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
@@ -587,10 +592,10 @@
     h1, .page-title { font-size: 19px; }
     .page-sub { font-size: 12.5px; max-width: 100%; }
     table { min-width: 640px; font-size: 12px; }
-    .pitch-slot { max-width: 58px; }
-    .pitch-slot img, .pitch-slot svg { width: 30px !important; height: 30px !important; }
-    .name-tag { font-size: 9.5px; max-width: 58px; padding: 1px 3px; }
-    .pts-tag { font-size: 9.5px; }
+    .pitch-slot { max-width: 72px; }
+    .pitch-slot img, .pitch-slot svg { width: 40px !important; height: 40px !important; }
+    .name-tag { font-size: 10px; max-width: 70px; padding: 2px 5px; }
+    .pts-tag { font-size: 10px; }
     .pitch-row { gap: 4px; }
     .builder-filters { flex-wrap: wrap; }
     .builder-filters select, .builder-filters input, .search-input { max-width: 100%; flex: 1 1 100%; }
@@ -612,8 +617,8 @@
     }
   }
   @media (max-width: 400px) {
-    .pitch-slot { max-width: 48px; }
-    .pitch-slot img, .pitch-slot svg { width: 26px !important; height: 26px !important; }
+    .pitch-slot { max-width: 58px; }
+    .pitch-slot img, .pitch-slot svg { width: 34px !important; height: 34px !important; }
   }
 </style>
 </head>
@@ -1260,7 +1265,7 @@ function heatmapBg(value, min, max, invert) {
   t = Math.max(0, Math.min(1, t));
   if (invert) t = 1 - t;
   const hue = 10 + t * 110; // 10=red -> 55=amber -> 120=green
-  return `background:hsla(${hue.toFixed(0)},70%,42%,0.32);`;
+  return `background:hsla(${hue.toFixed(0)},82%,45%,0.46);`;
 }
 // Builds { key: {min,max} } for a set of numeric columns across a set of
 // rows, where getVal(row, key) returns the number for that row/column.
@@ -1342,8 +1347,42 @@ const COMPARE_POINTS_ROWS = [
   ["totalPoints", "Total points", 1], ["form", "Form", 1], ["pointsPer90", "Points/90", 1],
   ["ppm", "Points/£m", 1], ["epNext", "Next GW (proj.)", 1], ["minutes", "Minutes", 1],
 ];
+// Per-90 tab — same shape across positions so it's always a fair strip.
+const COMPARE_PER90_ROWS = [
+  ["xg90", "xG/90", 1], ["xa90", "xA/90", 1], ["xgi90", "xGI/90", 1],
+  ["defensiveContributionPer90", "DefCon/90", 1], ["goalsConcededPer90", "Goals conceded/90", -1],
+  ["pointsPer90", "Points/90", 1],
+];
 function comparisonRowValue(p, key) { return Number(p[key]) || 0; }
-function buildComparisonTableHtml(players) {
+function buildComparisonTableHtml(players, tab) {
+  if (tab === "per90") {
+    return `<table style="width:100%;border-collapse:collapse">
+      <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
+      <tbody>${COMPARE_PER90_ROWS.map(([key, label, dir]) => {
+        const vals = players.map(p => comparisonRowValue(p, key));
+        const best = dir > 0 ? Math.max(...vals) : Math.min(...vals);
+        return `<tr>
+          <td style="font-size:12px;color:var(--ink-dim)">${label}</td>
+          ${vals.map(v => `<td class="mono" style="font-size:12.5px;text-align:center;${v === best && vals.some((x, i) => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v.toFixed(2)}</td>`).join("")}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  }
+  if (tab === "attributes") {
+    const attrRows = players.map(p => computeFcAttributes(p));
+    const labels = attrRows[0] ? attrRows[0].map(a => a.label) : [];
+    return `<table style="width:100%;border-collapse:collapse">
+      <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
+      <tbody>${labels.map((label, i) => {
+        const vals = attrRows.map(row => row[i].value);
+        const best = Math.max(...vals);
+        return `<tr>
+          <td style="font-size:12px;color:var(--ink-dim)">${label}</td>
+          ${vals.map(v => `<td class="mono" style="font-size:12.5px;text-align:center;${v === best && vals.some(x => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v}</td>`).join("")}
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+  }
   const positions = new Set(players.map(p => p.position));
   const samePos = positions.size === 1;
   const posKey = samePos ? [...positions][0] : null;
@@ -1381,25 +1420,36 @@ function openPlayerProfileCompare(ids) {
     document.body.appendChild(modal);
   }
   modal.style.display = "flex";
-  modal.innerHTML = `
-    <div class="glass-panel" style="max-width:1100px;width:100%;padding:20px;border-radius:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <h2 style="margin:0">Player profile comparison</h2>
-        <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
+  const COMPARE_TABS = [["radar", "Radar & key stats"], ["per90", "Per-90"], ["attributes", "Best attributes"]];
+  function renderModal(activeTab) {
+    modal.innerHTML = `
+      <div style="max-width:1100px;width:100%;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h2 style="margin:0">Player profile comparison</h2>
+          <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
+        </div>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center">
+          ${players.map(p => `
+            <div style="min-width:250px;flex:1;text-align:center">
+              ${playerAvatarHtml(p, 64)}
+              <div style="font-weight:600;margin-top:6px;margin-bottom:2px">${p.webName}</div>
+              <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${p.teamShort} · ${p.positionShort} · ${fmtPrice(p.nowCost)}</div>
+              ${activeTab === "radar" ? radarChartSvg(computeFcAttributes(p)) : ""}
+            </div>
+          `).join("")}
+        </div>
+        <div class="theme-seg" style="margin-top:16px">
+          ${COMPARE_TABS.map(([id, label]) => `<button data-compare-tab="${id}" class="${id === activeTab ? "active" : ""}">${label}</button>`).join("")}
+        </div>
+        <div class="table-wrap" style="margin-top:10px;padding:6px 10px">${buildComparisonTableHtml(players, activeTab === "radar" ? null : activeTab)}</div>
       </div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center">
-        ${players.map(p => `
-          <div style="min-width:250px;flex:1;text-align:center">
-            <div style="font-weight:600;margin-bottom:2px">${p.webName}</div>
-            <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${p.teamShort} · ${p.positionShort} · ${fmtPrice(p.nowCost)}</div>
-            ${radarChartSvg(computeFcAttributes(p))}
-          </div>
-        `).join("")}
-      </div>
-      <div class="table-wrap" style="margin-top:16px;padding:6px 10px">${buildComparisonTableHtml(players)}</div>
-    </div>
-  `;
-  document.getElementById("closeProfileCompare").onclick = () => { modal.style.display = "none"; };
+    `;
+    modal.querySelectorAll("[data-compare-tab]").forEach(btn => {
+      btn.onclick = () => renderModal(btn.dataset.compareTab);
+    });
+    document.getElementById("closeProfileCompare").onclick = () => { modal.style.display = "none"; };
+  }
+  renderModal("radar");
 }
 function getPlayerAttributes(playerId) { return state.playerAttributes[playerId] || {}; }
 function setPlayerAttribute(playerId, key, value) {
@@ -4289,7 +4339,7 @@ function renderBuilderPitch(draft) {
     if (!x) {
       return `
         <div class="pitch-slot placeholder-slot" data-placeholder-pos="${posHint}" title="Click to add a ${posHint}">
-          ${playerAvatarHtml(null, 40)}
+          ${playerAvatarHtml(null, 52)}
           <div class="name-tag" style="opacity:0.7">Trialist</div>
         </div>
       `;
@@ -4298,7 +4348,7 @@ function renderBuilderPitch(draft) {
     return `
       <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
         ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
-        ${playerAvatarHtml(x.p, 40)}
+        ${playerAvatarHtml(x.p, 52)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
         ${gwFixtureHtml(x.p.teamId, gwId)}
@@ -4319,7 +4369,7 @@ function renderBuilderPitch(draft) {
           return `
             <div class="pitch-slot placeholder-slot" data-placeholder-pos="${pos}" title="Click to add a ${pos}">
               <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
-              ${playerAvatarHtml(null, 40)}
+              ${playerAvatarHtml(null, 52)}
               <div class="name-tag" style="opacity:0.7">Trialist</div>
             </div>
           `;
@@ -4329,7 +4379,7 @@ function renderBuilderPitch(draft) {
         return `
           <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
             <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${label}</div>
-            ${playerAvatarHtml(x.p, 40)}
+            ${playerAvatarHtml(x.p, 52)}
             <div class="name-tag">${x.p.webName}</div>
             <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
             ${gwFixtureHtml(x.p.teamId, gwId)}
@@ -4581,11 +4631,21 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   for (const x of result.starting) byPos[x.p.position].push(x);
 
   function slotHtml(x, isCaptainSlot, isViceSlot) {
+    const fx = (state.fixturesByTeam[x.p.teamId] || []).find(f => f.event === gwId);
+    let fdrBadge = "";
+    if (fx) {
+      const opp = state.teamsById[fx.oppId];
+      const score = customFdr(x.p.teamId, fx.oppId, fx.isHome);
+      fdrBadge = `<div class="fdr-pill" style="width:auto;padding:1px 6px;font-size:8.5px;background:${fdrGradientColor(score)}">${opp ? opp.short_name : "?"} ${fx.isHome ? "(H)" : "(A)"}</div>`;
+    } else {
+      fdrBadge = `<div style="font-size:8.5px;color:rgba(255,255,255,0.6)">No fixture</div>`;
+    }
     return `
       <div class="pitch-slot" data-player="${x.p.id}">
         ${isCaptainSlot ? `<span class="cap-mark">${log.chip === "TC" ? "3×" : "C"}</span>` : isViceSlot ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
-        ${playerAvatarHtml(x.p, 40)}
+        ${playerAvatarHtml(x.p, 52)}
         <div class="name-tag">${x.p.webName}</div>
+        ${fdrBadge}
         <div class="pts-tag">${x.proj.toFixed(1)} pts</div>
       </div>
     `;
