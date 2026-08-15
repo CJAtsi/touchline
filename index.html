@@ -651,9 +651,10 @@
 
   <section id="tab-projections" style="display:none">
     <h1 class="page-title">Projections</h1>
-    <p class="page-sub">Predicts what actually drives points for the selected gameweek — projected points, chance of starting, the team's expected goals/clean-sheet%, this player's share of the team's attacking output, and likelihood of hitting DefCon/bonus thresholds. Uses expected-data + opponent strength, same prediction engine as FDR/Rankings.</p>
-    <div class="toolbar" style="margin-bottom:12px">
-      <select id="projGwSelect"></select>
+    <p class="page-sub">Predicts what actually drives points over the selected gameweek range — projected points (blending season form with underlying xG/xA, team involvement share, and fixture strength), chance of starting, team expected goals/clean-sheet%, and realistic DefCon/bonus likelihoods.</p>
+    <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">From <select id="projFromGw"></select></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">To <select id="projToGw"></select></label>
       <select id="projPosFilter">
         <option value="ALL">All positions</option>
         <option value="GK">GK</option>
@@ -662,6 +663,7 @@
         <option value="FWD">FWD</option>
       </select>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Min minutes <input type="number" id="projMinMinutes" value="90" style="width:64px" /></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projHeatmapToggle" /> Heatmap</label>
     </div>
     <div id="projectionsBody"></div>
   </section>
@@ -1113,7 +1115,7 @@ const SORT_OPTIONS = [
   ["netTransfers", "Net transfers (GW)"], ["goalsScored", "Goals"], ["assists", "Assists"],
   ["cleanSheets", "Clean sheets"], ["goalsConcededPer90", "Goals conceded /90"], ["xgc90", "xGC /90"],
   ["saves90", "Saves /90"], ["defensiveContribution", "Defensive contribution"], ["bps", "BPS"],
-  ["minutes", "Minutes"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
+  ["minutes", "Minutes"], ["minsPerStart", "Mins /start"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
   ["assistsPer90", "Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
   ["influencePer90", "Influence /90"], ["creativityPer90", "Creativity /90"], ["threatPer90", "Threat /90"],
   ["teamGoalShare", "% of team goals+assists"], ["teamXgiShare", "% of team xGI"],
@@ -1127,76 +1129,76 @@ const STAT_THEMES = {
   overview: {
     label: "Overview",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Value", ["selectedByPercent", "netTransfers", "ppm", "ppm90"]],
       ["Output", ["goalsScored", "assists", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
     ],
-    columns: [["minutes", "Mins"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"],
       ["goalsScored", "G"], ["assists", "A"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
   },
   attacking: {
     label: "Attacking",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Goals & assists", ["goalsScored", "assists", "goalsPer90", "assistsPer90"]],
       ["Expected", ["expectedGoals", "expectedAssists", "expectedGoalInvolvements", "xg90", "xa90", "xgi90"]],
       ["Team share", ["teamGoalShare", "teamXgiShare"]],
       ["Underlying", ["threat", "creativity", "penaltiesMissed"]],
     ],
-    columns: [["minutes", "Mins"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
       ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Clean sheets & goals", ["cleanSheets", "goalsConceded", "goalsConcededPer90", "xgc90"]],
       ["Defensive actions", ["saves90", "defensiveContribution", "defensiveContributionPer90"]],
       ["Bonus", ["bps"]],
     ],
-    columns: [["minutes", "Mins"], ["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["cleanSheets", "CS"], ["goalsConceded", "GC"], ["goalsConcededPer90", "GC/90"], ["xgc90", "xGC/90"],
       ["saves90", "Sv/90"], ["defensiveContribution", "DefCon"], ["defensiveContributionPer90", "DefCon/90"], ["bps", "BPS"]],
   },
   advanced: {
     label: "Deeper stats",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Underlying", ["influence", "creativity", "threat"]],
       ["Expected /90", ["xg90", "xa90", "xgi90"]],
       ["Set pieces", ["penaltiesOrder", "directFreekicksOrder", "cornersOrder"]],
     ],
-    columns: [["minutes", "Mins"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"],
       ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   creativity: {
     label: "Shots & creativity",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Shot & chance creation", ["dsShots", "dsKeyPasses", "dsXGChain", "dsXGBuildup"]],
     ],
-    columns: [["minutes", "Mins"], ["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
   },
   cbit: {
     label: "CBIT (defensive)",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["CBIT", ["dsTackles", "dsInterceptions", "dsBlocks", "dsClearances"]],
       ["Aerial", ["dsAerialsWon", "dsAerialWinPct"]],
     ],
-    columns: [["minutes", "Mins"], ["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
   },
   per90: {
     label: "Per 90",
     groups: [
-      ["Playing time", ["minutes"]],
+      ["Playing time", ["minutes", "minsPerStart"]],
       ["Points & output /90", ["pointsPer90", "goalsPer90", "assistsPer90", "ppm90"]],
       ["Expected /90", ["xg90", "xa90", "xgi90"]],
       ["Defensive /90", ["goalsConcededPer90", "bpsPer90"]],
       ["ICT /90", ["ictPer90", "influencePer90", "creativityPer90", "threatPer90"]],
     ],
-    columns: [["minutes", "Mins"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["ppm90", "Pts/£m/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["ppm90", "Pts/£m/90"],
       ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["goalsConcededPer90", "GA/90"], ["bpsPer90", "BPS/90"],
       ["ictPer90", "ICT/90"], ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"]],
   },
@@ -1212,6 +1214,7 @@ const COLUMN_FORMAT = {
   xgi90: p => [p.xgi90.toFixed(2), ""],
   defensiveContribution: p => [p.defensiveContribution, ""],
   defensiveContributionPer90: p => [p.defensiveContributionPer90.toFixed(2), ""],
+  minsPerStart: p => [p.starts > 0 ? Math.round(p.minsPerStart) : "—", p.starts > 0 && p.minsPerStart < 60 ? "color:var(--red)" : ""],
   bonus: p => [p.bonus, ""],
   expectedGoals: p => [p.expectedGoals.toFixed(2), ""],
   expectedAssists: p => [p.expectedAssists.toFixed(2), ""],
@@ -1451,7 +1454,7 @@ function openPlayerProfileCompare(ids) {
             <div style="min-width:250px;flex:1;text-align:center">
               ${playerAvatarHtml(p, 64)}
               <div style="font-weight:600;margin-top:6px;margin-bottom:2px">${p.webName}</div>
-              <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${p.teamShort} · ${p.positionShort} · ${fmtPrice(p.nowCost)}</div>
+              <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
               ${activeTab === "radar" ? radarChartSvg(computeFcAttributes(p)) : ""}
             </div>
           `).join("")}
@@ -2002,6 +2005,7 @@ function transformPlayer(e) {
     costChangeEvent: e.cost_change_event ?? 0, valueSeasonRaw: e.value_season,
     inDreamteam: !!e.in_dreamteam, dreamteamCount: e.dreamteam_count ?? 0,
     starts: e.starts ?? 0,
+    minsPerStart: (e.starts ?? 0) > 0 ? e.minutes / e.starts : 0,
     ppm: e.now_cost > 0 ? e.total_points / (e.now_cost / 10) : 0,
     ppm90: e.now_cost > 0 && e.minutes > 0 ? ((e.total_points / Math.max(e.minutes, 180)) * 90) / (e.now_cost / 10) : 0,
     pointsPer90: e.minutes > 0 ? (e.total_points / Math.max(e.minutes, 180)) * 90 : 0,
@@ -3638,19 +3642,30 @@ function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
 
 // ---------- Projections tab ----------
 // Start/appearance probability: prefer FPL's own chance_of_playing_next_round
-// when set, otherwise fall back to a simple status-based estimate.
+// when set (most reliable live injury signal), then fold in this-season
+// rotation risk via minutes-per-start (a player who only gets 35 mins when
+// he does play is a real appearance-points risk even if "available").
 function projStartProb(p) {
-  if (typeof p.chanceOfPlaying === "number") return p.chanceOfPlaying / 100;
-  if (p.status === "a") return p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
-  if (p.status === "d") return 0.5;
-  return 0.03; // injured/suspended/unavailable
+  let base;
+  if (typeof p.chanceOfPlaying === "number") base = p.chanceOfPlaying / 100;
+  else if (p.status === "a") base = p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
+  else if (p.status === "d") base = 0.5;
+  else base = 0.03; // injured/suspended/unavailable
+  // Rotation-risk shave: below ~70 mins/start on average, trim probability
+  // proportionally (a guy who's regularly hooked at 60' is less nailed on
+  // than his raw availability status suggests) — floors at a 0.6x factor.
+  if (p.starts > 0 && p.minsPerStart < 70) {
+    const shave = Math.max(0.6, p.minsPerStart / 70);
+    base *= shave;
+  }
+  return Math.max(0, Math.min(1, base));
 }
-// Rough per-90-based points floor once on the pitch, so start probability
-// can be turned into an appearance-points expectation (1 pt <60 mins, 2 pt 60+).
-function projAppearancePts(p) {
-  const avgMins = p.starts > 0 ? p.minutes / p.starts : (p.minutes > 0 ? p.minutes / Math.max(1, p.starts) : 0);
-  const startProb = projStartProb(p);
-  const fullGameShare = avgMins >= 60 ? 1 : avgMins / 60;
+function projMinsFactor(p) {
+  if (p.starts === 0) return p.minutes > 0 ? 0.4 : 0;
+  return Math.max(0.35, Math.min(1, p.minsPerStart / 80));
+}
+function projAppearancePts(p, startProb, minsFactor) {
+  const fullGameShare = minsFactor >= 0.75 ? 1 : minsFactor;
   return startProb * (1 * (1 - fullGameShare) + 2 * fullGameShare);
 }
 // Team's share of squad xG+xA output this player accounts for — cached per
@@ -3667,96 +3682,210 @@ function teamContributionShare(p) {
   if (teamTotal <= 0) return 0;
   return ((p.expectedGoalInvolvements || 0) / teamTotal) * 100;
 }
-// DefCon likelihood: percentile-rank this player's DefCon/90 against same
-// position peers — a stand-in for "how likely to clear the DefCon points
-// threshold this week" since FPL doesn't publish the raw threshold-crossing rate.
-function defConLikelihood(p) {
-  const pool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90).map(x => x.defensiveContributionPer90 || 0);
-  return percentileRank(p.defensiveContributionPer90 || 0, pool);
+// ---- DefCon: realistic probability of clearing the FPL DefCon threshold ----
+// (10 defensive actions for DEF, 12 for MID/FWD), not a raw percentile —
+// modelled as Poisson(lambda = this player's DefCon/90, scaled to expected
+// minutes) with a team-style multiplier so high-engagement/pressing teams
+// (whose players collectively rack up more tackles+interceptions+clearances
+// league-wide) get a bump independent of the individual's own rate.
+const DEFCON_THRESHOLD = { GK: 99, DEF: 10, MID: 12, FWD: 12 };
+function poissonPmf(k, lambda) {
+  if (lambda <= 0) return k === 0 ? 1 : 0;
+  let logP = -lambda + k * Math.log(lambda);
+  for (let i = 2; i <= k; i++) logP -= Math.log(i);
+  return Math.exp(logP);
 }
-function bonusPotential(p) {
-  const pool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90).map(x => x.bpsPer90 || 0);
-  return percentileRank(p.bpsPer90 || 0, pool);
+function poissonSf(lambda, k) {
+  // P(X >= k)
+  if (k <= 0) return 1;
+  let cdf = 0;
+  for (let i = 0; i < k; i++) cdf += poissonPmf(i, lambda);
+  return Math.max(0, Math.min(1, 1 - cdf));
 }
-function computeProjectionRow(p, gwId) {
-  const fx = (state.fixturesByTeam[p.teamId] || []).find(f => f.event === gwId);
-  let opp = null, fdrScore = null, csPct = null, teamXg = null;
-  if (fx) {
-    opp = state.teamsById[fx.oppId];
-    fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
-    const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
-    if (est) {
-      teamXg = est.teamXg;
-      csPct = FDR_MODES.cleansheet.value(est, fx.isHome);
-    }
+let _teamDefConAvg = null, _leagueDefConAvg = null;
+function teamStyleMultiplier(teamId) {
+  if (!_teamDefConAvg) {
+    _teamDefConAvg = {};
+    const counts = {};
+    state.players.forEach(x => {
+      if (x.position === "GK" || x.minutes < 200) return;
+      _teamDefConAvg[x.teamId] = (_teamDefConAvg[x.teamId] || 0) + (x.defensiveContributionPer90 || 0);
+      counts[x.teamId] = (counts[x.teamId] || 0) + 1;
+    });
+    let sum = 0, n = 0;
+    Object.keys(_teamDefConAvg).forEach(tid => { _teamDefConAvg[tid] /= (counts[tid] || 1); sum += _teamDefConAvg[tid]; n++; });
+    _leagueDefConAvg = n > 0 ? sum / n : 1;
   }
+  const teamAvg = _teamDefConAvg[teamId];
+  if (!teamAvg || !_leagueDefConAvg) return 1;
+  return Math.max(0.8, Math.min(1.25, teamAvg / _leagueDefConAvg));
+}
+function defConProbability(p, minsFactor) {
+  if (p.position === "GK") return 0;
+  const threshold = DEFCON_THRESHOLD[p.position];
+  const lambda = (p.defensiveContributionPer90 || 0) * minsFactor * teamStyleMultiplier(p.teamId);
+  return poissonSf(lambda, threshold);
+}
+// ---- Bonus: compare this player's BPS rate against the pool of likely
+// starters in the SAME fixture (both teams), so it's relative to who he's
+// actually sharing that match with, not the whole league. Decimal expected
+// value, not a flat 0/1/2/3 guess.
+function expectedBonusForFixture(p, fx, minsFactor) {
+  if (!fx) return 0;
+  const oppTeamId = fx.oppId;
+  const pool = state.players.filter(x => (x.teamId === p.teamId || x.teamId === oppTeamId) && x.minutes >= 300);
+  if (!pool.length) return 0;
+  const sorted = [...pool].sort((a, b) => (b.bpsPer90 || 0) - (a.bpsPer90 || 0));
+  const rank = sorted.findIndex(x => x.id === p.id);
+  if (rank === -1) return 0;
+  // Smooth decay from rank 1 — top spot worth ~3, decaying towards 0,
+  // scaled by how likely he actually plays meaningful minutes.
+  const weight = 3 * Math.exp(-0.35 * rank);
+  return weight * minsFactor;
+}
+// ---- Underlying-stats-driven attacking points: xG90/xA90 output, scaled
+// by expected minutes and by how weak the fixture's opponent is (reuses the
+// same FDR multiplier the rest of the app uses), so a high-xGI90 player
+// with a big share of his team's attacking output against a soft defence
+// gets a real bump — not just his season points-per-game average.
+const GOAL_PTS = { GK: 6, DEF: 6, MID: 5, FWD: 4 };
+function underlyingAttackPts(p, fdrScore, minsFactor, startProb) {
+  const goalPts = GOAL_PTS[p.position] || 4;
+  const fixtureMult = fdrScore !== null ? fdrToMultiplier(fdrScore) : 1;
+  return ((p.xg90 || 0) * goalPts + (p.xa90 || 0) * 3) * minsFactor * fixtureMult * startProb;
+}
+const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
+function computeProjectionRow(p, fromGw, toGw) {
+  const gws = [];
+  for (let g = fromGw; g <= toGw; g++) gws.push(g);
+  const fixtures = gws.map(g => ({ gw: g, fx: (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g) })).filter(x => x.fx);
+  let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0;
+  const fixtureLabels = [];
+  fixtures.forEach(({ gw, fx }) => {
+    const opp = state.teamsById[fx.oppId];
+    const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
+    const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
+    const teamXg = est ? est.teamXg : null;
+    const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
+    const startProb = projStartProb(p);
+    const minsFactor = projMinsFactor(p);
+    const seasonProj = projectPoints(p, gw);
+    const appearancePts = projAppearancePts(p, startProb, minsFactor);
+    const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
+    const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
+    const defConProb = defConProbability(p, minsFactor);
+    const defConPts = defConProb * 2;
+    const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
+    const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
+    const finalProj = seasonProj * 0.45 + underlyingProj * 0.55;
+    projTotal += finalProj;
+    if (teamXg !== null) { teamXgSum += teamXg; n++; }
+    if (csPct !== null) csSum += csPct;
+    defConSum += defConProb * 100;
+    bonusSum += bonusPts;
+    fdrSum += fdrScore;
+    fixtureLabels.push({ opp, isHome: fx.isHome, fdrScore });
+  });
+  const cnt = fixtures.length || 1;
   return {
-    p, fx, opp, fdrScore, csPct, teamXg,
-    proj: projectPoints(p, gwId),
+    p, fixtures: fixtureLabels,
+    proj: projTotal,
     startProb: projStartProb(p) * 100,
-    appearancePts: projAppearancePts(p),
+    minsPerStart: p.minsPerStart,
+    teamXg: fixtures.length ? teamXgSum / cnt : null,
+    csPct: fixtures.length ? csSum / cnt : null,
     contribution: teamContributionShare(p),
-    defConLikelihood: defConLikelihood(p),
-    bonusPotential: bonusPotential(p),
+    defConPct: fixtures.length ? defConSum / cnt : 0,
+    bonusExp: bonusSum,
+    avgFdr: fixtures.length ? fdrSum / cnt : null,
   };
 }
+const PROJ_SORT_KEYS = { proj: 1, startProb: 1, minsPerStart: 1, teamXg: 1, csPct: 1, contribution: 1, defConPct: 1, bonusExp: 1 };
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
-  _teamXgiTotals = null; // recompute fresh each render
-  const gwSelect = document.getElementById("projGwSelect");
-  if (gwSelect && !gwSelect.options.length) {
-    const upcoming = getHorizonGws(6);
-    gwSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
-    state.projGw = upcoming[0];
-    gwSelect.value = state.projGw;
+  _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; // recompute fresh each render
+  const fromSelect = document.getElementById("projFromGw");
+  const toSelect = document.getElementById("projToGw");
+  if (fromSelect && !fromSelect.options.length) {
+    const upcoming = getHorizonGws(8);
+    fromSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
+    toSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
+    state.projFromGw = upcoming[0];
+    state.projToGw = upcoming[0];
+    fromSelect.value = state.projFromGw;
+    toSelect.value = state.projToGw;
   }
-  const gwId = state.projGw || Number(gwSelect?.value) || (state.events.find(e => e.is_next) || state.events[0]).id;
+  const fromGw = state.projFromGw || Number(fromSelect?.value);
+  const toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
   const posFilter = state.projPosFilter || "ALL";
   const minMinutes = state.projMinMinutes ?? 90;
+  const heatOn = !!state.projHeatmap;
+  const sortKey = state.projSortKey || "proj";
+  const sortDir = state.projSortDir || "desc";
   let pool = state.players.filter(p => p.minutes >= minMinutes && (posFilter === "ALL" || p.position === posFilter));
-  const rows = pool.map(p => computeProjectionRow(p, gwId)).sort((a, b) => b.proj - a.proj);
-  const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConLikelihood", "bonusPotential"];
-  const ranges = computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]);
+  let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw));
+  rows.sort((a, b) => (a[sortKey] ?? -Infinity) < (b[sortKey] ?? -Infinity) ? 1 : -1);
+  if (sortDir === "asc") rows.reverse();
+  const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp"];
+  const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
+  const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
   body.innerHTML = `
     <div class="table-wrap"><table>
       <thead><tr>
-        <th class="label-col">Player</th><th>Opponent</th>
-        <th data-sort="proj">Proj pts</th>
-        <th data-sort="startProb">Start%</th>
-        <th data-sort="teamXg">Team xG</th>
-        <th data-sort="csPct">CS%</th>
-        <th data-sort="contribution">Team contrib%</th>
-        <th data-sort="defConLikelihood">DefCon likelihood</th>
-        <th data-sort="bonusPotential">Bonus potential</th>
+        <th class="label-col">Player</th><th>Fixture(s)</th>
+        ${colLabel("proj", "Proj pts")}
+        ${colLabel("startProb", "Start%")}
+        ${colLabel("minsPerStart", "Mins/start")}
+        ${colLabel("teamXg", "Team xG")}
+        ${colLabel("csPct", "CS%")}
+        ${colLabel("contribution", "Team contrib%")}
+        ${colLabel("defConPct", "DefCon%")}
+        ${colLabel("bonusExp", "Exp. bonus")}
       </tr></thead>
       <tbody>${rows.map(r => {
         const p = r.p;
-        const fixLabel = r.fx ? `${r.opp ? r.opp.short_name : "?"} ${r.fx.isHome ? "(H)" : "(A)"}` : "No fixture";
-        const fdrStyle = r.fdrScore !== null ? `background:${fdrGradientColor(r.fdrScore)};color:#0b1310;` : "";
+        const fixLabel = r.fixtures.length
+          ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
+          : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+        const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
         return `<tr>
-          <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${p.teamShort} · ${p.positionShort}</div></div></td>
-          <td><span class="fdr-pill" style="width:auto;padding:2px 7px;${fdrStyle}">${fixLabel}</span></td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.proj, ranges.proj.min, ranges.proj.max, false)}">${r.proj.toFixed(1)}</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.startProb, ranges.startProb.min, ranges.startProb.max, false)}">${Math.round(r.startProb)}%</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.teamXg, ranges.teamXg.min, ranges.teamXg.max, false)}">${r.teamXg !== null ? r.teamXg.toFixed(2) : "—"}</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.csPct, ranges.csPct.min, ranges.csPct.max, false)}">${r.csPct !== null ? Math.round(r.csPct) + "%" : "—"}</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.contribution, ranges.contribution.min, ranges.contribution.max, false)}">${r.contribution.toFixed(1)}%</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.defConLikelihood, ranges.defConLikelihood.min, ranges.defConLikelihood.max, false)}">${r.defConLikelihood}</td>
-          <td class="mono" style="text-align:center;${heatmapBg(r.bonusPotential, ranges.bonusPotential.min, ranges.bonusPotential.max, false)}">${r.bonusPotential}</td>
+          <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
+          <td>${fixLabel}</td>
+          ${cell("proj", r.proj, r.proj.toFixed(1))}
+          ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
+          <td class="mono" style="text-align:center">${r.minsPerStart ? Math.round(r.minsPerStart) : "—"}</td>
+          ${cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—")}
+          ${cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—")}
+          ${cell("contribution", r.contribution, r.contribution.toFixed(1) + "%")}
+          ${cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%")}
+          ${cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2))}
         </tr>`;
       }).join("")}</tbody>
     </table></div>
   `;
+  body.querySelectorAll("[data-proj-sort]").forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.projSort;
+      if (state.projSortKey === key) state.projSortDir = state.projSortDir === "desc" ? "asc" : "desc";
+      else { state.projSortKey = key; state.projSortDir = "desc"; }
+      renderProjectionsTab();
+    };
+  });
 }
 function setupProjectionsControls() {
-  const gwSelect = document.getElementById("projGwSelect");
+  const fromSelect = document.getElementById("projFromGw");
+  const toSelect = document.getElementById("projToGw");
   const posSelect = document.getElementById("projPosFilter");
   const minInput = document.getElementById("projMinMinutes");
-  gwSelect.onchange = () => { state.projGw = Number(gwSelect.value); renderProjectionsTab(); };
+  const heatToggle = document.getElementById("projHeatmapToggle");
+  fromSelect.onchange = () => { state.projFromGw = Number(fromSelect.value); renderProjectionsTab(); };
+  toSelect.onchange = () => { state.projToGw = Number(toSelect.value); renderProjectionsTab(); };
   posSelect.onchange = () => { state.projPosFilter = posSelect.value; renderProjectionsTab(); };
   minInput.onchange = () => { state.projMinMinutes = Number(minInput.value) || 0; renderProjectionsTab(); };
+  heatToggle.onchange = (e) => { state.projHeatmap = e.target.checked; renderProjectionsTab(); };
 }
+
 
 // Chooses a valid starting XI (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD) maximizing
 // projected points, then applies captain/chip effects.
