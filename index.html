@@ -436,6 +436,20 @@
   .gw-label { font-weight: 600; min-width: 70px; }
   .gw-proj { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--gold-bright); }
   .gw-cum { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-faint); }
+  /* Side rail replacing the old click-to-expand accordion of every GW —
+     a compact, always-visible list of per-GW projected/cumulative points,
+     with the current GW highlighted; the main view is now navigated via
+     Prev/Next arrows instead. */
+  .gw-rail-row {
+    display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; cursor: pointer;
+    padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; background: transparent;
+    color: var(--ink-dim); font-family: inherit; margin-bottom: 4px; transition: all 0.12s ease;
+  }
+  .gw-rail-row:hover { background: rgba(255,255,255,0.05); }
+  .gw-rail-row.active { background: var(--panel-2); border-color: var(--border); color: var(--ink); }
+  .gw-rail-label { font-weight: 600; font-size: 12.5px; min-width: 44px; }
+  .gw-rail-proj { margin-left: auto; font-weight: 700; color: var(--gold-bright); font-size: 12.5px; }
+  .gw-rail-cum { font-size: 10.5px; color: var(--ink-faint); min-width: 44px; text-align: right; }
   .chip-tag {
     font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
     background: var(--gold-soft); color: var(--gold-bright); text-transform: uppercase; letter-spacing: 0.03em;
@@ -913,7 +927,6 @@
       <span style="font-size:12px;color:var(--ink-dim)">to</span>
       <select id="fdrEndGw"></select>
       <div class="seg" id="fdrSortSeg" style="margin-left:10px"></div>
-      <div class="seg" id="fdrViewSeg"></div>
     </div>
     <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab).</p>
 
@@ -1490,17 +1503,29 @@ function comparisonRowValue(p, key) { return Number(p[key]) || 0; }
 function compareColgroup(players) {
   return `<colgroup><col style="width:140px" />${players.map(() => `<col />`).join("")}</colgroup>`;
 }
-function buildComparisonTableHtml(players, tab) {
+// For a 2-player comparison, aligning both columns dead-center made them
+// read as "not lined up with either player" — pull the left player's
+// column toward the left (nearer its own avatar) and the right player's
+// column toward the right, so each stat visually sits under its player
+// rather than both hovering in the table's middle. With 3+ players this
+// distinction stops making sense, so it falls back to plain center.
+function compareColAlign(i, total) {
+  if (total !== 2) return "center";
+  return i === 0 ? "left" : "right";
+}
+function buildComparisonTableHtml(players, tab, colMinWidth) {
+  const tableMinWidth = colMinWidth ? 140 + colMinWidth * players.length : 0;
+  const tableStyle = `width:100%;border-collapse:collapse;table-layout:fixed${tableMinWidth ? `;min-width:${tableMinWidth}px` : ""}`;
   if (tab === "per90") {
-    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    return `<table style="${tableStyle}">
       ${compareColgroup(players)}
-      <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
+      <thead><tr><th></th>${players.map((p, pi) => `<th style="font-size:12px;text-align:${compareColAlign(pi, players.length)};padding:4px">${p.webName}</th>`).join("")}</tr></thead>
       <tbody>${COMPARE_PER90_ROWS.map(([key, label, dir]) => {
         const vals = players.map(p => comparisonRowValue(p, key));
         const best = dir > 0 ? Math.max(...vals) : Math.min(...vals);
         return `<tr>
           <td style="font-size:12px;color:var(--ink-dim)">${label}</td>
-          ${vals.map(v => `<td class="mono" style="font-size:12.5px;text-align:center;${v === best && vals.some((x, i) => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v.toFixed(2)}</td>`).join("")}
+          ${vals.map((v, i) => `<td class="mono" style="font-size:12.5px;text-align:${compareColAlign(i, vals.length)};${v === best && vals.some((x, j) => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v.toFixed(2)}</td>`).join("")}
         </tr>`;
       }).join("")}</tbody>
     </table>`;
@@ -1508,15 +1533,28 @@ function buildComparisonTableHtml(players, tab) {
   if (tab === "attributes") {
     const attrRows = players.map(p => computeFcAttributes(p));
     const labels = attrRows[0] ? attrRows[0].map(a => a.label) : [];
-    return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    // Previously always listed Pace/Shooting/Passing/Dribbling/Defending/
+    // Physical in that fixed order for every comparison, so it read as
+    // "equal stats of anything" rather than actually surfacing what these
+    // specific players are best at. Now ranked by each attribute's best
+    // value across the compared players, strongest first — so a
+    // comparison between two strikers naturally leads with
+    // Shooting/Pace rather than Defending, and vice versa for defenders.
+    const order = labels.map((_, i) => i).sort((a, b) => {
+      const bestA = Math.max(...attrRows.map(row => row[a].value));
+      const bestB = Math.max(...attrRows.map(row => row[b].value));
+      return bestB - bestA;
+    });
+    return `<table style="${tableStyle}">
       ${compareColgroup(players)}
-      <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
-      <tbody>${labels.map((label, i) => {
+      <thead><tr><th></th>${players.map((p, pi) => `<th style="font-size:12px;text-align:${compareColAlign(pi, players.length)};padding:4px">${p.webName}</th>`).join("")}</tr></thead>
+      <tbody>${order.map(i => {
+        const label = labels[i];
         const vals = attrRows.map(row => row[i].value);
         const best = Math.max(...vals);
         return `<tr>
           <td style="font-size:12px;color:var(--ink-dim)">${label}</td>
-          ${vals.map(v => `<td class="mono" style="font-size:12.5px;text-align:center;${v === best && vals.some(x => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v}</td>`).join("")}
+          ${vals.map((v, ci) => `<td class="mono" style="font-size:12.5px;text-align:${compareColAlign(ci, vals.length)};${v === best && vals.some(x => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${v}</td>`).join("")}
         </tr>`;
       }).join("")}</tbody>
     </table>`;
@@ -1538,13 +1576,13 @@ function buildComparisonTableHtml(players, tab) {
         const best = dir > 0 ? Math.max(...vals) : Math.min(...vals);
         return `<tr>
           <td style="font-size:12px;color:var(--ink-dim)">${label}</td>
-          ${vals.map(v => `<td class="mono" style="font-size:12.5px;text-align:center;${v === best && vals.some((x, i) => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${Number.isInteger(v) ? v : v.toFixed(2)}</td>`).join("")}
+          ${vals.map((v, i) => `<td class="mono" style="font-size:12.5px;text-align:${compareColAlign(i, vals.length)};${v === best && vals.some((x, j) => x !== vals[0]) ? "color:#3cd25a;font-weight:700" : ""}">${Number.isInteger(v) ? v : v.toFixed(2)}</td>`).join("")}
         </tr>`;
       }).join("");
   }).join("");
-  return `<table style="width:100%;border-collapse:collapse;table-layout:fixed">
+  return `<table style="${tableStyle}">
     ${colgroup}
-    <thead><tr><th></th>${players.map(p => `<th style="font-size:12px;text-align:center;padding:4px">${p.webName}</th>`).join("")}</tr></thead>
+    <thead><tr><th></th>${players.map((p, pi) => `<th style="font-size:12px;text-align:${compareColAlign(pi, players.length)};padding:4px">${p.webName}</th>`).join("")}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
@@ -1561,32 +1599,46 @@ function openPlayerProfileCompare(ids) {
   }
   modal.style.display = "flex";
   const COMPARE_TABS = [["radar", "Radar & key stats"], ["per90", "Per-90"], ["attributes", "Best attributes"]];
+  // Fixed-pixel radar charts inside an equal-fraction grid meant that
+  // beyond ~5 players the columns got squeezed narrower than the radar
+  // itself, so the grid overflowed the modal box rather than fitting it.
+  // Shrink the radar/overlay size as the player count grows, AND let the
+  // grid genuinely scroll horizontally (with a sane per-column minimum)
+  // instead of silently breaking out of the card — so any number of
+  // players is viewable, just narrower or scrollable past 5.
+  const n = players.length;
+  const radarSize = n <= 4 ? 200 : n <= 6 ? 160 : 130;
+  const overlaySize = n <= 4 ? 260 : n <= 6 ? 210 : 170;
+  const modalMaxWidth = n <= 5 ? 1100 : Math.min(1500, 1100 + (n - 5) * 140);
+  const colMinWidth = n <= 5 ? 0 : 130;
   function renderModal(activeTab) {
     modal.innerHTML = `
-      <div style="max-width:1100px;width:100%;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%)">
+      <div style="max-width:${modalMaxWidth}px;width:100%;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="margin:0">Player profile comparison</h2>
           <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
         </div>
-        <div style="display:grid;grid-template-columns:140px repeat(${players.length},1fr);gap:18px;align-items:start">
-          <div></div>
-          ${players.map((p, pi) => `
-            <div style="text-align:center">
-              ${playerAvatarHtml(p, 64)}
-              <div style="font-weight:600;margin-top:6px;margin-bottom:2px">${p.webName}</div>
-              <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
-              ${activeTab !== "attributes" ? radarChartSvg(radarAttrsForTab(p, activeTab, players), 200, colorForIndex(pi)) : ""}
-            </div>
-          `).join("")}
+        <div style="overflow-x:auto">
+          <div style="display:grid;grid-template-columns:140px repeat(${players.length},minmax(${colMinWidth}px,1fr));gap:18px;align-items:start;min-width:${colMinWidth ? 140 + colMinWidth * players.length + 18 * players.length : 0}px">
+            <div></div>
+            ${players.map((p, pi) => `
+              <div style="text-align:center">
+                ${playerAvatarHtml(p, 64)}
+                <div style="font-weight:600;margin-top:6px;margin-bottom:2px">${p.webName}</div>
+                <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
+                ${activeTab !== "attributes" ? radarChartSvg(radarAttrsForTab(p, activeTab, players), radarSize, colorForIndex(pi)) : ""}
+              </div>
+            `).join("")}
+          </div>
         </div>
         ${players.length > 1 && activeTab !== "attributes" ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);text-align:center;margin-bottom:6px">Head-to-head overlay${activeTab === "per90" ? " · Per-90" : ""}</div>
-          ${overlayRadarSvg(players, activeTab, 260)}
+          ${overlayRadarSvg(players, activeTab, overlaySize)}
         </div>` : ""}
         <div class="theme-seg" style="margin-top:16px">
           ${COMPARE_TABS.map(([id, label]) => `<button data-compare-tab="${id}" class="${id === activeTab ? "active" : ""}">${label}</button>`).join("")}
         </div>
-        <div class="table-wrap" style="margin-top:10px;padding:6px 10px">${buildComparisonTableHtml(players, activeTab === "radar" ? null : activeTab)}</div>
+        <div class="table-wrap" style="margin-top:10px;padding:6px 0;overflow-x:auto">${buildComparisonTableHtml(players, activeTab === "radar" ? null : activeTab, colMinWidth)}</div>
       </div>
     `;
     modal.querySelectorAll("[data-compare-tab]").forEach(btn => {
@@ -4250,7 +4302,7 @@ function miniPitchHtml(result, gwId) {
       ${playerAvatarHtml(x.p, 26)}
       <div class="name-tag" style="font-size:8.5px;max-width:56px;padding:1px 5px">${x.p.webName}</div>
       <div class="pts-tag" style="font-size:8.5px">${x.proj.toFixed(1)}</div>
-      <div style="font-size:7.5px;color:rgba(255,255,255,0.7)">${teamFixtureLabel(x.p.teamId, gwId)}</div>
+      ${teamFixtureBadgeHtml(x.p.teamId, gwId)}
     </div>`;
   const rows = ["GK", "DEF", "MID", "FWD"].map(pos =>
     `<div class="pitch-row" style="gap:4px">${byPos[pos].map(x => slot(x, result.captain?.id === x.p.id)).join("")}</div>`
@@ -4262,6 +4314,17 @@ function teamFixtureLabel(teamId, gwId) {
   if (!fx) return "—";
   const opp = state.teamsById[fx.oppId];
   return `${opp ? opp.short_name : "?"} ${fx.isHome ? "(H)" : "(A)"}`;
+}
+// FDR-coloured version of teamFixtureLabel, for the compare-squads mini
+// pitches — the single-squad view already shows a colour-coded fdr-pill
+// per player, but the compare view's mini pitches had lost that colour
+// coding along the way and were only showing plain text.
+function teamFixtureBadgeHtml(teamId, gwId) {
+  const fx = (state.fixturesByTeam[teamId] || []).find(f => f.event === gwId);
+  if (!fx) return `<div style="font-size:7.5px;color:rgba(255,255,255,0.5)">No fixture</div>`;
+  const opp = state.teamsById[fx.oppId];
+  const score = customFdr(teamId, fx.oppId, fx.isHome);
+  return `<div class="fdr-pill" style="width:auto;padding:1px 5px;font-size:7.5px;background:${fdrGradientColor(score)}">${opp ? opp.short_name : "?"} ${fx.isHome ? "(H)" : "(A)"}</div>`;
 }
 function renderPlannerCompare(body) {
   const complete = state.drafts.filter(d => d.squad.length === 15 && d.squadConfirmed);
@@ -4638,8 +4701,30 @@ function renderSquadBuilder(draft) {
   document.getElementById("builderConfirm").onclick = () => {
     if (draft.squad.length !== 15 || BUDGET - squadCost(draft.squad) < 0) return;
     draft.squadConfirmed = true;
+    draft._editSnapshot = null; // edit finished/saved — nothing to cancel back to any more
     saveDrafts(); renderPlanner();
   };
+  // "Cancel" only shows when this builder session started from an
+  // existing confirmed squad (i.e. via "Edit squad") — lets you back out
+  // without having to redo the pick from scratch, which was previously
+  // impossible once you clicked into the editor.
+  if (draft._editSnapshot) {
+    const actionsRow = document.querySelector(".builder-actions");
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "dir-btn";
+    cancelBtn.id = "builderCancelEdit";
+    cancelBtn.textContent = "← Cancel, keep previous squad";
+    cancelBtn.onclick = () => {
+      const snap = draft._editSnapshot;
+      draft.squad = snap.squad;
+      draft.bank = snap.bank;
+      draft.transfersLog = snap.transfersLog;
+      draft.squadConfirmed = true;
+      draft._editSnapshot = null;
+      saveDrafts(); renderPlanner();
+    };
+    actionsRow.insertBefore(cancelBtn, actionsRow.firstChild);
+  }
 
   renderBuilderList(draft);
   renderBuilderPitch(draft);
@@ -5037,35 +5122,33 @@ function renderGwSimulator(draft) {
     body.innerHTML = '<div class="empty-state">No upcoming gameweeks found in the fixture data yet.</div>';
     return;
   }
-  // Default to a pitch preview of the next gameweek (not a bare list) —
-  // matches the compare view's "see the squad" feel instead of requiring a
-  // click into an accordion row before showing anything visual.
-  if (state.plannerExpandedGw === undefined || state.plannerExpandedGw === null) {
+  // Default to the next gameweek. Navigation is now via Prev/Next arrows
+  // (below) rather than an accordion of every GW row you had to click open
+  // — the old rowsHtml list is gone from the main view; the equivalent
+  // per-GW projection numbers now live in a compact side rail instead.
+  if (state.plannerExpandedGw === undefined || state.plannerExpandedGw === null || !horizon.includes(state.plannerExpandedGw)) {
     state.plannerExpandedGw = horizon[0];
   }
   const timeline = getSquadTimeline(draft, horizon);
+  const curGwId = state.plannerExpandedGw;
+  const curIdx = horizon.indexOf(curGwId);
 
   let cumulative = 0;
-  const rowsHtml = timeline.map(({ gwId, squad, chip, captainId, transfersCount }) => {
-    const captainIdResolved = captainId || null;
-    const result = computeGwResult(squad, gwId, chip, captainIdResolved);
+  const railRows = timeline.map(({ gwId, squad, chip, captainId, transfersCount }) => {
+    const result = computeGwResult(squad, gwId, chip, captainId || null);
     const freeTransfers = (chip === "WC" || chip === "FH") ? Infinity : 1;
     const hit = Math.max(0, transfersCount - freeTransfers) * 4;
     const net = result.total - (Number.isFinite(hit) ? hit : 0);
     cumulative += net;
-    const expanded = state.plannerExpandedGw === gwId;
+    const active = gwId === curGwId;
     return `
-      <div class="gw-row">
-        <div class="gw-row-head" data-gw="${gwId}">
-          <span class="gw-label">${fmtGwName(gwId)}</span>
-          ${chip ? `<span class="chip-tag">${CHIP_LABELS[chip]}</span>` : ""}
-          ${hit > 0 ? `<span class="hit-tag">-${hit} hit</span>` : ""}
-          <span style="flex:1"></span>
-          <span class="gw-proj">${net.toFixed(1)} pts</span>
-          <span class="gw-cum">cum. ${cumulative.toFixed(1)}</span>
-        </div>
-        ${expanded ? `<div class="gw-row-body" id="gw-body-${gwId}"></div>` : ""}
-      </div>
+      <button class="gw-rail-row${active ? " active" : ""}" data-gw="${gwId}">
+        <span class="gw-rail-label">${fmtGwName(gwId)}</span>
+        ${chip ? `<span class="chip-tag" style="font-size:9px;padding:1px 5px">${CHIP_LABELS[chip]}</span>` : ""}
+        ${hit > 0 ? `<span class="hit-tag" style="font-size:9px">-${hit}</span>` : ""}
+        <span class="gw-rail-proj mono">${net.toFixed(1)}</span>
+        <span class="gw-rail-cum mono">Σ${cumulative.toFixed(1)}</span>
+      </button>
     `;
   }).join("");
 
@@ -5078,28 +5161,46 @@ function renderGwSimulator(draft) {
       </div>
     </div>
     <p class="foot-note" style="margin-bottom:12px">Projections beyond next gameweek use fixture-difficulty-adjusted form, not a full model — treat as directional, not exact. Assumes 1 free transfer per gameweek (no rollover) outside Wildcard/Free Hit weeks.</p>
-    ${rowsHtml}
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px">
+          <button class="dir-btn" id="gwPrevBtn" ${curIdx <= 0 ? "disabled" : ""} title="Previous gameweek">‹</button>
+          <span style="font-size:16px;font-weight:700">${fmtGwName(curGwId)}${curGwId === currentEventId() ? " •" : ""}</span>
+          <button class="dir-btn" id="gwNextBtn" ${curIdx >= horizon.length - 1 ? "disabled" : ""} title="Next gameweek">›</button>
+        </div>
+        <div class="gw-row"><div class="gw-row-body" id="gw-body-${curGwId}"></div></div>
+      </div>
+      <div class="gw-rail" style="width:220px;flex-shrink:0">
+        <div class="detail-block-title" style="margin-bottom:6px">Points by gameweek</div>
+        ${railRows}
+      </div>
+    </div>
   `;
 
   document.getElementById("rebuildSquadBtn").onclick = () => {
     if (confirm("Editing the squad will clear any planned transfers/chips. Continue?")) {
+      // Snapshot what's being cleared so a "Cancel" in the builder can
+      // restore it exactly, instead of editing being a one-way door.
+      draft._editSnapshot = {
+        squad: [...draft.squad],
+        bank: draft.bank,
+        transfersLog: JSON.parse(JSON.stringify(draft.transfersLog)),
+      };
       draft.transfersLog = {};
       draft.squadConfirmed = false; // reopen the builder without dropping any player
       saveDrafts(); renderPlanner();
     }
   };
-
-  body.querySelectorAll(".gw-row-head").forEach(head => {
-    head.onclick = () => {
-      const gwId = Number(head.dataset.gw);
-      state.plannerExpandedGw = state.plannerExpandedGw === gwId ? null : gwId;
-      renderPlanner();
-      if (state.plannerExpandedGw === gwId) renderGwDetail(draft, gwId, horizon, timeline);
-    };
+  const goTo = (gwId) => { state.plannerExpandedGw = gwId; renderGwSimulator(draft); };
+  const prevBtn = document.getElementById("gwPrevBtn");
+  const nextBtn = document.getElementById("gwNextBtn");
+  if (prevBtn) prevBtn.onclick = () => { if (curIdx > 0) goTo(horizon[curIdx - 1]); };
+  if (nextBtn) nextBtn.onclick = () => { if (curIdx < horizon.length - 1) goTo(horizon[curIdx + 1]); };
+  body.querySelectorAll(".gw-rail-row").forEach(btn => {
+    btn.onclick = () => goTo(Number(btn.dataset.gw));
   });
-  if (state.plannerExpandedGw !== null && horizon.includes(state.plannerExpandedGw)) {
-    renderGwDetail(draft, state.plannerExpandedGw, horizon, timeline);
-  }
+
+  renderGwDetail(draft, curGwId, horizon, timeline);
 }
 
 function renderGwDetail(draft, gwId, horizon, timeline) {
@@ -6421,10 +6522,23 @@ function renderFdrModeRow() {
     <button class="mode-btn${state.fdrMode === key ? " active" : ""}" data-fdr-mode="${key}" style="--mode-glow:${m.glow}">
       <span class="mode-btn-icon">${m.icon}</span>${m.label}
     </button>
-  `).join("");
+  `).join("") + `
+    <button class="mode-btn${state.fdrViewScoreline ? " active" : ""}" id="fdrScorelineModeBtn" style="--mode-glow:rgba(224,169,79,0.55)">
+      <span class="mode-btn-icon">📋</span>Scoreline view
+    </button>
+  `;
   row.querySelectorAll("[data-fdr-mode]").forEach(btn => {
     btn.onclick = () => { state.fdrMode = btn.dataset.fdrMode; renderFdrModeRow(); renderFdrGrid(); };
   });
+  // "Scoreline view" used to live as a separate segmented control tucked
+  // into the GW-range toolbar below, easy to miss next to the FDR/Win%/etc
+  // mode pills — it's now a pill in the same row so it reads as a peer
+  // mode rather than a buried secondary toggle. Toggling it flips the
+  // grid's display style; it's independent of which data mode is active.
+  document.getElementById("fdrScorelineModeBtn").onclick = () => {
+    state.fdrViewScoreline = !state.fdrViewScoreline;
+    renderFdrModeRow(); renderFdrViewSeg(); renderFdrGrid();
+  };
   const mode = FDR_MODES[state.fdrMode];
   const legend = document.getElementById("fdrLegendRow");
   if (mode.key === "fdr" || !mode.buckets) {
@@ -6805,7 +6919,12 @@ function renderFdrSortSeg() {
   });
 }
 function renderFdrViewSeg() {
-  document.getElementById("fdrViewSeg").innerHTML = `
+  // The standalone segmented control this used to render was folded into
+  // the "Scoreline view" pill in renderFdrModeRow() — kept as a no-op
+  // (rather than deleted) in case anything still calls it.
+  const el = document.getElementById("fdrViewSeg");
+  if (!el) return;
+  el.innerHTML = `
     <button class="${!state.fdrViewScoreline ? "active" : ""}" data-fdr-view="colour">Opponent view</button>
     <button class="${state.fdrViewScoreline ? "active" : ""}" data-fdr-view="scoreline">Scoreline view</button>
   `;
