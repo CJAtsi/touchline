@@ -120,9 +120,16 @@
   #tabs.side-toolbar:hover button .tb-label { opacity: 1; }
   body { padding-left: 90px; }
   @media (max-width: 640px) {
-    #tabs.side-toolbar { position: static; left: auto; top: auto; bottom: auto; width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; margin: 10px; border-radius: 18px; }
+    #tabs.side-toolbar { position: static; left: auto; top: auto; bottom: auto; width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; margin: 10px; border-radius: 18px; justify-content: space-between; }
     #tabs.side-toolbar:hover { width: 100%; box-shadow: var(--shadow); }
-    #tabs.side-toolbar button .tb-label { opacity: 1; }
+    /* Icon-only by default on mobile (label hidden) so all tabs fit in one
+       row without needing to scroll to find one — labels previously
+       always showed here, which made the row wide enough that reaching
+       later tabs meant scrolling. Active tab still shows its label so
+       there's a clear "where am I" cue. */
+    #tabs.side-toolbar button { flex-direction: column; gap: 2px; padding: 7px 4px; justify-content: center; text-align: center; flex: 1 1 0; min-width: 0; }
+    #tabs.side-toolbar button .tb-label { opacity: 0; font-size: 8.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    #tabs.side-toolbar button.active .tb-label { opacity: 1; }
     body { padding-left: 0; }
   }
 
@@ -184,14 +191,21 @@
   .scout-card-name { font-weight: 700; font-size: 13.5px; margin-top: 2px; }
   .scout-card-sub { font-size: 11px; color: var(--ink-faint); margin: 2px 0 6px; }
   .scout-card-reasons { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; }
-  .top-tabs-row { display: flex; gap: 4px; margin-left: 24px; }
+  .top-tabs-row {
+    display: flex; gap: 2px; margin-left: 24px; padding: 4px; border-radius: 12px;
+    background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06);
+  }
   .top-tabs-row button {
-    background: transparent; border: 1px solid transparent; color: var(--ink-faint);
-    padding: 7px 10px; border-radius: 999px; cursor: pointer; font-size: 15px; line-height: 1;
+    background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--ink-faint);
+    padding: 6px 9px 5px; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1;
     font-family: inherit; transition: all 0.15s ease;
   }
-  .top-tabs-row button.active { background: rgba(255,255,255,0.12); border-color: var(--border); color: var(--ink); }
-  .top-tabs-row button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
+  /* Deliberately different visual language from the floating glass side
+     nav (pill/rounded, gold glow) — a flatter inset strip with an
+     underline-style active state, so the two navs read as distinct
+     pieces of chrome rather than near-duplicates. */
+  .top-tabs-row button.active { background: rgba(224,169,79,0.14); border-bottom-color: var(--gold-bright); color: var(--gold-bright); }
+  .top-tabs-row button:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--ink-dim); }
   @media (max-width: 900px) { .top-tabs-row { display: none; } }
   .page-title { font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
   .page-sub { font-size: 13.5px; color: var(--ink-dim); margin: 0 0 24px; max-width: 640px; line-height: 1.5; }
@@ -311,6 +325,13 @@
     table { font-size: 10.5px; }
     thead th { font-size: 8.5px; padding: 6px 4px; }
     tbody td { padding: 6px 4px; font-size: 10px; }
+    /* Columns are shrunk as far as they reasonably can be at this width,
+       but a table with many columns (e.g. Player Stats with every theme's
+       columns visible) can still not fit — overflow-x:hidden above was
+       simply cutting that content off with no way to reach it. Mobile
+       gets a real horizontal scroll as the safety net; the sticky
+       player-name column above keeps context while scrolling sideways. */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
@@ -442,6 +463,14 @@
 
   /* kit / photo */
   .kit-fallback { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+  /* The kit SVG carries fixed pixel width/height attributes from kitSvg(),
+     which ignored the parent .kit-fallback div's own sizing (including the
+     pitch's cqw-based scaling) — so kit-fallback players rendered a
+     different visible size than photo players in the same slot. Forcing
+     the svg to fill its wrapper via CSS (which wins over the presentation
+     attributes) makes it track the wrapper's size exactly, same as the
+     <img> does. */
+  .kit-fallback svg { width: 100%; height: 100%; display: block; }
   .kit-fallback span {
     position: absolute; font-size: 9px; font-weight: 800; color: rgba(255,255,255,0.92);
     text-shadow: 0 1px 2px rgba(0,0,0,0.4);
@@ -525,7 +554,7 @@
   .pitch-row { display: flex; justify-content: space-evenly; align-items: flex-start; gap: 4px; flex-wrap: nowrap; }
   .pitch-slot {
     display: flex; flex-direction: column; align-items: center; gap: 3px; width: 19cqw; cursor: pointer;
-    transition: transform 0.12s ease;
+    transition: transform 0.12s ease; position: relative;
   }
   .pitch-slot:hover { transform: translateY(-2px); }
   /* Avatar/kit size is a % of the pitch's own width (container query units),
@@ -539,8 +568,12 @@
   }
   .pitch-slot .pts-tag { font-size: 2.4cqw; color: rgba(255,255,255,0.9); font-family: "JetBrains Mono", monospace; font-weight: 600; }
   .pitch-slot .cap-mark {
+    /* Absolutely positioned so the C/VC badge floats above the avatar
+       instead of being a flex child that pushes the player down. */
+    position: absolute; top: -4px; left: 50%; transform: translateX(-50%); z-index: 2;
     font-size: 10px; font-weight: 800; line-height: 1;
     background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
   }
   .pitch-slot.placeholder-slot { opacity: 0.55; }
   .pitch-slot.placeholder-slot:hover { opacity: 0.9; }
@@ -558,6 +591,21 @@
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
     border-radius: 16px; background: rgba(255,255,255,0.04); flex-wrap: wrap;
+    container-type: inline-size; container-name: pitch; max-width: 460px; margin: 0 auto;
+  }
+  /* Same cqw-based sizing the pitch itself uses (see .pitch), applied here
+     too — the bench previously rendered its players at a fixed 40px
+     regardless of screen size, so on smaller screens where the pitch
+     itself had shrunk, the bench players looked oversized by comparison. */
+  .bench-strip .pitch-slot { width: 15cqw; }
+  .bench-strip .player-photo, .bench-strip .kit-fallback { width: 10cqw !important; height: auto !important; }
+  .bench-strip .name-tag { font-size: 2.4cqw; max-width: 15cqw; padding: 0.5cqw 1.6cqw; }
+  .bench-strip .pts-tag { font-size: 2.2cqw; }
+  /* Give each bench spot a real designated rectangle (like the actual FPL
+     substitutes bench) rather than just floating the player image loose. */
+  .bench-strip .pitch-slot, .bench-strip .placeholder-slot {
+    background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+    padding: 6px 4px; box-sizing: border-box;
   }
   .bench-strip .bench-label { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; width: 100%; text-align: center; }
 
@@ -674,8 +722,7 @@
         <option value="NEW">New / no Prem data yet</option>
         <option value="BREAKOUT">Potential breakouts (low mins, high underlying)</option>
       </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Rotation-risk floor (mins/start) <input type="number" id="projRotationThreshold" value="70" style="width:56px" /></label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projFullSeasonToggle" /> Full season</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)" title="If a player's average minutes-per-start this season is below this number, their Start% is reduced to reflect rotation risk — e.g. a player who averages 45 mins/start looks less nailed-on than one who averages 90, even with the same status flag. Raise this number to be stricter about who counts as 'nailed on'.">Treat as rotation risk below <input type="number" id="projRotationThreshold" value="70" style="width:56px" /> mins/start ⓘ</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projHeatmapToggle" /> Heatmap</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projSimpleToggle" /> Simple view (pts/game only)</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projAssume90Toggle" /> Assume 90 mins (ceiling)</label>
@@ -2466,6 +2513,16 @@ function teamFieldRating5(teamId, field, rawValue) {
   return toScale1to5(rawValue, state.strengthRanges[field]);
 }
 function defaultTeamRating(teamId) { return defaultFieldRating(teamId, "overall"); }
+// Like defaultFieldRating, but returns the EFFECTIVE rating — the user's
+// Rankings-tab override for this team/field if one is set, else FPL's raw
+// value scaled to 1-5. Use this (not defaultFieldRating) anywhere a rating
+// is displayed to the user, so edited values are reflected everywhere.
+function effectiveFieldRating(teamId, field) {
+  const t = state.teamsById[teamId];
+  if (!t || !state.strengthRanges) return 3;
+  const raw = (t[`strength_${field}_home`] + t[`strength_${field}_away`]) / 2;
+  return Math.round(teamFieldRating5(teamId, field, raw) * 10) / 10;
+}
 function customFdr(teamId, oppId, isHome) {
   const opp = state.teamsById[oppId];
   if (!opp || !state.strengthRanges) return 3;
@@ -3674,6 +3731,7 @@ async function loadDraftsFromStorage() {
   for (const d of state.drafts) {
     if (d.squadConfirmed === undefined) d.squadConfirmed = d.squad.length === 15;
     if (d.builderCaptainId === undefined) d.builderCaptainId = null;
+    if (d.builderViceCaptainId === undefined) d.builderViceCaptainId = null;
   }
   if (state.drafts.length && !state.activeDraftId) state.activeDraftId = state.drafts[0].id;
 }
@@ -3684,7 +3742,7 @@ function getDraft(id) { return state.drafts.find(d => d.id === id); }
 
 function seedDraftFromSquad(id, name, playerIds, bankTenths) {
   const existing = getDraft(id);
-  const draft = existing || { id, name, squad: [], bank: 0, transfersLog: {}, chipsUsed: {}, squadConfirmed: true, builderCaptainId: null };
+  const draft = existing || { id, name, squad: [], bank: 0, transfersLog: {}, chipsUsed: {}, squadConfirmed: true, builderCaptainId: null, builderViceCaptainId: null };
   draft.name = name;
   draft.squad = playerIds;
   draft.bank = bankTenths;
@@ -3913,25 +3971,24 @@ const PROJ_OPTIONAL_COLS = [
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
-  _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; // recompute fresh each render
+  _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; _teamGaRateCache = null; // recompute fresh each render
   const fromSelect = document.getElementById("projFromGw");
   const toSelect = document.getElementById("projToGw");
-  const fullSeason = !!state.projFullSeason;
   if (fromSelect && !fromSelect.options.length) {
-    const upcoming = getHorizonGws(fullSeason ? 38 : 8);
-    fromSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
-    toSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
-    state.projFromGw = upcoming[0];
-    state.projToGw = upcoming[0];
+    // Populate the full remaining-season range (up to GW38) so "To" can
+    // always reach the end of the season, even though the default
+    // selection below only spans the next few gameweeks.
+    const all = getHorizonGws(38);
+    fromSelect.innerHTML = all.map(id => `<option value="${id}">GW${id}</option>`).join("");
+    toSelect.innerHTML = all.map(id => `<option value="${id}">GW${id}</option>`).join("");
+    const defaultSpan = all.slice(0, 8);
+    state.projFromGw = defaultSpan[0];
+    state.projToGw = defaultSpan[0];
     fromSelect.value = state.projFromGw;
     toSelect.value = state.projToGw;
   }
   let fromGw = state.projFromGw || Number(fromSelect?.value);
   let toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
-  if (fullSeason) {
-    const all = getHorizonGws(38);
-    fromGw = all[0]; toGw = all[all.length - 1];
-  }
   const posFilter = state.projPosFilter || "ALL";
   const minMinutes = state.projMinMinutes ?? 90;
   const maxPrice = state.projMaxPrice;
@@ -4032,7 +4089,6 @@ function setupProjectionsControls() {
   const maxPriceInput = document.getElementById("projMaxPrice");
   const formSelect = document.getElementById("projFormFilter");
   const rotationInput = document.getElementById("projRotationThreshold");
-  const fullSeasonToggle = document.getElementById("projFullSeasonToggle");
   const heatToggle = document.getElementById("projHeatmapToggle");
   const simpleToggle = document.getElementById("projSimpleToggle");
   const assume90Toggle = document.getElementById("projAssume90Toggle");
@@ -4043,11 +4099,6 @@ function setupProjectionsControls() {
   maxPriceInput.onchange = () => { state.projMaxPrice = Number(maxPriceInput.value) || null; renderProjectionsTab(); };
   formSelect.onchange = () => { state.projFormFilter = formSelect.value; renderProjectionsTab(); };
   rotationInput.onchange = () => { state.projRotationThreshold = Number(rotationInput.value) || 70; renderProjectionsTab(); };
-  fullSeasonToggle.onchange = (e) => {
-    state.projFullSeason = e.target.checked;
-    if (fromSelect) fromSelect.innerHTML = ""; // force GW-select rebuild for the new horizon
-    renderProjectionsTab();
-  };
   heatToggle.onchange = (e) => { state.projHeatmap = e.target.checked; renderProjectionsTab(); };
   simpleToggle.onchange = (e) => { state.projSimpleView = e.target.checked; renderProjectionsTab(); };
   assume90Toggle.onchange = (e) => { state.projAssume90 = e.target.checked; renderProjectionsTab(); };
@@ -4195,7 +4246,7 @@ function miniPitchHtml(result, gwId) {
   for (const x of result.starting) byPos[x.p.position].push(x);
   const slot = (x, isCap) => `
     <div class="pitch-slot" style="width:56px">
-      ${isCap ? `<span class="cap-mark" style="transform:scale(0.8)">C</span>` : ""}
+      ${isCap ? `<span class="cap-mark" style="transform:translateX(-50%) scale(0.8)">C</span>` : ""}
       ${playerAvatarHtml(x.p, 26)}
       <div class="name-tag" style="font-size:8.5px;max-width:56px;padding:1px 5px">${x.p.webName}</div>
       <div class="pts-tag" style="font-size:8.5px">${x.proj.toFixed(1)}</div>
@@ -4448,7 +4499,7 @@ function autoPickSquad(draft, opts) {
     draft.squad[worstIdx] = best.id;
     newlyAddedIds[worstListPos] = best.id;
   }
-  draft.builderCaptainId = null; // recomputed fresh by computeGwResult from the new squad
+  draft.builderCaptainId = null; draft.builderViceCaptainId = null; // recomputed fresh by computeGwResult from the new squad
   draft.manualStarterIds = null;
 }
 
@@ -4580,7 +4631,7 @@ function renderSquadBuilder(draft) {
   };
   document.getElementById("builderResetSquad").onclick = () => {
     if (!draft.squad.length || confirm("Clear all picked players?")) {
-      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null; draft.manualStarterIds = null; state.builderSelectedId = null;
+      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null; draft.builderViceCaptainId = null; draft.manualStarterIds = null; state.builderSelectedId = null;
       saveDrafts(); renderPlanner();
     }
   };
@@ -4662,6 +4713,7 @@ function renderBuilderList(draft) {
       else {
         draft.squad = draft.squad.filter(pid => pid !== id);
         if (draft.builderCaptainId === id) draft.builderCaptainId = null;
+        if (draft.builderViceCaptainId === id) draft.builderViceCaptainId = null;
       }
       saveDrafts(); renderPlanner();
     };
@@ -4674,7 +4726,7 @@ function renderBuilderList(draft) {
 // still a legal XI drawn from the current squad. Falls back to auto the
 // moment it stops being valid (e.g. the squad changed since).
 function getBuilderResult(draft, gwId) {
-  const auto = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId);
+  const auto = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId, null, draft.builderViceCaptainId);
   if (!draft.manualStarterIds) return auto;
   const valid = draft.manualStarterIds.length === 11 &&
     draft.manualStarterIds.every(id => draft.squad.includes(id)) &&
@@ -4685,8 +4737,10 @@ function getBuilderResult(draft, gwId) {
     .map(p => ({ p, proj: projectPoints(p, gwId) }));
   const starting = withProj.filter(x => startingSet.has(x.p.id));
   const bench = withProj.filter(x => !startingSet.has(x.p.id));
-  const captainEntry = starting.find(x => x.p.id === draft.builderCaptainId) || [...starting].sort((a, b) => b.proj - a.proj)[0];
-  return { starting, bench, captain: captainEntry?.p };
+  const captainEntry = starting.find(x => x.p.id === draft.builderCaptainId)
+    || starting.find(x => x.p.id === draft.builderViceCaptainId)
+    || [...starting].sort((a, b) => b.proj - a.proj)[0];
+  return { starting, bench, captain: captainEntry?.p, viceCaptainId: draft.builderViceCaptainId || null };
 }
 // Attempts to swap a starter out for a bench player in. Only succeeds if
 // the resulting XI is still legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD, 11
@@ -4756,10 +4810,12 @@ function renderBuilderPitch(draft) {
   const selectedId = state.builderSelectedId;
   let byPos, benchEntries, startingIds, captainId;
 
+  let viceCaptainIdBuilder = null;
   if (squadComplete) {
     const result = getBuilderResult(draft, gwId);
     startingIds = result.starting.map(x => x.p.id);
     captainId = result.captain?.id ?? null;
+    viceCaptainIdBuilder = result.viceCaptainId || null;
     byPos = { GK: [], DEF: [], MID: [], FWD: [] };
     for (const x of result.starting) byPos[x.p.position].push(x);
     benchEntries = result.bench.map(x => ({ x, pos: x.p.position }));
@@ -4784,7 +4840,7 @@ function renderBuilderPitch(draft) {
     }
   }
 
-  function slotHtml(x, isCaptainSlot, posHint) {
+  function slotHtml(x, isCaptainSlot, posHint, isViceSlot) {
     if (!x) {
       return `
         <div class="pitch-slot placeholder-slot" data-placeholder-pos="${posHint}" title="Click to add a ${posHint}">
@@ -4796,7 +4852,7 @@ function renderBuilderPitch(draft) {
     const selected = x.p.id === selectedId;
     return `
       <div class="pitch-slot ${selected ? "selected" : ""}" data-player="${x.p.id}" style="${selected ? "outline:2px solid var(--gold-bright);border-radius:8px" : ""}">
-        ${isCaptainSlot ? '<span class="cap-mark">C</span>' : ""}
+        ${isCaptainSlot ? '<span class="cap-mark">C</span>' : isViceSlot ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
         ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
         <div class="pts-tag mono">${fmtPrice(x.p.nowCost)}</div>
@@ -4805,7 +4861,7 @@ function renderBuilderPitch(draft) {
     `;
   }
   const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, !!x && captainId === x.p.id, pos)).join("")}</div>`
+    `<div class="pitch-row">${byPos[pos].map(x => slotHtml(x, !!x && captainId === x.p.id, pos, !!x && viceCaptainIdBuilder === x.p.id)).join("")}</div>`
   ).join("");
 
   // bench, labelled the way FPL labels substitute priority: goalkeeper
@@ -4877,7 +4933,8 @@ function renderBuilderPitch(draft) {
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          ${squadComplete ? (isStarter ? `<button class="chip-btn" id="modalCaptain">👑 Make captain</button>` : `<button class="chip-btn" id="modalStart">⬆️ Move to starting XI</button>`) : ""}
+          ${squadComplete ? (isStarter ? `<button class="chip-btn" id="modalCaptain">👑 ${draft.builderCaptainId === playerId ? "Remove as captain" : "Make captain"}</button>` : `<button class="chip-btn" id="modalStart">⬆️ Move to starting XI</button>`) : ""}
+          ${squadComplete && isStarter ? `<button class="chip-btn" id="modalVice">🅥 ${draft.builderViceCaptainId === playerId ? "Remove as vice-captain" : "Make vice-captain"}</button>` : ""}
           ${squadComplete ? `<button class="chip-btn" id="modalSub">🔁 Substitute (swap with another player)</button>` : ""}
           <button class="chip-btn" id="modalShortlist">${isShortlisted(playerId) ? "★ Remove from shortlist" : "☆ Add to shortlist"}</button>
           <button class="chip-btn" id="modalRemove">🗑 Remove from squad</button>
@@ -4890,7 +4947,15 @@ function renderBuilderPitch(draft) {
 
     const capBtn = document.getElementById("modalCaptain");
     if (capBtn) capBtn.onclick = () => {
-      draft.builderCaptainId = playerId;
+      draft.builderCaptainId = draft.builderCaptainId === playerId ? null : playerId;
+      if (draft.builderCaptainId && draft.builderViceCaptainId === draft.builderCaptainId) draft.builderViceCaptainId = null;
+      closePitchModal();
+      saveDrafts(); renderBuilderPitch(draft);
+    };
+    const viceBtn = document.getElementById("modalVice");
+    if (viceBtn) viceBtn.onclick = () => {
+      draft.builderViceCaptainId = draft.builderViceCaptainId === playerId ? null : playerId;
+      if (draft.builderViceCaptainId && draft.builderCaptainId === draft.builderViceCaptainId) draft.builderCaptainId = null;
       closePitchModal();
       saveDrafts(); renderBuilderPitch(draft);
     };
@@ -4914,6 +4979,7 @@ function renderBuilderPitch(draft) {
     document.getElementById("modalRemove").onclick = () => {
       draft.squad = draft.squad.filter(id => id !== playerId);
       if (draft.builderCaptainId === playerId) draft.builderCaptainId = null;
+      if (draft.builderViceCaptainId === playerId) draft.builderViceCaptainId = null;
       if (draft.manualStarterIds) draft.manualStarterIds = draft.manualStarterIds.filter(id => id !== playerId);
       closePitchModal();
       saveDrafts(); renderPlanner();
@@ -6053,6 +6119,15 @@ const FDR_MODES = {
       const totalP = grid.reduce((s, c) => s + c.p, 0) || 1;
       const gridCS = grid.filter(c => (isHome ? c.away : c.home) === 0).reduce((s, c) => s + c.p, 0) / totalP;
       const poissonCS = Math.exp(-est.oppXg);
+      // Real season-to-date GA rate is the most trustworthy signal for
+      // "does this team actually keep clean sheets" — weighted heaviest.
+      // The scoreline-model estimates (grid + independent Poisson from
+      // this specific fixture's oppXg) fill in fixture-specific context
+      // (an easy/hard opponent) on top of that real baseline. Previously
+      // this was grid-only-derived and came out too generous.
+      const realGaRate = teamRealGaRate(est.teamId);
+      const realCS = realGaRate !== null ? Math.exp(-realGaRate) : null;
+      if (realCS !== null) return (realCS * 0.5 + gridCS * 0.3 + poissonCS * 0.2) * 100;
       return (gridCS * 0.75 + poissonCS * 0.25) * 100;
     },
     fmt: (v) => Math.round(v) + "%",
@@ -6209,7 +6284,14 @@ function estimateScoreline(teamId, oppId, isHome) {
   // this nudge to produce visibly different fixtures at all.
   const stretch = (v) => {
     const d = v - 3;
-    return Math.max(1, Math.min(5, 3 + Math.sign(d) * Math.pow(Math.abs(d), 0.85) * 1.2));
+    // Exponent/multiplier bumped (0.85→0.7, 1.2→1.5) — user feedback was
+    // that predicted scorelines were too shy/hedged in clearly mismatched
+    // fixtures (a big side at home to a bottom side should land on a
+    // genuinely decisive single scoreline like 3-0, not a diluted 1-0/1-1
+    // spread). This pushes computed ratings further from the midpoint for
+    // a bigger fixture gap → bigger xG gap → the model's top-probability
+    // scoreline actually commits to the mismatch.
+    return Math.max(1, Math.min(5, 3 + Math.sign(d) * Math.pow(Math.abs(d), 0.7) * 1.5));
   };
   if (teamOv.attack === null) a5 = stretch(a5);
   if (oppOv.attack === null) oa5 = stretch(oa5);
@@ -6279,12 +6361,24 @@ function estimateScoreline(teamId, oppId, isHome) {
   model.draw = blended.draw;
 
   return {
-    teamGoals: isHome ? model.top.home : model.top.away,
+    teamId, teamGoals: isHome ? model.top.home : model.top.away,
     oppGoals: isHome ? model.top.away : model.top.home,
     teamXg, oppXg, model,
     usedForm: true, usedEmpirical: !!(empiricalTeamXg != null && empiricalOppXg != null), usedH2h: !!h2h,
     usedPiRatings: blended.usedPiRatings, usedOdds: blended.usedOdds,
   };
+}
+// Real season-to-date goals-conceded rate for a team (goals against / games
+// played), used as a grounding signal for clean-sheet% below — cached per
+// render pass since computeLiveTable scans all fixtures.
+let _teamGaRateCache = null;
+function teamRealGaRate(teamId) {
+  if (!_teamGaRateCache) {
+    _teamGaRateCache = {};
+    const live = computeLiveTable(state.allFixtures, {});
+    if (live) for (const r of live) { if (r.played > 0) _teamGaRateCache[r.teamId] = r.ga / r.played; }
+  }
+  return _teamGaRateCache[teamId] ?? null;
 }
 function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   const team = state.teamsById[teamId], opp = state.teamsById[oppId];
@@ -6355,6 +6449,7 @@ function renderFdrModeRow() {
 }
 function renderFdrGrid() {
   if (!state.teams.length) return;
+  _teamGaRateCache = null; // refresh real GA rates in case fixtures updated
   populateFdrStartGw();
   renderFdrModeRow();
   const startGw = Number(document.getElementById("fdrStartGw").value);
@@ -7540,9 +7635,9 @@ function renderH2H() {
   const formStrA = teamRecentForm(teamA.id, 5), formStrB = teamRecentForm(teamB.id, 5);
   const formPillsHtml = (str) => str ? [...str].map(r => `<span class="pos-pill" style="width:20px;text-align:center;padding:2px 0;font-weight:800;background:${r === "W" ? "#3cd25a33;color:#3cd25a" : r === "L" ? "#e0529a33;color:#e0529a" : "#e0a94f33;color:#e0a94f"}">${r}</span>`).join("") : `<span class="foot-note">No matches yet</span>`;
   const barPct = (a, b) => { const tot = a + b; return tot > 0 ? Math.round((a / tot) * 100) : 50; };
-  const attackPct = barPct(defaultFieldRating(teamA.id, "attack"), defaultFieldRating(teamB.id, "attack"));
-  const defPct = barPct(defaultFieldRating(teamA.id, "defence"), defaultFieldRating(teamB.id, "defence"));
-  const overallPct = barPct(defaultFieldRating(teamA.id, "overall"), defaultFieldRating(teamB.id, "overall"));
+  const attackPct = barPct(effectiveFieldRating(teamA.id, "attack"), effectiveFieldRating(teamB.id, "attack"));
+  const defPct = barPct(effectiveFieldRating(teamA.id, "defence"), effectiveFieldRating(teamB.id, "defence"));
+  const overallPct = barPct(effectiveFieldRating(teamA.id, "overall"), effectiveFieldRating(teamB.id, "overall"));
   const statBar = (label, pct, valA, valB) => `
     <div style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:3px"><span class="mono">${valA}</span><span>${label}</span><span class="mono">${valB}</span></div>
@@ -7566,9 +7661,9 @@ function renderH2H() {
         <div style="text-align:center"><div class="stat-value mono" style="font-size:22px">${tableB?.points ?? "—"}</div><div class="foot-note">points (${tableB ? `${tableB.won}W ${tableB.drawn}D ${tableB.lost}L` : "—"})</div></div>
       </div>
       <div style="max-width:420px;margin:0 auto">
-        ${statBar("Attack rating", attackPct, defaultFieldRating(teamA.id, "attack").toFixed(1), defaultFieldRating(teamB.id, "attack").toFixed(1))}
-        ${statBar("Defence rating", defPct, defaultFieldRating(teamA.id, "defence").toFixed(1), defaultFieldRating(teamB.id, "defence").toFixed(1))}
-        ${statBar("Overall rating", overallPct, defaultFieldRating(teamA.id, "overall").toFixed(1), defaultFieldRating(teamB.id, "overall").toFixed(1))}
+        ${statBar("Attack rating", attackPct, effectiveFieldRating(teamA.id, "attack").toFixed(1), effectiveFieldRating(teamB.id, "attack").toFixed(1))}
+        ${statBar("Defence rating", defPct, effectiveFieldRating(teamA.id, "defence").toFixed(1), effectiveFieldRating(teamB.id, "defence").toFixed(1))}
+        ${statBar("Overall rating", overallPct, effectiveFieldRating(teamA.id, "overall").toFixed(1), effectiveFieldRating(teamB.id, "overall").toFixed(1))}
       </div>
       <p class="foot-note" style="margin-top:8px;text-align:center">Custom FDR if hosting: ${teamA.name} ${aHome} · ${teamB.name} ${bHome} (your weights from the Rankings tab).</p>
     </div>
