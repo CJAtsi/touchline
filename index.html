@@ -159,6 +159,39 @@
   .matchup-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .matchup-mid .note-input { width: 110px; text-align: center; font-size: 11px; }
   .matchup-winner-row { display: flex; gap: 4px; }
+  /* Draggable full-pitch tactical board (H2H) — two facing XIs on one
+     vertical pitch, numbered circular tokens instead of avatar cards, so
+     it reads like a real tactics board rather than a stat comparison. */
+  .tac-drag-pitch {
+    position: relative; width: 100%; aspect-ratio: 3 / 4; max-width: 480px; margin: 0 auto;
+    background: linear-gradient(180deg, #1e3d24, #234a2b); border: 2px solid rgba(255,255,255,0.25); border-radius: 10px;
+    overflow: hidden; touch-action: none;
+  }
+  .tac-drag-pitch::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0 10%, rgba(255,255,255,0.0) 10% 20%);
+  }
+  .tac-halfway { position: absolute; left: 4%; right: 4%; top: 50%; height: 0; border-top: 2px solid rgba(255,255,255,0.35); }
+  .tac-centre-circle { position: absolute; left: 50%; top: 50%; width: 20%; aspect-ratio: 1; border: 2px solid rgba(255,255,255,0.35); border-radius: 50%; transform: translate(-50%,-50%); }
+  .tac-goal-box { position: absolute; left: 30%; width: 40%; height: 10%; border: 2px solid rgba(255,255,255,0.3); }
+  .tac-goal-box.top { top: 0; border-top: none; }
+  .tac-goal-box.bottom { bottom: 0; border-bottom: none; }
+  .tac-token {
+    position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 13px;
+    cursor: grab; user-select: none; box-shadow: 0 2px 6px rgba(0,0,0,0.4); z-index: 2;
+    transition: box-shadow 0.12s ease;
+  }
+  .tac-token:active { cursor: grabbing; z-index: 5; box-shadow: 0 0 0 3px var(--gold-bright); }
+  .tac-token.team-a { background: var(--gold-bright); color: #1a1206; }
+  .tac-token.team-b { background: #3ba7ff; color: #06121f; }
+  .tac-token.drag-over-target { box-shadow: 0 0 0 3px #3cd25a; }
+  .tac-token-label {
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap;
+    font-size: 9.5px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); margin-top: 2px; pointer-events: none;
+  }
   .chip-btn.small { padding: 3px 8px; font-size: 10.5px; }
   .dir-btn.small { padding: 3px 7px; font-size: 10.5px; }
   .scout-theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -297,10 +330,17 @@
   table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
   thead th {
     text-align: right; padding: 7px 6px; color: var(--ink-dim); font-weight: 600;
-    background: rgba(255,255,255,0.045); white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
+    background: #14161fee; white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em;
     border-bottom: 1px solid var(--border); line-height: 1.25;
     transition: background 0.12s ease, color 0.12s ease;
+    /* Anchored while scrolling down: table headers stay visible instead of
+       scrolling out of view, offset below the app's own sticky top bar
+       (--header-h, measured at runtime). z-index 5 sits above ordinary
+       body rows (z-index unset) but below the sticky left label column's
+       corner cell (z-index 4 already, bumped to 6 below for the overlap). */
+    position: sticky; top: var(--header-h, 64px); z-index: 5;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   }
   thead th:hover { color: var(--gold-bright); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
@@ -310,7 +350,9 @@
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
   }
-  .table-wrap table thead th.label-col:first-child { z-index: 4; }
+  /* Corner cell (sticky top AND left at once) needs to sit above every
+     other sticky-top header cell it overlaps while scrolling both ways. */
+  .table-wrap table thead th.label-col:first-child { z-index: 6; }
   thead th.sorted { color: var(--gold-bright); }
   tbody td { padding: 7px 6px; text-align: right; border-top: 1px solid var(--border); font-size: 11.5px; }
   tbody td.label-col { text-align: left; }
@@ -756,17 +798,25 @@
     <div class="theme-seg" id="statsThemeSeg"></div>
     <div id="statsBudgetNote" class="foot-note" style="margin-bottom:10px"></div>
 
-    <div class="toolbar">
+    <div class="toolbar" style="margin-bottom:8px">
       <div class="seg" id="posSeg"></div>
       <select id="teamSelect"><option value="ALL">All teams</option></select>
       <div class="price-range">
         £ <input type="number" step="0.5" id="minPrice" placeholder="min" /> – <input type="number" step="0.5" id="maxPrice" placeholder="max" />
       </div>
-      <input type="text" id="search" class="search-input" placeholder="Search player…" />
       <div class="spacer" style="gap:5px;flex-direction:column;align-items:flex-start">
         <span style="font-size:10.5px;color:var(--ink-faint)">Min. minutes played</span>
         <input type="number" id="minMinutes" placeholder="e.g. 300" title="Hide players with fewer minutes played than this" style="width:78px" />
       </div>
+      <input type="text" id="search" class="search-input" placeholder="Search player…" />
+      <button class="dir-btn" id="statsMoreFiltersToggle" type="button" style="margin-left:auto">⚙️ More filters</button>
+    </div>
+    <!-- Less-common filters (fixture GW/venue, opponent rank, custom GW-point-range) were
+         previously all crammed into the same row as the everyday ones above, so the bar
+         read as a wall of controls regardless of which you actually needed. Collapsed by
+         default behind "More filters" now; same element IDs throughout so the JS wiring
+         in setupTableControls() is unchanged. -->
+    <div class="toolbar" id="statsMoreFilters" style="display:none;margin-bottom:12px;flex-wrap:wrap">
       <select id="fixtureGw"><option value="ALL">Any gameweek</option></select>
       <select id="fixtureVenue">
         <option value="ALL">Home + Away</option>
@@ -790,19 +840,19 @@
           <span id="rangeStatus" style="font-size:11px;color:var(--ink-faint)"></span>
         </div>
       </div>
-      <div class="spacer">
-        <select id="sortField"></select>
-        <button class="dir-btn" id="dirBtn">↓</button>
-        <button class="dir-btn" id="resetSortBtn" title="Back to Total pts, high to low">Reset sort</button>
-        <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
-        <button class="dir-btn" id="showSelectedStatsBtn" type="button">Show selected (0)</button>
-        <button class="dir-btn" id="deselectAllStatsBtn" type="button">Deselect all</button>
-        <button class="dir-btn" id="compareProfilesStatsBtn" type="button">📊 Compare profiles</button>
-        <button class="dir-btn" id="addSelectedToGroupBtn" type="button">+ Add selected to group</button>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap">
-          <input type="checkbox" id="statsHeatmapToggle" /> 🔥 Heatmap
-        </label>
-      </div>
+    </div>
+    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+      <select id="sortField"></select>
+      <button class="dir-btn" id="dirBtn">↓</button>
+      <button class="dir-btn" id="resetSortBtn" title="Back to Total pts, high to low">Reset sort</button>
+      <button class="dir-btn" id="scoutToggle" type="button">🔎 Scout picks</button>
+      <button class="dir-btn" id="showSelectedStatsBtn" type="button">Show selected (0)</button>
+      <button class="dir-btn" id="deselectAllStatsBtn" type="button">Deselect all</button>
+      <button class="dir-btn" id="compareProfilesStatsBtn" type="button">📊 Compare profiles</button>
+      <button class="dir-btn" id="addSelectedToGroupBtn" type="button">+ Add selected to group</button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap">
+        <input type="checkbox" id="statsHeatmapToggle" /> 🔥 Heatmap
+      </label>
     </div>
     <div id="rankLegendPanel" style="display:none;margin:-8px 0 14px;font-size:12px;color:var(--ink-dim);line-height:1.8"></div>
     <div id="scoutPanel" style="display:none;margin-bottom:16px"></div>
@@ -932,6 +982,14 @@
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <div class="detail-block-title">Best fixture pairings</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        Pairs of clubs whose fixtures rotate well together over the same From/To range above — each gameweek, whichever of the two has the easier fixture is the one you'd use, so a pairing scores well even if neither club is easy every single week on its own. Ranked by that best-of-both average FDR.
+      </p>
+      <div class="table-wrap"><table id="fdrPairingsGrid"></table></div>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1188,7 +1246,7 @@ function imgFallback(img) {
 
 const SORT_OPTIONS = [
   ["webName", "Name (A-Z)"], ["teamShort", "Team (A-Z)"], ["position", "Position (GK-DEF-MID-FWD)"],
-  ["totalPoints", "Total points"], ["form", "Form"], ["epNext", "Next GW (FPL proj.)"],
+  ["totalPoints", "Total points"], ["form", "Form"], ["epNext", "Next GW (model proj.)"],
   ["pointsPerGame", "Points per game"], ["nowCost", "Price"], ["selectedByPercent", "Ownership %"],
   ["ictIndex", "ICT index"], ["threat", "Threat"], ["creativity", "Creativity"], ["influence", "Influence"],
   ["expectedGoalInvolvements", "xGI (season)"], ["xgi90", "xGI /90"], ["xg90", "xG /90"], ["xa90", "xA /90"],
@@ -1405,6 +1463,26 @@ function computeFcAttributes(p) {
   const dribbling = percentileRank((p.xa90 || 0), posPool.map(x => x.xa90 || 0));
   const defending = percentileRank(p.defensiveContributionPer90 || 0, posPool.map(x => x.defensiveContributionPer90 || 0));
   const physical = percentileRank(per90(p, "influence"), posPool.map(x => per90(x, "influence")));
+  // Extra FM-style attributes, same percentile-vs-own-position-pool
+  // approach as the six above, so every player always gets a 1-99 number
+  // (nothing left blank) even though these aren't real FPL fields:
+  //  - Finishing: goals actually scored per unit of expected goals (xG
+  //    overperformance = clinical finishing), floored so a 0-xG sample
+  //    doesn't blow up the ratio.
+  //  - Decision making: BPS/90 blended with a low-turnover proxy (ICT
+  //    influence relative to threat+creativity combined) — a rough stand-in
+  //    for "does the right thing with the ball" absent real decision data.
+  //  - Work rate: defensive actions/90 blended with minutes reliability
+  //    (starts a bigger share of available minutes = graft/fitness proxy).
+  const finishing = percentileRank(
+    (p.goalsScored || 0) / Math.max(0.5, p.expectedGoals || 0.5),
+    posPool.map(x => (x.goalsScored || 0) / Math.max(0.5, x.expectedGoals || 0.5))
+  );
+  const decisionMaking = percentileRank(per90(p, "bps"), posPool.map(x => per90(x, "bps")));
+  const workRate = percentileRank(
+    (p.defensiveContributionPer90 || 0) + (p.minsPerStart ? Math.min(1, p.minsPerStart / 90) * 20 : 0),
+    posPool.map(x => (x.defensiveContributionPer90 || 0) + (x.minsPerStart ? Math.min(1, x.minsPerStart / 90) * 20 : 0))
+  );
   return [
     { label: "Pace", value: pace },
     { label: "Shooting", value: shooting },
@@ -1412,6 +1490,9 @@ function computeFcAttributes(p) {
     { label: "Dribbling", value: dribbling },
     { label: "Defending", value: defending },
     { label: "Physical", value: physical },
+    { label: "Finishing", value: finishing },
+    { label: "Decision making", value: decisionMaking },
+    { label: "Work rate", value: workRate },
   ];
 }
 const COMPARE_COLORS = ["#e0529a", "#3ba7ff", "#ffcf4d", "#3cd25a"];
@@ -1437,7 +1518,14 @@ function overlayRadarSvg(players, tab, size = 260) {
   const labels = allAttrs[0] ? allAttrs[0].map(a => a.label) : [];
   const n = labels.length;
   if (!n) return "";
-  const cx = size / 2, cy = size / 2, r = size / 2 - 30;
+  // Labels sit outside the polygon at frac 1.22 and can run wide (e.g.
+  // "Physical 99"); without extra room around the drawn circle they get
+  // clipped by the viewBox edge on the left/right. Pad the viewBox itself
+  // (not the drawn circle) so label text always has room to render fully,
+  // and switch to edge-aware text-anchor so text grows away from the edge.
+  const pad = 44;
+  const vb = size + pad * 2;
+  const cx = vb / 2, cy = vb / 2, r = size / 2 - 26;
   const angleFor = i => (Math.PI * 2 * i) / n - Math.PI / 2;
   const ptFor = (i, frac) => { const a = angleFor(i); return [cx + Math.cos(a) * r * frac, cy + Math.sin(a) * r * frac]; };
   const rings = [0.25, 0.5, 0.75, 1].map(frac =>
@@ -1451,16 +1539,22 @@ function overlayRadarSvg(players, tab, size = 260) {
   }).join("");
   const labelEls = labels.map((label, i) => {
     const [x, y] = ptFor(i, 1.22);
-    return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="var(--ink-dim,#aaa)">${label}</text>`;
+    const anchor = Math.abs(x - cx) < r * 0.15 ? "middle" : (x < cx ? "end" : "start");
+    return `<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="11" fill="var(--ink-dim,#aaa)">${label}</text>`;
   }).join("");
   const legend = players.map((p, pi) => `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;color:var(--ink-dim)"><span style="width:10px;height:10px;border-radius:3px;background:${colorForIndex(pi)};display:inline-block"></span>${p.webName}</span>`).join("");
   return `<div style="text-align:center">
-    <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${rings}${spokes}${polys}${labelEls}</svg>
+    <svg viewBox="0 0 ${vb} ${vb}" width="${size}" height="${size}" style="max-width:100%">${rings}${spokes}${polys}${labelEls}</svg>
     <div style="margin-top:4px">${legend}</div>
   </div>`;
 }
 function radarChartSvg(attrs, size = 220, color = "var(--pink,#e0529a)") {
-  const cx = size / 2, cy = size / 2, r = size / 2 - 28, n = attrs.length;
+  // Same clipping fix as overlayRadarSvg: pad the viewBox so "Label NN"
+  // text (e.g. "Physical 99") has room outside the drawn circle instead
+  // of running past the SVG's own edge and getting cut off.
+  const pad = 44;
+  const vb = size + pad * 2;
+  const cx = vb / 2, cy = vb / 2, r = size / 2 - 24, n = attrs.length;
   const angleFor = i => (Math.PI * 2 * i) / n - Math.PI / 2;
   const ptFor = (i, frac) => {
     const a = angleFor(i);
@@ -1474,9 +1568,10 @@ function radarChartSvg(attrs, size = 220, color = "var(--pink,#e0529a)") {
   const dataPoly = `<polygon points="${dataPts.map(p => p.join(",")).join(" ")}" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-width="2" />`;
   const labels = attrs.map((a, i) => {
     const [x, y] = ptFor(i, 1.22);
-    return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="var(--ink-dim,#aaa)">${a.label} ${a.value}</text>`;
+    const anchor = Math.abs(x - cx) < r * 0.15 ? "middle" : (x < cx ? "end" : "start");
+    return `<text x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle" font-size="11" fill="var(--ink-dim,#aaa)">${a.label} ${a.value}</text>`;
   }).join("");
-  return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${rings}${spokes}${dataPoly}${labels}</svg>`;
+  return `<svg viewBox="0 0 ${vb} ${vb}" width="${size}" height="${size}" style="max-width:100%">${rings}${spokes}${dataPoly}${labels}</svg>`;
 }
 // Full stat comparison table for the Compare Profiles modal — beyond the
 // radar: an actual row-by-row stat comparison, with the best value in each
@@ -1545,10 +1640,34 @@ function buildComparisonTableHtml(players, tab, colMinWidth) {
       const bestB = Math.max(...attrRows.map(row => row[b].value));
       return bestB - bestA;
     });
+    // Standout real stat per player, role-relative — e.g. a defender's
+    // actual DefCon/90 vs a forward's actual xGI/90, rather than only the
+    // abstract 1-99 FC-style categories below (which flatten "good at the
+    // defensive side of the game" and "good at the attacking side" into
+    // comparable-looking numbers). Each player's own best-percentile
+    // metric from their own position's stat set is picked independently,
+    // so the row can legitimately show a different stat per player.
+    const standout = players.map(p => {
+      const posPool = state.players.filter(x => x.position === p.position && x.minutes >= 300);
+      const metrics = scoutMetricsFor(p.position, "base");
+      let best = null;
+      for (const [key, label, dir] of metrics) {
+        const v = scoutMetricValue(p, key);
+        const pool = posPool.map(x => scoutMetricValue(x, key));
+        const pct = dir > 0 ? percentileRank(v, pool) : (100 - percentileRank(v, pool));
+        if (!best || pct > best.pct) best = { label, v, pct };
+      }
+      return best;
+    });
+    const standoutRowHtml = standout.some(Boolean) ? `<tr>
+      <td style="font-size:12px;color:var(--ink-dim)">Standout stat</td>
+      ${standout.map((s, ci) => `<td class="mono" style="font-size:12px;text-align:${compareColAlign(ci, standout.length)};color:var(--gold-bright)">${s ? `${s.label} ${Number.isInteger(s.v) ? s.v : s.v.toFixed(2)}` : "—"}</td>`).join("")}
+    </tr>
+    <tr><td colspan="${players.length + 1}" style="border-top:1px solid var(--border);padding:2px"></td></tr>` : "";
     return `<table style="${tableStyle}">
       ${compareColgroup(players)}
       <thead><tr><th></th>${players.map((p, pi) => `<th style="font-size:12px;text-align:${compareColAlign(pi, players.length)};padding:4px">${p.webName}</th>`).join("")}</tr></thead>
-      <tbody>${order.map(i => {
+      <tbody>${standoutRowHtml}${order.map(i => {
         const label = labels[i];
         const vals = attrRows.map(row => row[i].value);
         const best = Math.max(...vals);
@@ -1619,8 +1738,7 @@ function openPlayerProfileCompare(ids) {
           <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
         </div>
         <div style="overflow-x:auto">
-          <div style="display:grid;grid-template-columns:140px repeat(${players.length},minmax(${colMinWidth}px,1fr));gap:18px;align-items:start;min-width:${colMinWidth ? 140 + colMinWidth * players.length + 18 * players.length : 0}px">
-            <div></div>
+          <div style="display:grid;grid-template-columns:repeat(${players.length},minmax(${colMinWidth}px,1fr));gap:18px;align-items:start;min-width:${colMinWidth ? colMinWidth * players.length + 18 * (players.length - 1) : 0}px">
             ${players.map((p, pi) => `
               <div style="text-align:center">
                 ${playerAvatarHtml(p, 64)}
@@ -1756,7 +1874,7 @@ let state = {
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
-  h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {},
+  h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {},
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
   h2hCombined: {}, h2hCombinedPickPos: null, h2hCombinedPickSlot: 0,
   h2hScoreboard: {}, h2hSaved: [],
@@ -1766,7 +1884,7 @@ let state = {
   expandedShortlistId: null, preferKits: false,
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
-  showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowStatsTable: false, scoutTheme: "base",
+  showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowStatsTable: false, scoutTheme: "base", scoutFixtureHorizon: 4,
   statsHeatmap: false, teamsHeatmap: false,
   // FM-style 1-20 custom attributes. attributeDefs is a global, user-editable
   // list of attribute names (any wording, not tied to any real data source or
@@ -2175,7 +2293,7 @@ function transformPlayer(e) {
     penaltiesMissed: e.penalties_missed ?? 0, penaltiesSaved: e.penalties_saved ?? 0,
     penaltiesOrder: e.penalties_order, directFreekicksOrder: e.direct_freekicks_order, cornersOrder: e.corners_and_indirect_freekicks_order,
     yellowCards: e.yellow_cards ?? 0, redCards: e.red_cards ?? 0,
-    epNext: num(e.ep_next), epThis: num(e.ep_this),
+    epNext: num(e.ep_next), fplEpNext: num(e.ep_next), epThis: num(e.ep_this),
     transfersInEvent: e.transfers_in_event ?? 0, transfersOutEvent: e.transfers_out_event ?? 0,
     netTransfers: (e.transfers_in_event ?? 0) - (e.transfers_out_event ?? 0),
     costChangeEvent: e.cost_change_event ?? 0, valueSeasonRaw: e.value_season,
@@ -2233,6 +2351,16 @@ async function loadData() {
     attachDeeperStats(deeper);
     attachClubStats(clubStats);
     attachOdds(oddsData);
+
+    // Player Stats' "Next GW proj." previously just displayed FPL's own
+    // ep_next figure verbatim. Now that fixturesByTeam is loaded, replace
+    // it with Touchline's own scoreline/fixture-aware model (projectPoints)
+    // for the actual next event — original FPL number is kept on
+    // `fplEpNext` in case it's still wanted for reference/diagnostics.
+    const modelNextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
+    if (modelNextEvent) {
+      state.players.forEach(p => { p.epNext = projectPoints(p, modelNextEvent.id); });
+    }
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
@@ -2792,7 +2920,7 @@ function renderDash() {
     { label: "Players tracked", value: state.players.length, sub: "live from FPL" },
     { label: "Best form", value: topForm ? topForm.webName : "—", sub: topForm ? "form " + topForm.form.toFixed(1) : "", small: true },
     { label: "Biggest riser", value: topRiser ? topRiser.webName : "—", sub: topRiser ? "+" + topRiser.netTransfers.toLocaleString() + " net" : "", small: true },
-    { label: "Top projected", value: topEp ? topEp.webName : "—", sub: topEp ? topEp.epNext.toFixed(1) + " pts (FPL's own model)" : "", small: true },
+    { label: "Top projected", value: topEp ? topEp.webName : "—", sub: topEp ? topEp.epNext.toFixed(1) + " pts (Touchline model)" : "", small: true },
   ];
   const row = document.getElementById("dashRow");
   row.innerHTML = cards.map(c => `
@@ -2822,6 +2950,16 @@ function populateTeamSelect() {
 }
 
 function buildToolbarStatics() {
+  // "More filters" starts collapsed — fixture GW/venue, opponent rank, and
+  // the custom GW-point-range are all secondary to the everyday
+  // pos/team/price/minutes/search filters above them, so hiding them by
+  // default declutters the bar without removing anything. If any of those
+  // secondary filters is actually active, the button itself gets a subtle
+  // highlight so an active-but-hidden filter is never invisible.
+  document.getElementById("statsMoreFiltersToggle").onclick = () => {
+    const panel = document.getElementById("statsMoreFilters");
+    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+  };
   const posSeg = document.getElementById("posSeg");
   ["ALL", "GK", "DEF", "MID", "FWD"].forEach(p => {
     const b = document.createElement("button");
@@ -3082,10 +3220,25 @@ const SCOUT_THEMES = {
     filter: p => (p.selectedByPercent || 0) < 10,
     weights: {},
   },
+  fixtures: {
+    label: "Great run coming", short: "🗓️ Fixtures", color: "#5de0b8",
+    weights: {},
+    // Scored on top of the usual per-position metrics with a fixture-ease
+    // term folded in via extraMetrics, so this surfaces players who are
+    // both playing well AND have a kind run of fixtures ahead — not just
+    // whoever has the easiest fixtures regardless of form.
+    extraMetrics: [["fixtureEase", "Fixture run", 2]],
+    usesFixtureHorizon: true,
+  },
 };
+// Underlying metric value for a player + metric key. "fixtureEase" is
+// synthetic (not a raw player field) — it depends on the scout fixture
+// horizon control, so it's threaded through via state.scoutFixtureHorizon
+// rather than being a fixed field on the player object.
 function scoutMetricValue(p, key) {
   if (key === "cbit") return (p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0);
   if (key === "pointsPerMillion") return p.nowCost > 0 ? p.totalPoints / (p.nowCost / 10) : 0;
+  if (key === "fixtureEase") return upcomingFixtureEase(p.teamId, state.scoutFixtureHorizon || 4);
   return Number(p[key]) || 0;
 }
 function scoutMetricsFor(pos, themeKey = "base") {
@@ -3111,7 +3264,10 @@ function computeScoutList(pos, themeKey = "base") {
   const theme = SCOUT_THEMES[themeKey] || SCOUT_THEMES.base;
   if (theme.positions && !theme.positions.includes(pos)) return null; // theme doesn't apply to this position
   const minMinutes = 300;
-  let pool = state.players.filter(p => p.position === pos && p.minutes >= minMinutes);
+  // Scout picks are meant to be "who should I actually consider", so
+  // currently-injured players are dropped from the pool entirely rather
+  // than surfacing (and needing a mental discount) alongside fit players.
+  let pool = state.players.filter(p => p.position === pos && p.minutes >= minMinutes && p.status !== "i");
   if (theme.maxPrice && theme.maxPrice[pos] != null) pool = pool.filter(p => p.nowCost / 10 <= theme.maxPrice[pos]);
   if (theme.filter) pool = pool.filter(theme.filter);
   const metrics = scoutMetricsFor(pos, themeKey);
@@ -3159,6 +3315,15 @@ function renderScoutPanel() {
   const theme = SCOUT_THEMES[themeKey];
   const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
   const POS_ICON = { GK: "🧤", DEF: "🛡️", MID: "🎯", FWD: "⚡" };
+  // "Great run coming" theme lets you pick how many fixtures ahead count
+  // as "the run" — a couple of gameweeks for a short-term punt, or further
+  // out for planning around a longer favourable stretch.
+  const horizonRow = theme.usesFixtureHorizon ? `
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;font-size:12px;color:var(--ink-dim)">
+      Next
+      ${[2, 3, 4, 6, 8].map(n => `<button class="dir-btn" data-scout-horizon="${n}" style="padding:3px 9px;font-size:11.5px;${(state.scoutFixtureHorizon || 4) === n ? "background:color-mix(in srgb, var(--gold-bright) 22%, transparent);border-color:var(--gold-bright);color:var(--gold-bright)" : ""}">${n}</button>`).join("")}
+      fixtures
+    </div>` : "";
   const body = ["GK", "DEF", "MID", "FWD"].map(pos => {
     const result = computeScoutList(pos, themeKey);
     if (result === null) return "";
@@ -3176,10 +3341,13 @@ function renderScoutPanel() {
       }
     </div>`;
   }).join("");
-  panel.innerHTML = `<div id="scoutThemeRow" class="scout-theme-row"></div>${body}`;
+  panel.innerHTML = `<div id="scoutThemeRow" class="scout-theme-row"></div>${horizonRow}${body}`;
   renderScoutThemeRow();
   panel.querySelectorAll("[data-scout-star]").forEach(btn => {
     btn.onclick = () => { toggleShortlist(Number(btn.dataset.scoutStar), true); renderScoutPanel(); };
+  });
+  panel.querySelectorAll("[data-scout-horizon]").forEach(btn => {
+    btn.onclick = () => { state.scoutFixtureHorizon = Number(btn.dataset.scoutHorizon); renderScoutPanel(); };
   });
 }
 function scoutCardHtml({ p, score, reasons }, theme) {
@@ -3206,6 +3374,21 @@ function renderStats() {
   document.querySelectorAll("#headRow th[data-key]").forEach(th => {
     th.classList.toggle("sorted", th.dataset.key === state.filters.sort);
   });
+  // Flag the collapsed "More filters" button when any filter inside that
+  // panel is actually engaged, so a hidden active filter never silently
+  // narrows the table without the user noticing why.
+  const moreBtn = document.getElementById("statsMoreFiltersToggle");
+  if (moreBtn) {
+    const moreActive = (state.filters.gw && state.filters.gw !== "ALL") ||
+      (state.filters.venue && state.filters.venue !== "ALL") ||
+      (state.filters.rankMin && state.filters.rankMin > 1) ||
+      (state.filters.rankMax && state.filters.rankMax < 20) ||
+      !!state.rangeLabel;
+    moreBtn.style.background = moreActive ? "color-mix(in srgb, var(--gold-bright) 20%, transparent)" : "";
+    moreBtn.style.borderColor = moreActive ? "var(--gold-bright)" : "";
+    moreBtn.style.color = moreActive ? "var(--gold-bright)" : "";
+    moreBtn.textContent = moreActive ? "⚙️ More filters •" : "⚙️ More filters";
+  }
   // Heatmap ranges computed over exactly the rows/columns currently on
   // screen (respects filters/theme), so shading is always relative to
   // what you're actually looking at, not the whole player pool.
@@ -3813,8 +3996,6 @@ function fdrToMultiplier(score) {
   return FDR_MULT[1] + (score - 1) / 4 * (FDR_MULT[5] - FDR_MULT[1]);
 }
 function projectPoints(player, gwId) {
-  const nextEvent = state.events.find(e => e.is_current) || state.events.find(e => e.is_next);
-  if (nextEvent && gwId === nextEvent.id && player.epNext) return player.epNext;
   const fixtures = (state.fixturesByTeam[player.teamId] || []).filter(f => f.event === gwId);
   if (fixtures.length === 0) return 0; // blank gameweek for this player's team
   const base = player.pointsPerGame || 0;
@@ -6561,6 +6742,37 @@ function renderFdrModeRow() {
     }).join("");
   }
 }
+function renderFdrPairingsGrid(list, gwIds, curId) {
+  const el = document.getElementById("fdrPairingsGrid");
+  if (!el) return;
+  if (list.length < 2 || !gwIds.length) { el.innerHTML = ""; return; }
+  const pairs = [];
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      let sum = 0, n = 0;
+      for (let k = 0; k < gwIds.length; k++) {
+        const sa = a.scoresInOrder[k], sb = b.scoresInOrder[k];
+        const validA = sa !== null && sa !== -Infinity, validB = sb !== null && sb !== -Infinity;
+        if (!validA && !validB) continue; // both blank this gw — skip, not a real rotation choice
+        const best = validA && validB ? Math.min(sa, sb) : (validA ? sa : sb);
+        sum += best; n++;
+      }
+      if (n === 0) continue;
+      pairs.push({ a: a.t, b: b.t, combined: sum / n, avgA: a.avg, avgB: b.avg, n });
+    }
+  }
+  pairs.sort((x, y) => x.combined - y.combined);
+  const top = pairs.slice(0, 20);
+  const head = `<tr><th class="label-col">Pairing</th><th>Best-of-both avg FDR</th><th>Club A avg</th><th>Club B avg</th></tr>`;
+  const rows = top.map(pr => `<tr>
+    <td class="label-col" style="display:flex;align-items:center;gap:6px">${kitSvg(pr.a.id, 18)}${pr.a.short_name} <span style="color:var(--ink-faint)">+</span> ${kitSvg(pr.b.id, 18)}${pr.b.short_name}</td>
+    <td class="mono" style="font-size:12px;font-weight:700;color:${fdrGradientColor(pr.combined)}">${pr.combined.toFixed(2)}</td>
+    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.a.short_name} ${pr.avgA !== null ? pr.avgA.toFixed(1) : "–"}</td>
+    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.b.short_name} ${pr.avgB !== null ? pr.avgB.toFixed(1) : "–"}</td>
+  </tr>`).join("");
+  el.innerHTML = `<thead>${head}</thead><tbody>${rows || `<tr><td colspan="4" class="foot-note" style="padding:10px">Not enough fixture data in this range to compute pairings.</td></tr>`}</tbody>`;
+}
 function renderFdrGrid() {
   if (!state.teams.length) return;
   _teamGaRateCache = null; // refresh real GA rates in case fixtures updated
@@ -6669,6 +6881,8 @@ function renderFdrGrid() {
     });
     return { t, cells, bestRun, scoresInOrder, avg, avgGf, avgGa, avgGd, avgMode };
   });
+
+  renderFdrPairingsGrid(list, gwIds, curId);
 
   if (sortBy === "easiest") list.sort((a, b) => (a.avg ?? 99) - (b.avg ?? 99));
   else if (sortBy === "hardest") list.sort((a, b) => (b.avg ?? -99) - (a.avg ?? -99));
@@ -6955,8 +7169,13 @@ async function loadH2hMatchups() {
     const raw = await persistGet("h2hMatchups");
     if (raw) state.h2hMatchups = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const rawPos = await persistGet("h2hBoardPos");
+    if (rawPos) state.h2hBoardPos = JSON.parse(rawPos);
+  } catch (e) { /* keep defaults */ }
 }
 function saveH2hMatchups() { persistSet("h2hMatchups", JSON.stringify(state.h2hMatchups)); }
+function saveH2hBoardPos() { persistSet("h2hBoardPos", JSON.stringify(state.h2hBoardPos)); }
 function h2hMatchupKey(teamAId, teamBId) {
   const [x, y] = [teamAId, teamBId].sort((a, b) => a - b);
   return `${x}-${y}`;
@@ -7296,10 +7515,132 @@ function renderH2hTacticalBoard(teamA, teamB, matchups) {
       <p class="foot-note" style="margin-top:6px">Lines pair each side's Draft XI slot-for-slot (GK vs GK, etc). Green/pink/gold connectors reflect matchups you've recorded a winner for below; grey means no result recorded yet. Uses the "Ability draft XI" tab's picks if you've set one up, otherwise a quick auto top-points XI.</p>
     </div>`;
 }
+// Draggable full-pitch tactical board — two facing XIs (team A defending
+// the bottom goal, team B the top goal) as numbered tokens on one vertical
+// pitch, matching a real tactics-board layout rather than a stat table.
+// Tokens can be dragged anywhere on the pitch (position saved per team
+// pairing); dropping one token onto an opposing token creates a player
+// matchup directly (same state.h2hMatchups list the "Add a matchup" form
+// below feeds), so the board itself is how matchups get made, not just a
+// picture of the squads.
+function h2hDefaultTokenPos(pos, idx, n, isTeamA) {
+  const rowY = { GK: 0.94, DEF: 0.78, MID: 0.62, FWD: 0.50 };
+  const yBase = rowY[pos] ?? 0.7;
+  const y = isTeamA ? yBase : 1 - yBase;
+  const x = (idx + 1) / (n + 1);
+  return { x: x * 100, y: y * 100 };
+}
+function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
+  const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {} });
+  let n = 0;
+  const tokens = [];
+  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+    const rowA = xiA[pos] || [], rowB = xiB[pos] || [];
+    rowA.forEach((p, idx) => {
+      n++;
+      const tokId = `${pos}-${idx}`;
+      const saved = posStore.A[tokId];
+      const def = h2hDefaultTokenPos(pos, idx, rowA.length, true);
+      tokens.push({ team: "A", tokId, p, num: n, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+    });
+    rowB.forEach((p, idx) => {
+      const tokId = `${pos}-${idx}`;
+      const saved = posStore.B[tokId];
+      const def = h2hDefaultTokenPos(pos, idx, rowB.length, false);
+      const numB = tokens.filter(t => t.team === "B").length + 1;
+      tokens.push({ team: "B", tokId, p, num: numB, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+    });
+  });
+  const findWinner = (pa, pb) => {
+    const m = matchups.find(x => (x.playerAId === pa?.id && x.playerBId === pb?.id) || (x.playerAId === pb?.id && x.playerBId === pa?.id));
+    return m ? m.winner : null;
+  };
+  const tokensHtml = tokens.map(t => {
+    if (!t.p) return "";
+    const pairedWith = matchups.find(m => m.playerAId === t.p.id || m.playerBId === t.p.id);
+    let ring = "";
+    if (pairedWith) {
+      const winner = pairedWith.winner;
+      const isThisSideA = pairedWith.playerAId === t.p.id;
+      const won = winner && ((winner === "A" && isThisSideA) || (winner === "B" && !isThisSideA));
+      ring = winner === "EVEN" ? "box-shadow:0 0 0 3px #e0a94f" : won ? "box-shadow:0 0 0 3px #3cd25a" : winner ? "box-shadow:0 0 0 3px rgba(255,255,255,0.25)" : "box-shadow:0 0 0 2px rgba(255,255,255,0.4)";
+    }
+    return `<div class="tac-token team-${t.team === "A" ? "a" : "b"}" draggable="true"
+        data-tok-id="${t.tokId}" data-tok-team="${t.team}" data-tok-player="${t.p.id}"
+        style="left:${t.x}%;top:${t.y}%;${ring}" title="${t.p.webName}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup"}">
+      ${t.num}
+      <span class="tac-token-label">${t.p.webName}</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="tac-board-heads" style="margin-bottom:8px"><span style="color:var(--gold-bright)">● ${teamA.short_name}</span><span style="color:var(--ink-faint);font-size:11px">Drag tokens to move · drop on an opponent to matchup</span><span style="color:#3ba7ff">● ${teamB.short_name}</span></div>
+    <div class="tac-drag-pitch" id="tacDragPitch">
+      <div class="tac-goal-box top"></div>
+      <div class="tac-goal-box bottom"></div>
+      <div class="tac-centre-circle"></div>
+      <div class="tac-halfway"></div>
+      ${tokensHtml}
+    </div>
+    <p class="foot-note" style="margin-top:6px">Formation/personnel comes from the "Ability draft XI" tab (or a quick auto top-points XI if you haven't set one up). Token positions are draggable and saved per matchup — drag one token onto another to record who's marking who.</p>
+  `;
+}
+function wireH2hDraggablePitchBoard(body, teamA, teamB) {
+  const pitch = body.querySelector("#tacDragPitch");
+  if (!pitch) return;
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {} });
+  let dragTok = null;
+  pitch.querySelectorAll("[data-tok-id]").forEach(el => {
+    el.ondragstart = (e) => {
+      dragTok = { tokId: el.dataset.tokId, team: el.dataset.tokTeam, playerId: Number(el.dataset.tokPlayer) };
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setDragImage(el, 17, 17); } catch (err) { /* not all browsers support this */ }
+    };
+    el.ondragover = (e) => { e.preventDefault(); if (dragTok && dragTok.team !== el.dataset.tokTeam) el.classList.add("drag-over-target"); };
+    el.ondragleave = () => { el.classList.remove("drag-over-target"); };
+    el.ondrop = (e) => {
+      e.preventDefault();
+      el.classList.remove("drag-over-target");
+      if (!dragTok) return;
+      const destTeam = el.dataset.tokTeam, destPlayerId = Number(el.dataset.tokPlayer);
+      if (dragTok.team !== destTeam) {
+        // Dropped on an opposing token — create (or update) a matchup
+        // between the two players rather than moving the token, since
+        // dropping onto a player reads as "mark this one", not "stand here".
+        const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
+        const existing = arr.find(m => (m.playerAId === dragTok.playerId && m.playerBId === destPlayerId) || (m.playerAId === destPlayerId && m.playerBId === dragTok.playerId));
+        if (!existing) {
+          const aId = dragTok.team === "A" ? dragTok.playerId : destPlayerId;
+          const bId = dragTok.team === "A" ? destPlayerId : dragTok.playerId;
+          arr.push({ id: "m" + Date.now(), playerAId: aId, playerBId: bId, label: "", winner: null });
+          saveH2hMatchups();
+        }
+        dragTok = null;
+        renderH2H();
+      }
+    };
+  });
+  // Free-drag repositioning within the pitch (own or opposing side, no
+  // restriction — a real tactics board lets you place a marker anywhere).
+  pitch.ondragover = (e) => e.preventDefault();
+  pitch.ondrop = (e) => {
+    if (e.target !== pitch) return; // token-on-token drops are handled above
+    if (!dragTok) return;
+    e.preventDefault();
+    const rect = pitch.getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100));
+    const store = dragTok.team === "A" ? posStore.A : posStore.B;
+    store[dragTok.tokId] = { x, y };
+    saveH2hBoardPos();
+    dragTok = null;
+    renderH2H();
+  };
+}
 function renderH2hMatchups(body, teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
-  const list = state.h2hMatchups[key] || [];
-  const squadA = state.players.filter(p => p.teamId === teamA.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const squadB = state.players.filter(p => p.teamId === teamB.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const POS_ORDER = ["GK", "DEF", "MID", "FWD"];
   const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
@@ -7332,7 +7673,7 @@ function renderH2hMatchups(body, teamA, teamB) {
     `;
   }).join("");
   body.innerHTML = `
-    ${renderH2hTacticalBoard(teamA, teamB, list)}
+    ${renderH2hDraggablePitchBoard(teamA, teamB, list)}
     <div class="card" style="margin:16px 0">
       <div class="detail-block-title">Add a matchup</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -7344,6 +7685,7 @@ function renderH2hMatchups(body, teamA, teamB) {
     </div>
     <div class="matchup-grid">${rows || '<p class="foot-note">No matchups added yet.</p>'}</div>
   `;
+  wireH2hDraggablePitchBoard(body, teamA, teamB);
   document.getElementById("h2hAddMatchupBtn").onclick = () => {
     const playerAId = Number(document.getElementById("h2hMatchupPlayerA").value);
     const playerBId = Number(document.getElementById("h2hMatchupPlayerB").value);
@@ -7415,13 +7757,40 @@ function h2hMatchupsAutoWinner(teamA, teamB) {
   if (a === b) return { winner: "DRAW", a, b };
   return { winner: a > b ? "A" : "B", a, b };
 }
+// Combined XI / Ability draft XI category winners, computed live from
+// whatever's currently saved on those two tabs (summed real season
+// points for each team's picked XI) — so the Scoreboard reflects an edit
+// made on either tab the moment you switch back here, with no separate
+// manual "who won this category" click needed for these two rows.
+function h2hXiAutoWinner(mode, teamA, teamB) {
+  const store = mode === "combined" ? state.h2hCombined : state.h2hDraft;
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const saved = store[key];
+  if (!saved) return { winner: null, a: 0, b: 0 };
+  let a = 0, b = 0;
+  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+    (saved.picks[pos] || []).forEach(id => {
+      if (!id) return;
+      const p = state.players.find(x => x.id === id);
+      if (!p) return;
+      if (p.teamId === teamA.id) a += p.totalPoints || 0;
+      else if (p.teamId === teamB.id) b += p.totalPoints || 0;
+    });
+  });
+  if (!a && !b) return { winner: null, a, b };
+  return { winner: a === b ? "DRAW" : (a > b ? "A" : "B"), a, b };
+}
 function renderH2hScoreboard(body, teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
-  const saved = state.h2hScoreboard[key] || (state.h2hScoreboard[key] = { categories: [
-    { id: "c1", name: "Combined XI (by points)", winner: null },
-    { id: "c2", name: "Ability draft XI", winner: null },
-  ] });
+  const saved = state.h2hScoreboard[key] || (state.h2hScoreboard[key] = { categories: [] });
+  // Older saved boards may still have the two XI categories stored as
+  // manually-clicked entries (ids "c1"/"c2") from before these became
+  // auto-computed rows below — drop them so they don't double-count
+  // alongside the new live versions.
+  saved.categories = saved.categories.filter(c => c.id !== "c1" && c.id !== "c2");
   const auto = h2hMatchupsAutoWinner(teamA, teamB);
+  const autoCombined = h2hXiAutoWinner("combined", teamA, teamB);
+  const autoDraft = h2hXiAutoWinner("draft", teamA, teamB);
 
   let scoreA = 0, scoreB = 0;
   saved.categories.forEach(c => {
@@ -7429,9 +7798,11 @@ function renderH2hScoreboard(body, teamA, teamB) {
     else if (c.winner === "B") scoreB += 1;
     else if (c.winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
   });
-  if (auto.winner === "A") scoreA += 1;
-  else if (auto.winner === "B") scoreB += 1;
-  else if (auto.winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
+  [auto, autoCombined, autoDraft].forEach(res => {
+    if (res.winner === "A") scoreA += 1;
+    else if (res.winner === "B") scoreB += 1;
+    else if (res.winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
+  });
 
   const winnerRow = (c, removable) => `
     <div class="builder-row" style="justify-content:space-between">
@@ -7456,6 +7827,8 @@ function renderH2hScoreboard(body, teamA, teamB) {
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title" style="margin-bottom:8px">Categories</div>
       ${winnerRow({ id: "auto", name: `Player matchups (auto — ${auto.a}-${auto.b})`, winner: auto.winner }, false)}
+      ${winnerRow({ id: "autoCombined", name: `Combined XI by points (auto — ${autoCombined.a}-${autoCombined.b})`, winner: autoCombined.winner }, false)}
+      ${winnerRow({ id: "autoDraft", name: `Ability draft XI by points (auto — ${autoDraft.a}-${autoDraft.b})`, winner: autoDraft.winner }, false)}
       ${saved.categories.map(c => winnerRow(c, true)).join("")}
     </div>
     <div class="card">
@@ -7997,6 +8370,16 @@ setupTableControls();
 setupFdrControls();
 setupRankingsControls();
 setupH2hControls();
+// Anchored (sticky) table headers are offset below the app's own sticky
+// top bar via --header-h, since the top bar's real height varies with
+// viewport (mobile nav wraps differently). Measure it for real instead
+// of hard-coding a guess, and re-measure on resize/orientation change.
+function updateHeaderHeightVar() {
+  const header = document.querySelector("header");
+  if (header) document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+}
+updateHeaderHeightVar();
+window.addEventListener("resize", updateHeaderHeightVar);
 loadData();
 </script>
 </body>
