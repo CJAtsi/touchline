@@ -3809,7 +3809,7 @@ function renderShortlist() {
 
   // Toolbar: show-selected toggle (+ rename/delete when viewing a custom group)
   const toolbar = document.createElement("div");
-  toolbar.style.cssText = "display:flex;gap:8px;margin-bottom:10px;align-items:center";
+  toolbar.className = "shortlist-toolbar";
   toolbar.innerHTML = `
     <button class="dir-btn" id="showSelectedShortlistBtn">Show selected (0)</button>
     <button class="dir-btn" id="deselectAllShortlistBtn">Deselect all</button>
@@ -3858,30 +3858,40 @@ function renderShortlist() {
     return;
   }
 
+  const grid = document.createElement("div");
+  grid.className = "shortlist-grid";
+  el.appendChild(grid);
+  const POS_COLOR = { GK: "#e0a94f", DEF: "#3ba7ff", MID: "#3cd25a", FWD: "#e0529a" };
   for (const item of items) {
     const p = state.players.find(pl => pl.id === item.playerId);
     if (!p) continue;
     const team = state.teamsById[p.teamId];
     const expanded = state.expandedShortlistId === p.id;
     const row = document.createElement("div");
-    row.className = "card";
-    row.style.cssText = "margin-bottom:6px;padding:8px 12px;cursor:pointer";
+    row.className = "sl-card" + (expanded ? " expanded" : "");
+    row.style.setProperty("--pc", POS_COLOR[p.position] || "var(--gold-bright)");
     row.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px" data-toggle="${p.id}">
-        ${playerAvatarHtml(p, 26)}
-        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600">
-          ${p.webName} <span style="color:var(--ink-faint);font-weight:400">· ${team ? team.short_name : ""} · ${p.position}</span>
-        </div>
-        <span class="mono" style="font-size:12px;color:var(--ink-dim);flex-shrink:0">${p.totalPoints}pts</span>
-        <span class="mono" style="font-size:12px;color:var(--gold-bright);flex-shrink:0">${fmtPrice(p.nowCost)}</span>
-        <span style="flex-shrink:0;color:var(--ink-faint);font-size:11px">${expanded ? "▲" : "▼"}</span>
+      <div class="sl-card-actions">
         <input type="checkbox" data-compare-id="${p.id}" ${state.compareSelectionShortlist.has(p.id) ? "checked" : ""} title="Select to compare (Shortlist only)" onclick="event.stopPropagation()" />
-        <button class="star-btn on" data-id="${p.id}" title="Remove from shortlist" style="flex-shrink:0">★</button>
+        <button class="sl-star-btn" data-id="${p.id}" title="Remove from shortlist" onclick="event.stopPropagation()">★</button>
+      </div>
+      <div class="sl-card-top" data-toggle="${p.id}">
+        ${playerAvatarHtml(p, 40)}
+        <div style="flex:1;min-width:0">
+          <div class="sl-card-name">${p.webName}</div>
+          <div class="sl-card-sub">${team ? team.short_name : ""} · <span style="color:${POS_COLOR[p.position] || "inherit"};font-weight:600">${p.position}</span> · ${fmtPrice(p.nowCost)}</div>
+        </div>
+      </div>
+      <div class="sl-card-stats" data-toggle="${p.id}">
+        <div class="sl-card-stat"><span class="sl-card-stat-label">Pts</span><span class="sl-card-stat-val">${p.totalPoints}</span></div>
+        <div class="sl-card-stat"><span class="sl-card-stat-label">Form</span><span class="sl-card-stat-val">${p.form.toFixed(1)}</span></div>
+        <div class="sl-card-stat"><span class="sl-card-stat-label">Next GW</span><span class="sl-card-stat-val" style="color:var(--gold-bright)">${p.epNext.toFixed(1)}</span></div>
+        <div class="sl-card-stat" style="margin-left:auto"><span class="sl-card-chevron" data-toggle="${p.id}">${expanded ? "▲ less" : "▼ more"}</span></div>
       </div>
       ${expanded ? `
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+        <div class="sl-card-detail">
           <div class="mono" style="font-size:12px;color:var(--ink-dim);margin-bottom:8px">
-            form ${p.form.toFixed(1)} · ${p.selectedByPercent.toFixed(1)}% owned · next GW proj. ${p.epNext.toFixed(1)}
+            ${p.selectedByPercent.toFixed(1)}% owned
           </div>
           <div style="margin-bottom:8px">${fixtureTickerHtml(p.teamId, 5)}</div>
           <div style="margin-bottom:8px">
@@ -3900,7 +3910,7 @@ function renderShortlist() {
         </div>
       ` : ""}
     `;
-    el.appendChild(row);
+    grid.appendChild(row);
     if (expanded) renderPlayerHeatmapInto(document.getElementById(`heatmap-shortlist-${p.id}`), p.id);
   }
   el.querySelectorAll("[data-toggle]").forEach(toggleEl => {
@@ -3910,7 +3920,7 @@ function renderShortlist() {
       renderShortlist();
     };
   });
-  el.querySelectorAll(".star-btn").forEach(btn => {
+  el.querySelectorAll(".sl-star-btn").forEach(btn => {
     btn.onclick = (e) => { e.stopPropagation(); toggleShortlist(Number(btn.dataset.id)); };
   });
   el.querySelectorAll("[data-compare-id]").forEach(chk => {
