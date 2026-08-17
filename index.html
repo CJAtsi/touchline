@@ -327,7 +327,15 @@
   .mode-btn.active { color: #fff; border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
   .mode-btn.active .mode-btn-icon { background: rgba(255,255,255,0.22); }
 
-  table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: auto; }
+  /* border-collapse:collapse + position:sticky on <th> is a known
+     combination that renders badly in most browsers — the sticky header
+     cell's background doesn't paint correctly above the scrolling body,
+     so data visibly bleeds up through/over it as you scroll. Switching to
+     separate borders (with zero spacing, so it still looks identical)
+     is the standard fix and doesn't change layout since every border
+     here is single-sided (thead's border-bottom, tbody's border-top) —
+     there were no shared double-borders relying on collapse to merge. */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: auto; }
   thead th {
     text-align: right; padding: 7px 6px; color: var(--ink-dim); font-weight: 600;
     background: #14161fee; white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
