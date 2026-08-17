@@ -839,6 +839,12 @@
     <div class="toolbar" id="projColumnToggles" style="margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <span style="font-size:11px;color:var(--ink-faint)">Columns:</span>
     </div>
+    <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap;align-items:center;gap:10px">
+      <div class="mode-btn-row" id="projViewModeRow"></div>
+      <label id="projFormationWrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Formation
+        <select id="projFormationSelect"></select>
+      </label>
+    </div>
     <div id="projectionsBody"></div>
   </section>
 
@@ -1545,6 +1551,32 @@ function computeFcAttributes(p) {
   ];
 }
 const COMPARE_COLORS = ["#e0529a", "#3ba7ff", "#ffcf4d", "#3cd25a"];
+// Attribute-driven matchup edge: blends each player's 9 FC attributes into
+// one "matchup strength" score weighted by role — an attacker's score
+// leans on Pace/Shooting/Dribbling/Finishing, a defender's on
+// Defending/Physical/Work rate, everyone gets some Passing/Decision making
+// credit regardless of role. Two attackers or two defenders just compare
+// on the same weighting, which is the best a position-blind data set can
+// do without real 1v1 tracking data — this is a suggestion to inform the
+// manual A/=/B call on the matchup card, not a verdict.
+function matchupStrengthScore(p) {
+  const attrs = Object.fromEntries(computeFcAttributes(p).map(a => [a.label, a.value]));
+  const attackWeight = p.position === "FWD" ? 1 : p.position === "MID" ? 0.6 : p.position === "DEF" ? 0.25 : 0.1;
+  const defendWeight = p.position === "DEF" ? 1 : p.position === "GK" ? 0.9 : p.position === "MID" ? 0.5 : 0.2;
+  const attackScore = (attrs["Pace"] + attrs["Shooting"] + attrs["Dribbling"] + attrs["Finishing"]) / 4;
+  const defendScore = (attrs["Defending"] + attrs["Physical"] + attrs["Work rate"]) / 3;
+  const roundScore = (attrs["Passing"] + attrs["Decision making"]) / 2;
+  return attackScore * attackWeight + defendScore * defendWeight + roundScore * 0.3;
+}
+function matchupAttributeEdge(pa, pb) {
+  if (!pa || !pb) return null;
+  const sa = matchupStrengthScore(pa), sb = matchupStrengthScore(pb);
+  const total = sa + sb;
+  if (total <= 0) return null;
+  const pctA = Math.round((sa / total) * 100);
+  const favoured = pctA > 55 ? "A" : pctA < 45 ? "B" : "EVEN";
+  return { pctA, pctB: 100 - pctA, favoured };
+}
 function colorForIndex(i) { return COMPARE_COLORS[i % COMPARE_COLORS.length]; }
 // Builds {label,value}[] (0-99 scale, matching radarChartSvg's expected range)
 // for a given compare tab, so the overlay radar can re-render per-theme.
@@ -1928,6 +1960,7 @@ let state = {
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {},
+  h2hBoardManual: {}, h2hBoardFlip: {}, h2hSavedBoards: {}, h2hBoardMode: {},
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
   h2hCombined: {}, h2hCombinedPickPos: null, h2hCombinedPickSlot: 0,
   h2hScoreboard: {}, h2hSaved: [],
@@ -4335,9 +4368,94 @@ const PROJ_OPTIONAL_COLS = [
   ["minsPerStart", "Mins/start"], ["teamXg", "Team xG"], ["csPct", "CS%"],
   ["contribution", "Team contrib%"], ["defConPct", "DefCon%"], ["bonusExp", "Exp. bonus"],
 ];
+function renderProjViewModeRow() {
+  const row = document.getElementById("projViewModeRow");
+  if (!row) return;
+  const view = state.projView || "table";
+  row.innerHTML = `
+    <button class="mode-btn${view === "table" ? " active" : ""}" data-proj-view="table" style="--mode-glow:rgba(224,169,79,0.55)">
+      <span class="mode-btn-icon">📋</span>Table view
+    </button>
+    <button class="mode-btn${view === "pitch" ? " active" : ""}" data-proj-view="pitch" style="--mode-glow:rgba(76,201,138,0.55)">
+      <span class="mode-btn-icon">⚽</span>Best XI
+    </button>
+  `;
+  row.querySelectorAll("[data-proj-view]").forEach(btn => {
+    btn.onclick = () => {
+      state.projView = btn.dataset.projView;
+      const wrap = document.getElementById("projFormationWrap");
+      if (wrap) wrap.style.display = state.projView === "pitch" ? "flex" : "none";
+      renderProjViewModeRow();
+      renderProjectionsTab();
+    };
+  });
+  const wrap = document.getElementById("projFormationWrap");
+  if (wrap) wrap.style.display = view === "pitch" ? "flex" : "none";
+  const formationSelect = document.getElementById("projFormationSelect");
+  if (formationSelect && !formationSelect.options.length) {
+    formationSelect.innerHTML = Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}">${f}</option>`).join("");
+    formationSelect.value = state.projFormation || "3-4-3";
+    formationSelect.onchange = () => { state.projFormation = formationSelect.value; renderProjectionsTab(); };
+  }
+}
+// Renders a "best XI right now" pitch for the selected GW range: takes the
+// same filtered/projected rows as the table view (min-minutes, form, price
+// filters all still apply) but ignores the position filter, since a pitch
+// needs all four positions to fill a formation. Picks the top-projected
+// player per slot for whichever formation is selected, captain = highest
+// projected starter, reusing the same pitch-row/pitch-slot visual language
+// as the Planner and H2H boards.
+function renderProjectionsPitch(rows) {
+  const body = document.getElementById("projectionsBody");
+  const formationKey = state.projFormation || "3-4-3";
+  const formation = FORMATIONS_H2H[formationKey] || FORMATIONS_H2H["3-4-3"];
+  const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
+  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+  for (const r of rows) byPos[r.p.position].push(r);
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) byPos[pos].sort((a, b) => b.proj - a.proj);
+  const picked = { GK: byPos.GK.slice(0, need.GK), DEF: byPos.DEF.slice(0, need.DEF), MID: byPos.MID.slice(0, need.MID), FWD: byPos.FWD.slice(0, need.FWD) };
+  const allPicked = [...picked.GK, ...picked.DEF, ...picked.MID, ...picked.FWD];
+  const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
+  const totalProj = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
+  const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => picked[pos].length < need[pos]);
+  function fixLabel(r) {
+    return r.fixtures.length
+      ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:1px 5px;margin:1px;font-size:8px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
+      : "";
+  }
+  function slotHtml(r) {
+    if (!r) return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">—</div></div>`;
+    const isCap = captain && r.p.id === captain.p.id;
+    return `
+      <div class="pitch-slot">
+        ${isCap ? '<span class="cap-mark">C</span>' : ""}
+        ${playerAvatarHtml(r.p, 40)}
+        <div class="name-tag">${r.p.webName}</div>
+        <div class="pts-tag mono">${r.proj.toFixed(1)}${isCap ? " (×2)" : ""}</div>
+        ${fixLabel(r)}
+      </div>
+    `;
+  }
+  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos => {
+    const slots = [];
+    for (let i = 0; i < need[pos]; i++) slots.push(slotHtml(picked[pos][i] || null));
+    return `<div class="pitch-row">${slots.join("")}</div>`;
+  }).join("");
+  body.innerHTML = `
+    <div class="proj-pitch-wrap" style="max-width:520px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--ink-faint)">Best XI, ${formationKey}, over the selected GW range</div>
+        <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${totalProj.toFixed(1)} pts</div>
+        ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough eligible players at current filters to fill: ${missing.join(", ")} — loosen min-minutes or price filters.</div>` : ""}
+      </div>
+      <div class="pitch">${pitchRows}</div>
+    </div>
+  `;
+}
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
+  renderProjViewModeRow();
   _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; _teamGaRateCache = null; // recompute fresh each render
   const fromSelect = document.getElementById("projFromGw");
   const toSelect = document.getElementById("projToGw");
@@ -4366,7 +4484,11 @@ function renderProjectionsTab() {
   const assume90 = !!state.projAssume90;
   const sortKey = state.projSortKey || "proj";
   const sortDir = state.projSortDir || "desc";
-  let pool = state.players.filter(p => p.minutes >= minMinutes && (posFilter === "ALL" || p.position === posFilter));
+  const pitchView = (state.projView || "table") === "pitch";
+  // Best-XI pitch view needs every position available to fill a formation,
+  // so it ignores the position filter specifically (all other filters —
+  // min minutes, price, form — still apply, same pool logic otherwise).
+  let pool = state.players.filter(p => p.minutes >= minMinutes && (pitchView || posFilter === "ALL" || p.position === posFilter));
   if (maxPrice) pool = pool.filter(p => (p.nowCost || 0) <= maxPrice);
   if (formFilter === "NEW") pool = pool.filter(p => (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0);
   if (formFilter === "BREAKOUT") pool = pool.filter(p => (p.minutes || 0) > 0 && (p.minutes || 0) < 900 && ((p.xg90 || 0) + (p.xa90 || 0)) > 0.35);
@@ -4374,6 +4496,11 @@ function renderProjectionsTab() {
   const effSortKey = simpleView && sortKey !== "projPerGame" ? "proj" : sortKey;
   rows.sort((a, b) => (a[effSortKey] ?? -Infinity) < (b[effSortKey] ?? -Infinity) ? 1 : -1);
   if (sortDir === "asc") rows.reverse();
+
+  if (pitchView) {
+    renderProjectionsPitch(rows);
+    return;
+  }
 
   if (simpleView) {
     const heatKeys = ["projPerGame"];
@@ -7358,9 +7485,29 @@ async function loadH2hMatchups() {
     const rawPos = await persistGet("h2hBoardPos");
     if (rawPos) state.h2hBoardPos = JSON.parse(rawPos);
   } catch (e) { /* keep defaults */ }
+  try {
+    const rawManual = await persistGet("h2hBoardManual");
+    if (rawManual) state.h2hBoardManual = JSON.parse(rawManual);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const rawFlip = await persistGet("h2hBoardFlip");
+    if (rawFlip) state.h2hBoardFlip = JSON.parse(rawFlip);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const rawSaved = await persistGet("h2hSavedBoards");
+    if (rawSaved) state.h2hSavedBoards = JSON.parse(rawSaved);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const rawMode = await persistGet("h2hBoardMode");
+    if (rawMode) state.h2hBoardMode = JSON.parse(rawMode);
+  } catch (e) { /* keep defaults */ }
 }
 function saveH2hMatchups() { persistSet("h2hMatchups", JSON.stringify(state.h2hMatchups)); }
 function saveH2hBoardPos() { persistSet("h2hBoardPos", JSON.stringify(state.h2hBoardPos)); }
+function saveH2hBoardManual() { persistSet("h2hBoardManual", JSON.stringify(state.h2hBoardManual)); }
+function saveH2hBoardFlip() { persistSet("h2hBoardFlip", JSON.stringify(state.h2hBoardFlip)); }
+function saveH2hSavedBoards() { persistSet("h2hSavedBoards", JSON.stringify(state.h2hSavedBoards)); }
+function saveH2hBoardMode() { persistSet("h2hBoardMode", JSON.stringify(state.h2hBoardMode)); }
 function h2hMatchupKey(teamAId, teamBId) {
   const [x, y] = [teamAId, teamBId].sort((a, b) => a - b);
   return `${x}-${y}`;
@@ -7723,47 +7870,70 @@ function h2hDefaultTokenPos(pos, idx, n, isTeamA) {
   const x = (idx + 1) / (n + 1);
   return { x: x * 100, y: y * 100 };
 }
+function h2hSquadOptionsHtml(teamId) {
+  const squad = state.players.filter(p => p.teamId === teamId).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const POS_ORDER = ["GK", "DEF", "MID", "FWD"];
+  const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
+  return POS_ORDER.map(pos => {
+    const inPos = squad.filter(p => p.position === pos);
+    if (!inPos.length) return "";
+    return `<optgroup label="${POS_LABEL[pos]}">${inPos.map(p => `<option value="${p.id}">${p.webName}</option>`).join("")}</optgroup>`;
+  }).join("");
+}
 function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
-  const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
-  const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {}, sigA: "", sigB: "" });
-  // Saved token positions are keyed by "POS-idx" (e.g. "DEF-2"), which
-  // silently drifts stale if the underlying XI's shape changes (a
-  // different formation, or a player swap that shifts array order/length)
-  // — a saved "DEF-2" from a 5-at-the-back lineup gets reused for a
-  // 4-at-the-back one and lands the wrong token on top of another. Each
-  // side's saved positions are wiped whenever that side's actual player-id
-  // signature no longer matches what they were saved against, so stale
-  // coordinates can never collide with the current lineup.
-  const sigOf = (xi) => ["GK", "DEF", "MID", "FWD"].map(pos => (xi[pos] || []).map(p => p.id).join(",")).join("|");
-  const sigA = sigOf(xiA), sigB = sigOf(xiB);
-  if (posStore.sigA !== sigA) { posStore.A = {}; posStore.sigA = sigA; }
-  if (posStore.sigB !== sigB) { posStore.B = {}; posStore.sigB = sigB; }
-  let n = 0;
-  const tokens = [];
-  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
-    const rowA = xiA[pos] || [], rowB = xiB[pos] || [];
-    rowA.forEach((p, idx) => {
-      n++;
-      const tokId = `${pos}-${idx}`;
-      const saved = posStore.A[tokId];
-      const def = h2hDefaultTokenPos(pos, idx, rowA.length, true);
-      tokens.push({ team: "A", tokId, p, num: n, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+  const mode = state.h2hBoardMode[key] || "auto";
+  const flip = state.h2hBoardFlip[key] || (state.h2hBoardFlip[key] = { A: false, B: false });
+  let tokens = [];
+
+  if (mode === "manual") {
+    // Empty-by-default board: nothing on the pitch until the user picks
+    // players from their squad below to add — a real tactics board you
+    // build up yourself, rather than always inheriting the Ability draft XI.
+    const roster = state.h2hBoardManual[key] || (state.h2hBoardManual[key] = { A: [], B: [] });
+    roster.A.forEach((t, i) => {
+      const p = state.players.find(x => x.id === t.playerId);
+      if (p) tokens.push({ team: "A", tokId: t.tokId, p, num: i + 1, x: t.x, y: t.y });
     });
-    rowB.forEach((p, idx) => {
-      const tokId = `${pos}-${idx}`;
-      const saved = posStore.B[tokId];
-      const def = h2hDefaultTokenPos(pos, idx, rowB.length, false);
-      const numB = tokens.filter(t => t.team === "B").length + 1;
-      tokens.push({ team: "B", tokId, p, num: numB, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+    roster.B.forEach((t, i) => {
+      const p = state.players.find(x => x.id === t.playerId);
+      if (p) tokens.push({ team: "B", tokId: t.tokId, p, num: i + 1, x: t.x, y: t.y });
     });
-  });
-  const findWinner = (pa, pb) => {
-    const m = matchups.find(x => (x.playerAId === pa?.id && x.playerBId === pb?.id) || (x.playerAId === pb?.id && x.playerBId === pa?.id));
-    return m ? m.winner : null;
-  };
+  } else {
+    const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
+    const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {}, sigA: "", sigB: "" });
+    // Saved token positions are keyed by "POS-idx" (e.g. "DEF-2"), which
+    // silently drifts stale if the underlying XI's shape changes (a
+    // different formation, or a player swap that shifts array order/length)
+    // — each side's saved positions are wiped whenever that side's actual
+    // player-id signature no longer matches what they were saved against.
+    const sigOf = (xi) => ["GK", "DEF", "MID", "FWD"].map(pos => (xi[pos] || []).map(p => p.id).join(",")).join("|");
+    const sigA = sigOf(xiA), sigB = sigOf(xiB);
+    if (posStore.sigA !== sigA) { posStore.A = {}; posStore.sigA = sigA; }
+    if (posStore.sigB !== sigB) { posStore.B = {}; posStore.sigB = sigB; }
+    let n = 0;
+    ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+      const rowA = xiA[pos] || [], rowB = xiB[pos] || [];
+      rowA.forEach((p, idx) => {
+        n++;
+        const tokId = `${pos}-${idx}`;
+        const saved = posStore.A[tokId];
+        const def = h2hDefaultTokenPos(pos, idx, rowA.length, true);
+        tokens.push({ team: "A", tokId, p, num: n, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+      });
+      rowB.forEach((p, idx) => {
+        const tokId = `${pos}-${idx}`;
+        const saved = posStore.B[tokId];
+        const def = h2hDefaultTokenPos(pos, idx, rowB.length, false);
+        const numB = tokens.filter(t => t.team === "B").length + 1;
+        tokens.push({ team: "B", tokId, p, num: numB, x: saved?.x ?? def.x, y: saved?.y ?? def.y });
+      });
+    });
+  }
+
   const tokensHtml = tokens.map(t => {
     if (!t.p) return "";
+    const dispX = flip[t.team] ? (100 - t.x) : t.x;
     const pairedWith = matchups.find(m => m.playerAId === t.p.id || m.playerBId === t.p.id);
     let ring = "";
     if (pairedWith) {
@@ -7774,13 +7944,30 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
     }
     return `<div class="tac-token team-${t.team === "A" ? "a" : "b"}" draggable="true"
         data-tok-id="${t.tokId}" data-tok-team="${t.team}" data-tok-player="${t.p.id}"
-        style="left:${t.x}%;top:${t.y}%;${ring}" title="${t.p.webName}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup"}">
+        style="left:${dispX}%;top:${t.y}%;${ring}" title="${t.p.webName}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup, double-click for attributes"}">
       ${t.num}
       <span class="tac-token-label">${t.p.webName}</span>
     </div>`;
   }).join("");
+
+  const savedNames = Object.keys(state.h2hSavedBoards[key] || {});
+
   return `
-    <div class="tac-board-heads" style="margin-bottom:8px"><span style="color:var(--gold-bright)">● ${teamA.short_name}</span><span style="color:var(--ink-faint);font-size:11px">Drag tokens to move · drop on an opponent to matchup</span><span style="color:#3ba7ff">● ${teamB.short_name}</span></div>
+    <div class="tac-board-heads" style="margin-bottom:8px"><span style="color:var(--gold-bright)">● ${teamA.short_name}</span><span style="color:var(--ink-faint);font-size:11px">Drag tokens to move · drop on an opponent to matchup · double-click for attributes</span><span style="color:#3ba7ff">● ${teamB.short_name}</span></div>
+    <div class="toolbar" style="margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <button class="chip-btn small${mode === "auto" ? " active" : ""}" id="tacModeAuto">Auto (Ability draft XI)</button>
+      <button class="chip-btn small${mode === "manual" ? " active" : ""}" id="tacModeManual">Build manually (empty board)</button>
+      <span style="width:1px;background:var(--border);align-self:stretch"></span>
+      <button class="chip-btn small" id="tacFlipA">⇋ Flip ${teamA.short_name}</button>
+      <button class="chip-btn small" id="tacFlipB">⇋ Flip ${teamB.short_name}</button>
+    </div>
+    ${mode === "manual" ? `
+      <div class="toolbar" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <select id="tacAddA"><option value="">+ Add ${teamA.short_name} player…</option>${h2hSquadOptionsHtml(teamA.id)}</select>
+        <select id="tacAddB"><option value="">+ Add ${teamB.short_name} player…</option>${h2hSquadOptionsHtml(teamB.id)}</select>
+        <button class="dir-btn small" id="tacClearBoard">🧹 Clear board</button>
+      </div>
+    ` : ""}
     <div class="tac-drag-pitch" id="tacDragPitch">
       <div class="tac-goal-box top"></div>
       <div class="tac-goal-box bottom"></div>
@@ -7788,15 +7975,126 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
       <div class="tac-halfway"></div>
       ${tokensHtml}
     </div>
-    <p class="foot-note" style="margin-top:6px">Formation/personnel comes from the "Ability draft XI" tab (or a quick auto top-points XI if you haven't set one up). Token positions are draggable and saved per matchup — drag one token onto another to record who's marking who.</p>
+    <div class="toolbar" style="margin-top:8px;flex-wrap:wrap;gap:8px;align-items:center">
+      <input type="text" id="tacSaveName" placeholder="Board name (e.g. \"Their press vs our build-up\")" style="flex:1;min-width:180px" />
+      <button class="dir-btn small" id="tacSaveBoard">💾 Save this layout</button>
+      ${savedNames.length ? savedNames.map(name => `
+        <span class="chip-btn small" style="display:flex;align-items:center;gap:4px">
+          <span data-tac-load="${name}" style="cursor:pointer">${name}</span>
+          <span data-tac-delete="${name}" style="cursor:pointer;color:var(--red);font-weight:700">✕</span>
+        </span>
+      `).join("") : ""}
+    </div>
+    <p class="foot-note" style="margin-top:6px">${mode === "auto" ? 'Formation/personnel comes from the "Ability draft XI" tab (or a quick auto top-points XI if you haven\'t set one up).' : "Empty board — pick players from either squad above to place them, then drag to position. Positions save automatically as you go."} Drop a token onto an opponent's to record a matchup below.</p>
+    <div id="tacAttrModal" class="pitch-modal-backdrop" style="display:none">
+      <div class="pitch-modal-card" style="max-width:320px" id="tacAttrModalCard"></div>
+    </div>
   `;
+}
+function h2hOpenAttrModal(playerId) {
+  const p = state.players.find(x => x.id === playerId);
+  const modal = document.getElementById("tacAttrModal");
+  const card = document.getElementById("tacAttrModalCard");
+  if (!p || !modal || !card) return;
+  const attrs = computeFcAttributes(p);
+  card.innerHTML = `
+    <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 28)}${p.webName} <span style="color:var(--ink-faint);font-size:11px;font-weight:400">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</span></div>
+    <div style="margin-top:8px">
+      ${attrs.map(a => `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="width:110px;font-size:11px;color:var(--ink-dim)">${a.label}</span>
+          <div style="flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden">
+            <div style="width:${a.value}%;height:100%;background:${a.value >= 80 ? "#3cd25a" : a.value >= 50 ? "#e0a94f" : "#e0529a"}"></div>
+          </div>
+          <span class="mono" style="width:24px;text-align:right;font-size:11px">${a.value}</span>
+        </div>
+      `).join("")}
+    </div>
+    <button class="dir-btn small" style="margin-top:8px;width:100%" id="tacAttrCloseBtn">Close</button>
+  `;
+  modal.style.display = "flex";
+  document.getElementById("tacAttrCloseBtn").onclick = () => { modal.style.display = "none"; };
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
 }
 function wireH2hDraggablePitchBoard(body, teamA, teamB) {
   const pitch = body.querySelector("#tacDragPitch");
   if (!pitch) return;
   const key = h2hMatchupKey(teamA.id, teamB.id);
+  const mode = state.h2hBoardMode[key] || "auto";
+  const flip = state.h2hBoardFlip[key] || (state.h2hBoardFlip[key] = { A: false, B: false });
   const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {} });
-  let dragTok = null;
+  const roster = state.h2hBoardManual[key] || (state.h2hBoardManual[key] = { A: [], B: [] });
+  let dragTok = null, clickTimer = null;
+
+  const modeAutoBtn = body.querySelector("#tacModeAuto"), modeManualBtn = body.querySelector("#tacModeManual");
+  if (modeAutoBtn) modeAutoBtn.onclick = () => { state.h2hBoardMode[key] = "auto"; saveH2hBoardMode(); renderH2H(); };
+  if (modeManualBtn) modeManualBtn.onclick = () => { state.h2hBoardMode[key] = "manual"; saveH2hBoardMode(); renderH2H(); };
+  const flipABtn = body.querySelector("#tacFlipA"), flipBBtn = body.querySelector("#tacFlipB");
+  if (flipABtn) flipABtn.onclick = () => { flip.A = !flip.A; saveH2hBoardFlip(); renderH2H(); };
+  if (flipBBtn) flipBBtn.onclick = () => { flip.B = !flip.B; saveH2hBoardFlip(); renderH2H(); };
+
+  const addA = body.querySelector("#tacAddA"), addB = body.querySelector("#tacAddB");
+  if (addA) addA.onchange = () => {
+    const id = Number(addA.value);
+    if (!id) return;
+    if (!roster.A.some(t => t.playerId === id)) {
+      roster.A.push({ tokId: "m" + Date.now(), playerId: id, x: 30 + Math.random() * 40, y: 20 + Math.random() * 60 });
+      saveH2hBoardManual();
+    }
+    renderH2H();
+  };
+  if (addB) addB.onchange = () => {
+    const id = Number(addB.value);
+    if (!id) return;
+    if (!roster.B.some(t => t.playerId === id)) {
+      roster.B.push({ tokId: "m" + Date.now(), playerId: id, x: 30 + Math.random() * 40, y: 20 + Math.random() * 60 });
+      saveH2hBoardManual();
+    }
+    renderH2H();
+  };
+  const clearBtn = body.querySelector("#tacClearBoard");
+  if (clearBtn) clearBtn.onclick = () => {
+    roster.A = []; roster.B = [];
+    saveH2hBoardManual();
+    renderH2H();
+  };
+
+  const saveBtn = body.querySelector("#tacSaveBoard");
+  if (saveBtn) saveBtn.onclick = () => {
+    const nameInput = body.querySelector("#tacSaveName");
+    const name = (nameInput?.value || "").trim();
+    if (!name) return;
+    const snapshot = {
+      mode,
+      pos: mode === "auto" ? JSON.parse(JSON.stringify(posStore)) : null,
+      manual: mode === "manual" ? JSON.parse(JSON.stringify(roster)) : null,
+      flip: JSON.parse(JSON.stringify(flip)),
+    };
+    if (!state.h2hSavedBoards[key]) state.h2hSavedBoards[key] = {};
+    state.h2hSavedBoards[key][name] = snapshot;
+    saveH2hSavedBoards();
+    renderH2H();
+  };
+  body.querySelectorAll("[data-tac-load]").forEach(el => {
+    el.onclick = () => {
+      const snap = (state.h2hSavedBoards[key] || {})[el.dataset.tacLoad];
+      if (!snap) return;
+      state.h2hBoardMode[key] = snap.mode;
+      if (snap.mode === "auto" && snap.pos) state.h2hBoardPos[key] = JSON.parse(JSON.stringify(snap.pos));
+      if (snap.mode === "manual" && snap.manual) state.h2hBoardManual[key] = JSON.parse(JSON.stringify(snap.manual));
+      state.h2hBoardFlip[key] = JSON.parse(JSON.stringify(snap.flip));
+      saveH2hBoardMode(); saveH2hBoardPos(); saveH2hBoardManual(); saveH2hBoardFlip();
+      renderH2H();
+    };
+  });
+  body.querySelectorAll("[data-tac-delete]").forEach(el => {
+    el.onclick = () => {
+      if (state.h2hSavedBoards[key]) delete state.h2hSavedBoards[key][el.dataset.tacDelete];
+      saveH2hSavedBoards();
+      renderH2H();
+    };
+  });
+
   pitch.querySelectorAll("[data-tok-id]").forEach(el => {
     el.ondragstart = (e) => {
       dragTok = { tokId: el.dataset.tokId, team: el.dataset.tokTeam, playerId: Number(el.dataset.tokPlayer) };
@@ -7805,6 +8103,10 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
     };
     el.ondragover = (e) => { e.preventDefault(); if (dragTok && dragTok.team !== el.dataset.tokTeam) el.classList.add("drag-over-target"); };
     el.ondragleave = () => { el.classList.remove("drag-over-target"); };
+    // Double-click a token to open its attribute breakdown rather than
+    // drag/drop it — a real "view the player" action alongside the
+    // positioning/matchup gestures.
+    el.ondblclick = (e) => { e.preventDefault(); h2hOpenAttrModal(Number(el.dataset.tokPlayer)); };
     el.ondrop = (e) => {
       e.preventDefault();
       el.classList.remove("drag-over-target");
@@ -7814,12 +8116,16 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
         // Dropped on an opposing token — create (or update) a matchup
         // between the two players rather than moving the token, since
         // dropping onto a player reads as "mark this one", not "stand here".
+        // Attribute-driven edge is attached as a suggestion alongside the
+        // manual winner call, not a replacement for it.
         const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
         const existing = arr.find(m => (m.playerAId === dragTok.playerId && m.playerBId === destPlayerId) || (m.playerAId === destPlayerId && m.playerBId === dragTok.playerId));
         if (!existing) {
           const aId = dragTok.team === "A" ? dragTok.playerId : destPlayerId;
           const bId = dragTok.team === "A" ? destPlayerId : dragTok.playerId;
-          arr.push({ id: "m" + Date.now(), playerAId: aId, playerBId: bId, label: "", winner: null });
+          const pa = state.players.find(p => p.id === aId), pb = state.players.find(p => p.id === bId);
+          const edge = matchupAttributeEdge(pa, pb);
+          arr.push({ id: "m" + Date.now(), playerAId: aId, playerBId: bId, label: "", winner: null, edge });
           saveH2hMatchups();
         }
         dragTok = null;
@@ -7835,11 +8141,21 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
     if (!dragTok) return;
     e.preventDefault();
     const rect = pitch.getBoundingClientRect();
-    const x = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
+    let x = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100));
-    const store = dragTok.team === "A" ? posStore.A : posStore.B;
-    store[dragTok.tokId] = { x, y };
-    saveH2hBoardPos();
+    // Board may be visually flipped for this side — un-mirror the dropped
+    // screen position before persisting, so the stored coordinate stays in
+    // the same "unflipped" space regardless of the current flip toggle.
+    if (flip[dragTok.team]) x = 100 - x;
+    if (mode === "manual") {
+      const arr = dragTok.team === "A" ? roster.A : roster.B;
+      const entry = arr.find(t => t.tokId === dragTok.tokId);
+      if (entry) { entry.x = x; entry.y = y; saveH2hBoardManual(); }
+    } else {
+      const store = dragTok.team === "A" ? posStore.A : posStore.B;
+      store[dragTok.tokId] = { x, y };
+      saveH2hBoardPos();
+    }
     dragTok = null;
     renderH2H();
   };
@@ -7863,6 +8179,10 @@ function renderH2hMatchups(body, teamA, teamB) {
   const rows = list.map(m => {
     const pa = state.players.find(p => p.id === m.playerAId);
     const pb = state.players.find(p => p.id === m.playerBId);
+    const edge = m.edge || matchupAttributeEdge(pa, pb);
+    const edgeLabel = edge
+      ? `<div style="font-size:10px;color:var(--ink-faint);text-align:center;margin-top:2px" title="Blends each player's FC-style attributes (weighted by role) — a suggestion, not a verdict">Model suggests: ${edge.favoured === "EVEN" ? "roughly even" : `${edge.favoured === "A" ? (pa?.webName || "A") : (pb?.webName || "B")} favoured`} (${edge.pctA}% / ${edge.pctB}%) <span data-matchup-use-edge="${m.id}" style="cursor:pointer;color:var(--gold-bright);text-decoration:underline">use this</span></div>`
+      : "";
     return `
       <div class="matchup-card">
         <div class="matchup-side">${pa ? playerAvatarHtml(pa, 24) : ""}<span>${pa ? pa.webName : "?"}</span></div>
@@ -7874,6 +8194,7 @@ function renderH2hMatchups(body, teamA, teamB) {
             <button class="chip-btn small${m.winner === "B" ? " active" : ""}" data-matchup-winner="${m.id}" data-winner-val="B">B</button>
             <button class="dir-btn small" style="color:var(--red)" data-matchup-remove="${m.id}">✕</button>
           </div>
+          ${edgeLabel}
         </div>
         <div class="matchup-side">${pb ? playerAvatarHtml(pb, 24) : ""}<span>${pb ? pb.webName : "?"}</span></div>
       </div>
@@ -7898,7 +8219,8 @@ function renderH2hMatchups(body, teamA, teamB) {
     const playerBId = Number(document.getElementById("h2hMatchupPlayerB").value);
     if (!playerAId || !playerBId) return;
     const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
-    arr.push({ id: "m" + Date.now(), playerAId, playerBId, label: "", winner: null });
+    const pa = state.players.find(p => p.id === playerAId), pb = state.players.find(p => p.id === playerBId);
+    arr.push({ id: "m" + Date.now(), playerAId, playerBId, label: "", winner: null, edge: matchupAttributeEdge(pa, pb) });
     saveH2hMatchups();
     renderH2H();
   };
@@ -7916,6 +8238,15 @@ function renderH2hMatchups(body, teamA, teamB) {
     btn.onclick = () => {
       const m = list.find(x => x.id === btn.dataset.matchupWinner);
       if (m) { m.winner = btn.dataset.winnerVal; saveH2hMatchups(); renderH2H(); }
+    };
+  });
+  body.querySelectorAll("[data-matchup-use-edge]").forEach(el => {
+    el.onclick = () => {
+      const m = list.find(x => x.id === el.dataset.matchupUseEdge);
+      if (!m) return;
+      const pa = state.players.find(p => p.id === m.playerAId), pb = state.players.find(p => p.id === m.playerBId);
+      const edge = m.edge || matchupAttributeEdge(pa, pb);
+      if (edge) { m.winner = edge.favoured; saveH2hMatchups(); renderH2H(); }
     };
   });
   body.querySelectorAll("[data-matchup-remove]").forEach(btn => {
