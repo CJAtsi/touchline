@@ -259,6 +259,13 @@
   .sl-star-btn:hover { background: rgba(255,182,72,0.15); }
   .sl-card-chevron { font-size: 10px; color: var(--ink-faint); }
   .sl-card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .sl-stats-wrap { border-radius: 14px; overflow: hidden; border: 1px solid var(--border); }
+  .sl-stats-wrap table { border-collapse: separate; border-spacing: 0; }
+  .sl-stats-wrap tbody tr { transition: background 0.1s ease; }
+  .sl-stats-wrap tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+  .sl-stats-wrap tbody tr:hover { background: rgba(255,182,72,0.06); }
+  .sl-stats-wrap td, .sl-stats-wrap th { padding: 8px 8px; }
+  .sl-stats-wrap td.label-col { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .top-tabs-row {
     display: flex; gap: 2px; margin-left: 24px; padding: 4px; border-radius: 12px;
     background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06);
@@ -371,31 +378,30 @@
      is the standard fix and doesn't change layout since every border
      here is single-sided (thead's border-bottom, tbody's border-top) —
      there were no shared double-borders relying on collapse to merge. */
-  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: auto; }
+  /* width:100% alone caps the table at exactly the wrapper's width no
+     matter how many columns it has — with 15-20+ stat columns that forces
+     every header to compress down to a few px each, and combined with
+     word-break:break-word above, header text wraps letter-by-letter (the
+     "Pl ay er / Te a ms" squashed-header bug). min-width:max-content lets
+     the table grow past 100% when it needs to, so .table-wrap's existing
+     overflow-x:auto actually gets used — the table scrolls sideways
+     instead of being crushed. */
+  table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: auto; }
   thead th {
     text-align: right; padding: 7px 6px; color: var(--ink-dim); font-weight: 600;
     background: #14161fee; white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em;
     border-bottom: 1px solid var(--border); line-height: 1.25;
     transition: background 0.12s ease, color 0.12s ease;
-    /* Anchored while scrolling down: table headers stay visible instead of
-       scrolling out of view, offset below the app's own sticky top bar
-       (--header-h, measured at runtime). z-index 5 sits above ordinary
-       body rows (z-index unset) but below the sticky left label column's
-       corner cell (z-index 4 already, bumped to 6 below for the overlap). */
-    position: sticky; top: var(--header-h, 64px); z-index: 5;
-    background: #14161f; /* fully opaque — a translucent sticky header lets
-       scrolled-under row text bleed through visually ("header over data") */
+    /* Sticky/anchored headers were tried across several rounds (top offset,
+       stacked group-row offset, opaque backgrounds) and kept causing worse
+       breakage than the plain scroll-away header it replaced — most
+       recently, badly squashed/vertically-wrapped header text in the live
+       app. Removed outright per explicit instruction: headers now scroll
+       normally with the table, no position:sticky anywhere in this file. */
+    background: #14161f;
   }
   thead th:hover { color: var(--gold-bright); }
-  /* The themed super-header row (PLAYING TIME / VALUE / OUTPUT bands) sits
-     directly above the column-label row when both are sticky — without a
-     stacked offset they'd both anchor to the exact same `top` and overlap
-     each other instead of stacking. Group row anchors first (higher up),
-     column row anchors just below it, added heights below the app's own
-     sticky top bar. */
-  #headGroupRow th { position: sticky; top: var(--header-h, 64px); z-index: 6; }
-  #headRow th { top: calc(var(--header-h, 64px) + 22px); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
   /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at */
   .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child {
@@ -414,20 +420,13 @@
   tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
   tbody tr.detail-row td { background: rgba(255,255,255,0.02); border-top: none; padding: 0; }
   .table-wrap {
-    overflow-x: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
     background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   }
   @media (max-width: 900px) {
     table { font-size: 10.5px; }
     thead th { font-size: 8.5px; padding: 6px 4px; }
     tbody td { padding: 6px 4px; font-size: 10px; }
-    /* Columns are shrunk as far as they reasonably can be at this width,
-       but a table with many columns (e.g. Player Stats with every theme's
-       columns visible) can still not fit — overflow-x:hidden above was
-       simply cutting that content off with no way to reach it. Mobile
-       gets a real horizontal scroll as the safety net; the sticky
-       player-name column above keeps context while scrolling sideways. */
-    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
@@ -3798,6 +3797,14 @@ function renderShortlistCompareInto(container, players) {
   `;
 }
 
+// Next-5-gameweeks projected points strip on each shortlist card — reuses
+// the same projectPoints() model the Projection tab and planner use, so
+// the numbers agree everywhere in the app rather than being a separate
+// estimate.
+function sl5GwProj(p) {
+  const gwIds = getHorizonGws(5);
+  return gwIds.map(gwId => ({ gwId, pts: projectPoints(p, gwId) }));
+}
 function renderShortlist() {
   renderShortlistGroupTabs();
   const el = document.getElementById("shortlistBody");
@@ -3895,6 +3902,16 @@ function renderShortlist() {
         <div class="sl-card-stat"><span class="sl-card-stat-label">Form</span><span class="sl-card-stat-val">${p.form.toFixed(1)}</span></div>
         <div class="sl-card-stat"><span class="sl-card-stat-label">Next GW</span><span class="sl-card-stat-val" style="color:var(--gold-bright)">${p.epNext.toFixed(1)}</span></div>
         <div class="sl-card-stat" style="margin-left:auto"><span class="sl-card-chevron" data-toggle="${p.id}">${expanded ? "▲ less" : "▼ more"}</span></div>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div class="sl-card-stat-label" style="margin-bottom:4px">Next 5 GWs (projected)</div>
+        <div style="display:flex;gap:8px">
+          ${sl5GwProj(p).map(({ gwId, pts }) => `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1">
+              <span style="font-size:9px;color:var(--ink-faint)">GW${gwId}</span>
+              <span class="mono" style="font-size:12px;font-weight:700;color:${pts >= 6 ? "var(--green,#3bb273)" : pts >= 3 ? "var(--ink)" : "var(--ink-faint)"}">${pts.toFixed(1)}</span>
+            </div>`).join("")}
+        </div>
       </div>
       ${expanded ? `
         <div class="sl-card-detail">
@@ -8357,6 +8374,17 @@ function renderH2H() {
       <div class="detail-block-title">This season's meetings (real data)</div>
       <div class="fixture-list">${meetingsHtml}</div>
       <p class="foot-note" style="margin-top:4px;color:var(--ink-faint)">Multi-season head-to-head history isn't exposed by the FPL API, so only this season's meetings are shown above as real data.</p>
+    </div>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="card" style="flex:1;min-width:260px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamA.id, 18)}${teamA.short_name} — current + next 3</div>
+        ${fixtureTickerHtml(teamA.id, 4)}
+      </div>
+      <div class="card" style="flex:1;min-width:260px">
+        <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(teamB.id, 18)}${teamB.short_name} — current + next 3</div>
+        ${fixtureTickerHtml(teamB.id, 4)}
+      </div>
     </div>
 
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
