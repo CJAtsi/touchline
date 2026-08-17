@@ -224,6 +224,41 @@
   .scout-card-name { font-weight: 700; font-size: 13.5px; margin-top: 2px; }
   .scout-card-sub { font-size: 11px; color: var(--ink-faint); margin: 2px 0 6px; }
   .scout-card-reasons { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; }
+  /* ---------- Shortlist: modern card grid ---------- */
+  .shortlist-toolbar {
+    display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;
+  }
+  .shortlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .sl-card {
+    --pc: var(--gold-bright);
+    position: relative; border: 1px solid var(--border); border-radius: 16px; padding: 14px 14px 12px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+  }
+  .sl-card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pc);
+    opacity: 0.85;
+  }
+  .sl-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+  .sl-card.expanded { grid-column: 1 / -1; }
+  .sl-card-top { display: flex; align-items: center; gap: 10px; }
+  .sl-card-name { font-size: 14px; font-weight: 700; line-height: 1.25; }
+  .sl-card-sub { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+  .sl-card-stats { display: flex; gap: 14px; margin-top: 10px; }
+  .sl-card-stat { display: flex; flex-direction: column; gap: 1px; }
+  .sl-card-stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
+  .sl-card-stat-val { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700; color: var(--ink); }
+  .sl-card-actions { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; }
+  .sl-star-btn {
+    background: none; border: none; color: var(--gold-bright); font-size: 16px; cursor: pointer; line-height: 1;
+    padding: 2px; border-radius: 6px; transition: background 0.12s ease;
+  }
+  .sl-star-btn:hover { background: rgba(255,182,72,0.15); }
+  .sl-card-chevron { font-size: 10px; color: var(--ink-faint); }
+  .sl-card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
   .top-tabs-row {
     display: flex; gap: 2px; margin-left: 24px; padding: 4px; border-radius: 12px;
     background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06);
@@ -292,8 +327,9 @@
     background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink);
     border-radius: 999px; padding: 8px 13px; font-size: 13px; font-family: inherit; outline: none;
     transition: border-color 0.15s ease, background 0.15s ease;
-    color-scheme: dark;
+    color-scheme: dark; box-sizing: border-box;
   }
+  input[type=number] { padding: 8px 6px 8px 12px; min-width: 58px; text-align: left; }
   select option { background: #14161f; color: var(--ink); }
   select:focus, input:focus { border-color: var(--border-strong); background: rgba(255,255,255,0.08); }
   .price-range { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
@@ -348,16 +384,18 @@
        body rows (z-index unset) but below the sticky left label column's
        corner cell (z-index 4 already, bumped to 6 below for the overlap). */
     position: sticky; top: var(--header-h, 64px); z-index: 5;
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    background: #14161f; /* fully opaque — a translucent sticky header lets
+       scrolled-under row text bleed through visually ("header over data") */
   }
   thead th:hover { color: var(--gold-bright); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
   /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at */
   .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child {
-    position: sticky; left: 0; z-index: 3; background: #14161fee;
-    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    position: sticky; left: 0; z-index: 3; background: #14161f;
     box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
   }
+  .table-wrap table tbody td.label-col:first-child { background: #1a1a22; }
+  .table-wrap table tbody tr:nth-child(even) td.label-col:first-child { background: #1e1e26; }
   /* Corner cell (sticky top AND left at once) needs to sit above every
      other sticky-top header cell it overlaps while scrolling both ways. */
   .table-wrap table thead th.label-col:first-child { z-index: 6; }
@@ -786,7 +824,7 @@
         <option value="NEW">New / no Prem data yet</option>
         <option value="BREAKOUT">Potential breakouts (low mins, high underlying)</option>
       </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)" title="If a player's average minutes-per-start this season is below this number, their Start% is reduced to reflect rotation risk — e.g. a player who averages 45 mins/start looks less nailed-on than one who averages 90, even with the same status flag. Raise this number to be stricter about who counts as 'nailed on'.">Treat as rotation risk below <input type="number" id="projRotationThreshold" value="70" style="width:56px" /> mins/start ⓘ</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)" title="If a player's average minutes-per-start this season is below this number, their Start% is reduced to reflect rotation risk — e.g. a player who averages 45 mins/start looks less nailed-on than one who averages 90, even with the same status flag. Raise this number to be stricter about who counts as 'nailed on'.">Treat as rotation risk below <input type="number" id="projRotationThreshold" value="70" style="width:70px" /> mins/start ⓘ</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projHeatmapToggle" /> Heatmap</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projSimpleToggle" /> Simple view (pts/game only)</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projAssume90Toggle" /> Assume 90 mins (ceiling)</label>
@@ -833,17 +871,17 @@
       </select>
       <div class="spacer" style="gap:6px">
         <span style="font-size:12px;color:var(--ink-dim)">Opponent rank</span>
-        <input type="number" id="tierRankMin" min="1" max="20" value="1" style="width:48px" />
+        <input type="number" id="tierRankMin" min="1" max="20" value="1" style="width:62px" />
         <span style="color:var(--ink-dim)">–</span>
-        <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:48px" />
+        <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:62px" />
         <button class="dir-btn" id="rankLegendToggle" type="button" title="Show which teams are which rank">?</button>
       </div>
       <div class="spacer" style="gap:6px;flex-direction:column;align-items:flex-start;border-left:1px solid var(--panel-2);padding-left:10px">
         <span style="font-size:10.5px;color:var(--ink-faint)">Add up points across a custom GW range (e.g. GW1–GW5) instead of the whole season</span>
         <div style="display:flex;align-items:center;gap:6px">
-          <input type="number" id="rangeFromGw" min="1" max="38" placeholder="from GW" style="width:60px" />
+          <input type="number" id="rangeFromGw" min="1" max="38" placeholder="from GW" style="width:74px" />
           <span style="color:var(--ink-dim)">–</span>
-          <input type="number" id="rangeToGw" min="1" max="38" placeholder="to GW" style="width:60px" />
+          <input type="number" id="rangeToGw" min="1" max="38" placeholder="to GW" style="width:74px" />
           <button class="dir-btn" id="applyRangeBtn" type="button">Apply</button>
           <span id="rangeStatus" style="font-size:11px;color:var(--ink-faint)"></span>
         </div>
@@ -930,9 +968,9 @@
         <option value="RANGE">Custom GW range…</option>
       </select>
       <span id="tableRangeInputs" style="display:none;align-items:center;gap:6px">
-        <input type="number" id="tableRangeFrom" min="1" max="38" placeholder="from" style="width:52px" />
+        <input type="number" id="tableRangeFrom" min="1" max="38" placeholder="from" style="width:66px" />
         <span style="color:var(--ink-dim)">–</span>
-        <input type="number" id="tableRangeTo" min="1" max="38" placeholder="to" style="width:52px" />
+        <input type="number" id="tableRangeTo" min="1" max="38" placeholder="to" style="width:66px" />
         <button class="dir-btn" id="tableRangeApply" type="button">Apply</button>
       </span>
       <select id="tableOpponentTierSelect">
@@ -1120,11 +1158,6 @@
       </p>
       <div id="teamOverrideList"></div>
     </div>
-
-    <div class="card">
-      <div class="detail-block-title">2026/27 fixture list</div>
-      <div id="fixtureListBody"></div>
-    </div>
   </section>
 </main>
 
@@ -1255,6 +1288,7 @@ function imgFallback(img) {
 const SORT_OPTIONS = [
   ["webName", "Name (A-Z)"], ["teamShort", "Team (A-Z)"], ["position", "Position (GK-DEF-MID-FWD)"],
   ["totalPoints", "Total points"], ["form", "Form"], ["epNext", "Next GW (model proj.)"],
+  ["heatAvg", "🔥 Heatmap average (jack of many trades)"],
   ["pointsPerGame", "Points per game"], ["nowCost", "Price"], ["selectedByPercent", "Ownership %"],
   ["ictIndex", "ICT index"], ["threat", "Threat"], ["creativity", "Creativity"], ["influence", "Influence"],
   ["expectedGoalInvolvements", "xGI (season)"], ["xgi90", "xGI /90"], ["xg90", "xG /90"], ["xa90", "xA /90"],
@@ -1648,28 +1682,32 @@ function buildComparisonTableHtml(players, tab, colMinWidth) {
       const bestB = Math.max(...attrRows.map(row => row[b].value));
       return bestB - bestA;
     });
-    // Standout real stat per player, role-relative — e.g. a defender's
+    // Standout real stat(s) per player, role-relative — e.g. a defender's
     // actual DefCon/90 vs a forward's actual xGI/90, rather than only the
     // abstract 1-99 FC-style categories below (which flatten "good at the
     // defensive side of the game" and "good at the attacking side" into
-    // comparable-looking numbers). Each player's own best-percentile
-    // metric from their own position's stat set is picked independently,
-    // so the row can legitimately show a different stat per player.
+    // comparable-looking numbers). Shows every metric where the player is
+    // genuinely "green" (≥70th percentile among same-position players with
+    // 300+ mins) rather than just their single best stat — a true
+    // all-rounder can rightly show 3-4 green stats, a one-trick player
+    // might only show 1. Falls back to their single best metric if nothing
+    // clears the green bar, so the row is never empty.
+    const GREEN_PCT = 70;
     const standout = players.map(p => {
       const posPool = state.players.filter(x => x.position === p.position && x.minutes >= 300);
       const metrics = scoutMetricsFor(p.position, "base");
-      let best = null;
-      for (const [key, label, dir] of metrics) {
+      const scored = metrics.map(([key, label, dir]) => {
         const v = scoutMetricValue(p, key);
         const pool = posPool.map(x => scoutMetricValue(x, key));
         const pct = dir > 0 ? percentileRank(v, pool) : (100 - percentileRank(v, pool));
-        if (!best || pct > best.pct) best = { label, v, pct };
-      }
-      return best;
+        return { label, v, pct };
+      }).sort((a, b) => b.pct - a.pct);
+      const greens = scored.filter(s => s.pct >= GREEN_PCT);
+      return (greens.length ? greens : scored.slice(0, 1)).slice(0, 4);
     });
-    const standoutRowHtml = standout.some(Boolean) ? `<tr>
-      <td style="font-size:12px;color:var(--ink-dim)">Standout stat</td>
-      ${standout.map((s, ci) => `<td class="mono" style="font-size:12px;text-align:${compareColAlign(ci, standout.length)};color:var(--gold-bright)">${s ? `${s.label} ${Number.isInteger(s.v) ? s.v : s.v.toFixed(2)}` : "—"}</td>`).join("")}
+    const standoutRowHtml = standout.some(s => s.length) ? `<tr>
+      <td style="font-size:12px;color:var(--ink-dim);vertical-align:top">Standout stats</td>
+      ${standout.map((s, ci) => `<td class="mono" style="font-size:11.5px;text-align:${compareColAlign(ci, standout.length)};color:var(--gold-bright);line-height:1.6">${s.length ? s.map(x => `${x.label} ${Number.isInteger(x.v) ? x.v : x.v.toFixed(2)}`).join("<br>") : "—"}</td>`).join("")}
     </tr>
     <tr><td colspan="${players.length + 1}" style="border-top:1px solid var(--border);padding:2px"></td></tr>` : "";
     return `<table style="${tableStyle}">
@@ -1804,7 +1842,7 @@ function attributeEditorHtml(playerId) {
     <div class="attr-row" style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
       <span style="flex:1;font-size:12px;color:var(--ink-dim)">${a.label}</span>
       <input type="range" min="1" max="20" step="1" value="${vals[a.key] || 10}" data-attr-slider="${a.key}" data-attr-player="${playerId}" style="width:110px" />
-      <input type="number" min="1" max="20" step="1" value="${vals[a.key] || 10}" data-attr-num="${a.key}" data-attr-player="${playerId}" class="mono" style="width:46px" />
+      <input type="number" min="1" max="20" step="1" value="${vals[a.key] || 10}" data-attr-num="${a.key}" data-attr-player="${playerId}" class="mono" style="width:60px" />
     </div>
   `).join("");
   return `
@@ -1870,7 +1908,7 @@ let state = {
   // shape (which exact score gets picked) comes from the Weibull+copula
   // grid, tuned by weibullShape/copulaTheta below. All editable — see
   // "Edit prediction model" on the Rankings tab.
-  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.6, copulaTheta: -0.3, piLearningRate: 0.06, piCrossInfluence: 0.6 },
+  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -0.15, piLearningRate: 0.06, piCrossInfluence: 0.6 },
   piRatings: null, // computed once per data load — see computePiRatings()
   oddsData: [], oddsWarnings: [],
   fixtureRunTiers: {
@@ -2572,8 +2610,8 @@ async function seedStartOfSeasonRatings() {
   // these two fields — leaves any other blend-weight edits alone.
   const recalibrated = await persistGet("modelRecalibratedV2");
   if (recalibrated !== "1") {
-    state.modelWeights.weibullShape = 1.6;
-    state.modelWeights.copulaTheta = -0.3;
+    state.modelWeights.weibullShape = 1.15;
+    state.modelWeights.copulaTheta = -0.15;
     saveModelWeights();
     persistSet("modelRecalibratedV2", "1");
   }
@@ -2899,6 +2937,32 @@ function getFiltered() {
     return true;
   });
   const POS_ORDER = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+  // "Sort by heatmap" (a.k.a. jack-of-all-trades sort): averages each
+  // player's normalized 0-1 "how green" position across every column
+  // currently on screen, using the same min/max-per-column normalization
+  // the heatmap shading itself uses — so a player who's solidly green
+  // across many stats (rather than one big spike) ranks highest.
+  if (f.sort === "heatAvg") {
+    const cols = activeColumns();
+    const ranges = computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p));
+    const heatAvgFor = (p0) => {
+      const p = scopedPlayer(p0);
+      let sum = 0, n = 0;
+      cols.forEach(([key]) => {
+        const r = ranges[key];
+        if (!r || r.min === null || r.max === null || r.min === r.max) return;
+        let t = (numericColValue(key, p) - r.min) / (r.max - r.min);
+        if (t === null || Number.isNaN(t)) return;
+        t = Math.max(0, Math.min(1, t));
+        if (HEATMAP_INVERT_KEYS.has(key)) t = 1 - t;
+        sum += t; n++;
+      });
+      return n ? sum / n : 0;
+    };
+    list.forEach(p => { p._heatAvg = heatAvgFor(p); });
+    list.sort((a, b) => (b._heatAvg - a._heatAvg) * (f.dir === "asc" ? -1 : 1));
+    return list.slice(0, 200);
+  }
   list.sort((a, b) => {
     let av, bv;
     if (f.sort === "webName") { av = a.webName.toLowerCase(); bv = b.webName.toLowerCase(); }
@@ -3036,7 +3100,11 @@ function buildToolbarStatics() {
 
   document.getElementById("scoutToggle").onclick = () => {
     const panel = document.getElementById("scoutPanel");
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
+    const btn = document.getElementById("scoutToggle");
+    const nowOpen = panel.style.display === "none";
+    panel.style.display = nowOpen ? "block" : "none";
+    btn.classList.toggle("active", nowOpen);
+    btn.innerHTML = nowOpen ? "✕ Close scout picks (back to full table)" : "🔎 Scout picks";
     renderScoutPanel();
   };
   document.getElementById("showSelectedStatsBtn").onclick = () => {
@@ -3238,6 +3306,19 @@ const SCOUT_THEMES = {
     extraMetrics: [["fixtureEase", "Fixture run", 2]],
     usesFixtureHorizon: true,
   },
+  risky: {
+    label: "Risky value (high ceiling, fewer starts)", short: "🎲 Risky value", color: "#e0529a",
+    // Prioritises Pts/£m/90 (value per 90 mins actually played, i.e.
+    // efficiency when they DO start) rather than Pts/£m (which rewards
+    // nailed-on starters just for accumulating minutes). A soft floor of
+    // ~10 starts keeps this to players with at least some sample size —
+    // not a hard cutoff, just heavily favoured, since early-season this
+    // is exactly the kind of "hasn't played much but explosive when they
+    // do" player this theme exists to surface.
+    weights: { ppm90: 3, starts: 0.6 },
+    extraMetrics: [["ppm90", "Pts/£m/90", 3], ["starts", "Starts", 0.6]],
+    minStartsSoftFloor: 10,
+  },
 };
 // Underlying metric value for a player + metric key. "fixtureEase" is
 // synthetic (not a raw player field) — it depends on the scout fixture
@@ -3297,6 +3378,16 @@ function computeScoutList(pos, themeKey = "base") {
       .map(part => `${part.label} ${Number.isInteger(part.v) ? part.v : part.v.toFixed(2)}`);
     return { p, score, reasons };
   }).sort((a, b) => b.score - a.score);
+  // Soft floor: themes that specify minStartsSoftFloor (e.g. "Risky value")
+  // gently discount players with very few starts rather than excluding them
+  // outright — a player with 3 starts still shows up if their underlying
+  // rate stats are strong, just ranked behind an equally-good player with
+  // more of a track record. Re-sort after applying.
+  if (theme.minStartsSoftFloor) {
+    const floor = theme.minStartsSoftFloor;
+    ranked.forEach(r => { r.score *= 0.5 + 0.5 * Math.min(1, (r.p.starts || 0) / floor); });
+    ranked.sort((a, b) => b.score - a.score);
+  }
   const minScore = theme.minScoreForPositions && theme.minScoreForPositions[pos];
   if (minScore != null && (!ranked.length || ranked[0].score < minScore)) return { weak: true, list: ranked.slice(0, 8) };
   return { weak: false, list: ranked.slice(0, 8) };
@@ -4538,7 +4629,9 @@ function renderPlannerCompare(body) {
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:12px;color:var(--ink-dim)">Gameweek</span>
-        <select id="plannerCompareGwSelect">${gwOptions.map(id => `<option value="${id}"${id === state.plannerCompareGw ? " selected" : ""}>GW${id}</option>`).join("")}</select>
+        <button class="dir-btn" id="compareGwPrev" ${gwOptions.indexOf(state.plannerCompareGw) <= 0 ? "disabled" : ""}>‹</button>
+        <span class="mono" style="font-weight:700;font-size:13px;min-width:44px;text-align:center">GW${state.plannerCompareGw}</span>
+        <button class="dir-btn" id="compareGwNext" ${gwOptions.indexOf(state.plannerCompareGw) >= gwOptions.length - 1 ? "disabled" : ""}>›</button>
         <button class="dir-btn" id="exitCompareBtn" style="margin-left:auto;font-weight:600">← Back to squad view</button>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
@@ -4570,10 +4663,11 @@ function renderPlannerCompare(body) {
     </div>
   `;
   document.getElementById("exitCompareBtn").onclick = () => { state.plannerCompareMode = false; renderPlanner(); };
-  document.getElementById("plannerCompareGwSelect").onchange = (e) => {
-    state.plannerCompareGw = Number(e.target.value);
-    renderPlanner();
-  };
+  const compareGwIdx = gwOptions.indexOf(state.plannerCompareGw);
+  const prevGwBtn = document.getElementById("compareGwPrev");
+  const nextGwBtn = document.getElementById("compareGwNext");
+  if (prevGwBtn) prevGwBtn.onclick = () => { if (compareGwIdx > 0) { state.plannerCompareGw = gwOptions[compareGwIdx - 1]; renderPlanner(); } };
+  if (nextGwBtn) nextGwBtn.onclick = () => { if (compareGwIdx < gwOptions.length - 1) { state.plannerCompareGw = gwOptions[compareGwIdx + 1]; renderPlanner(); } };
   body.querySelectorAll("[data-toggle-draft]").forEach(btn => {
     btn.onclick = () => {
       const id = btn.dataset.toggleDraft;
@@ -4999,7 +5093,27 @@ function renderBuilderList(draft) {
 // clicks) — in which case that manual arrangement is used as long as it's
 // still a legal XI drawn from the current squad. Falls back to auto the
 // moment it stops being valid (e.g. the squad changed since).
+// C and VC should always be preset (like real FPL) rather than requiring a
+// manual pick — auto-assigns the top-2 projected starters the first time a
+// squad has neither set, and keeps re-picking if the current pick(s) fall
+// out of the squad/starting XI entirely.
+function ensureCaptainsPreset(squadIds, gwId, getIds, setIds) {
+  const { captainId, viceCaptainId } = getIds();
+  if (squadIds.length < 11) return;
+  const stillIn = (id) => id && squadIds.includes(id);
+  if (stillIn(captainId) && stillIn(viceCaptainId) && captainId !== viceCaptainId) return;
+  const auto = computeGwResult(squadIds, gwId, null, null, null, null);
+  const ranked = [...auto.starting].sort((a, b) => b.proj - a.proj);
+  const newCap = stillIn(captainId) ? captainId : (ranked[0]?.p.id ?? null);
+  const newVice = stillIn(viceCaptainId) && viceCaptainId !== newCap
+    ? viceCaptainId
+    : (ranked.find(x => x.p.id !== newCap)?.p.id ?? null);
+  setIds(newCap, newVice);
+}
 function getBuilderResult(draft, gwId) {
+  ensureCaptainsPreset(draft.squad, gwId,
+    () => ({ captainId: draft.builderCaptainId, viceCaptainId: draft.builderViceCaptainId }),
+    (cap, vice) => { draft.builderCaptainId = cap; draft.builderViceCaptainId = vice; });
   const auto = computeGwResult(draft.squad, gwId, null, draft.builderCaptainId, null, draft.builderViceCaptainId);
   if (!draft.manualStarterIds) return auto;
   const valid = draft.manualStarterIds.length === 11 &&
@@ -5396,9 +5510,12 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   const el = document.getElementById(`gw-body-${gwId}`);
   if (!el) return;
   const entry = timeline.find(t => t.gwId === gwId);
-  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null, viceCaptainId: null, manualStarterIds: null });
+  const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null, viceCaptainId: draft.builderViceCaptainId || null, manualStarterIds: null });
   if (log.viceCaptainId === undefined) log.viceCaptainId = null;
   if (log.manualStarterIds === undefined) log.manualStarterIds = null;
+  ensureCaptainsPreset(entry.squad, gwId,
+    () => ({ captainId: log.captainId, viceCaptainId: log.viceCaptainId }),
+    (cap, vice) => { log.captainId = cap; log.viceCaptainId = vice; });
   const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId, log.manualStarterIds, log.viceCaptainId);
 
   const chipsAvailable = ["WC", "FH", "BB", "TC"];
@@ -5856,7 +5973,6 @@ function renderRankings() {
   renderFormulaPanels();
   renderRankingsList();
   renderTeamOverrides();
-  renderFixtureList();
   renderOddsStatus();
   renderRankingsPresetList();
 }
@@ -6750,34 +6866,54 @@ function renderFdrModeRow() {
     }).join("");
   }
 }
-function renderFdrPairingsGrid(list, gwIds, curId) {
+// Pairings table now follows whichever FDR mode pill is active (FDR itself,
+// pGoals, pGoals against, Win%, Clean sheet%, 2+ goals) — same metric, same
+// per-fixture "worst of that gameweek" values the main grid already computed
+// (list[].scoresInOrder / modeValsInOrder), so switching the pill above
+// changes both tables together and the pairing ranking is always sortable by
+// the same feature the FDR table itself is currently showing.
+function renderFdrPairingsGrid(list, gwIds, curId, mode) {
   const el = document.getElementById("fdrPairingsGrid");
   if (!el) return;
   if (list.length < 2 || !gwIds.length) { el.innerHTML = ""; return; }
+  const usingMode = mode && mode.key !== "fdr";
+  // For plain FDR, lower combined score = easier = better. For a mode value,
+  // "better" depends on the mode's own invert flag (same convention as
+  // fdrModeColor): non-inverted metrics (pGoals, Win%, CS%, 2+ goals) are
+  // better when HIGHER; pGoals-against is better when LOWER.
+  const higherIsBetter = usingMode && !mode.invert;
   const pairs = [];
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
       let sum = 0, n = 0;
       for (let k = 0; k < gwIds.length; k++) {
-        const sa = a.scoresInOrder[k], sb = b.scoresInOrder[k];
-        const validA = sa !== null && sa !== -Infinity, validB = sb !== null && sb !== -Infinity;
+        const arrA = usingMode ? a.modeValsInOrder : a.scoresInOrder;
+        const arrB = usingMode ? b.modeValsInOrder : b.scoresInOrder;
+        const sa = arrA[k], sb = arrB[k];
+        const validA = sa !== null && sa !== undefined && sa !== -Infinity;
+        const validB = sb !== null && sb !== undefined && sb !== -Infinity;
         if (!validA && !validB) continue; // both blank this gw — skip, not a real rotation choice
-        const best = validA && validB ? Math.min(sa, sb) : (validA ? sa : sb);
+        let best;
+        if (validA && validB) best = higherIsBetter ? Math.max(sa, sb) : Math.min(sa, sb);
+        else best = validA ? sa : sb;
         sum += best; n++;
       }
       if (n === 0) continue;
-      pairs.push({ a: a.t, b: b.t, combined: sum / n, avgA: a.avg, avgB: b.avg, n });
+      pairs.push({ a: a.t, b: b.t, combined: sum / n, avgA: usingMode ? a.avgMode : a.avg, avgB: usingMode ? b.avgMode : b.avg, n });
     }
   }
-  pairs.sort((x, y) => x.combined - y.combined);
+  pairs.sort((x, y) => higherIsBetter ? (y.combined - x.combined) : (x.combined - y.combined));
   const top = pairs.slice(0, 20);
-  const head = `<tr><th class="label-col">Pairing</th><th>Best-of-both avg FDR</th><th>Club A avg</th><th>Club B avg</th></tr>`;
+  const metricLabel = usingMode ? `Best-of-both avg ${mode.label}` : "Best-of-both avg FDR";
+  const fmt = (v) => v === null || v === undefined ? "–" : (usingMode && mode.fmt ? mode.fmt(v) : v.toFixed(1));
+  const combinedColor = (v) => usingMode ? (fdrModeColor(mode, v) || "var(--gold-bright)") : fdrGradientColor(v);
+  const head = `<tr><th class="label-col">Pairing</th><th>${metricLabel}</th><th>Club A avg</th><th>Club B avg</th></tr>`;
   const rows = top.map(pr => `<tr>
     <td class="label-col" style="display:flex;align-items:center;gap:6px">${kitSvg(pr.a.id, 18)}${pr.a.short_name} <span style="color:var(--ink-faint)">+</span> ${kitSvg(pr.b.id, 18)}${pr.b.short_name}</td>
-    <td class="mono" style="font-size:12px;font-weight:700;color:${fdrGradientColor(pr.combined)}">${pr.combined.toFixed(2)}</td>
-    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.a.short_name} ${pr.avgA !== null ? pr.avgA.toFixed(1) : "–"}</td>
-    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.b.short_name} ${pr.avgB !== null ? pr.avgB.toFixed(1) : "–"}</td>
+    <td class="mono" style="font-size:12px;font-weight:700;color:${combinedColor(pr.combined)}">${fmt(pr.combined)}</td>
+    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.a.short_name} ${fmt(pr.avgA)}</td>
+    <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.b.short_name} ${fmt(pr.avgB)}</td>
   </tr>`).join("");
   el.innerHTML = `<thead>${head}</thead><tbody>${rows || `<tr><td colspan="4" class="foot-note" style="padding:10px">Not enough fixture data in this range to compute pairings.</td></tr>`}</tbody>`;
 }
@@ -6820,6 +6956,9 @@ function renderFdrGrid() {
     const modeValsInRange = []; // active-theme value per fixture, for "sort by active theme"
     const scoresInOrder = []; // per-fixture FDR score, in chronological gw
                                // order, for the good-run streak bar below
+    const modeValsInOrder = []; // same, but in the currently active FDR_MODE's
+                               // units (pGoals/CS%/etc) — feeds the pairings
+                               // table so it can sort/combine by that metric too
     const cells = gwIds.map(gwId => {
       const fixtures = byGw[gwId] || [];
       const bg = gwId === curId ? "background:var(--panel-2)" : "";
@@ -6827,12 +6966,13 @@ function renderFdrGrid() {
       // A gameweek can have 0, 1, or (rarely, on a blank/double) 2+
       // fixtures — use the toughest of that week's fixtures for the streak
       // bar so a double-gameweek with one hard game doesn't get flattered.
-      let worstThisGw = -Infinity;
+      let worstThisGw = -Infinity, worstModeValThisGw = null;
       const html = fixtures.map(fx => {
         const opp = state.teamsById[fx.oppId];
         const score = customFdr(t.id, fx.oppId, fx.isHome);
         scoresInRange.push(score);
-        if (score > worstThisGw) worstThisGw = score;
+        const isWorstSoFar = score > worstThisGw;
+        if (isWorstSoFar) worstThisGw = score;
         let est = null;
         if (needsScoreline) {
           est = estimateScoreline(t.id, fx.oppId, fx.isHome);
@@ -6853,6 +6993,7 @@ function renderFdrGrid() {
         const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
         const modeVal = mode.key !== "fdr" && est ? mode.value(est, fx.isHome) : null;
         if (modeVal !== null && modeVal !== undefined) modeValsInRange.push(modeVal);
+        if (isWorstSoFar && modeVal !== null && modeVal !== undefined) worstModeValThisGw = modeVal;
         let label, bgColor;
         if (mode.key !== "fdr" && modeVal !== null) {
           label = `${oppLabel}<br>${mode.fmt(modeVal)}`;
@@ -6867,6 +7008,7 @@ function renderFdrGrid() {
         return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${bgColor};margin:1px auto;width:56px;font-size:9px;line-height:1.3" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) — ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
       }).join("");
       scoresInOrder.push(worstThisGw);
+      modeValsInOrder.push(worstModeValThisGw);
       return `<td style="padding:4px 4px 2px;${bg}">${html}</td>`;
     });
     const avg = scoresInRange.length ? scoresInRange.reduce((a, b) => a + b, 0) / scoresInRange.length : null;
@@ -6887,10 +7029,10 @@ function renderFdrGrid() {
         curRun = { start: -1, len: 0 };
       }
     });
-    return { t, cells, bestRun, scoresInOrder, avg, avgGf, avgGa, avgGd, avgMode };
+    return { t, cells, bestRun, scoresInOrder, modeValsInOrder, avg, avgGf, avgGa, avgGd, avgMode };
   });
 
-  renderFdrPairingsGrid(list, gwIds, curId);
+  renderFdrPairingsGrid(list, gwIds, curId, mode);
 
   if (sortBy === "easiest") list.sort((a, b) => (a.avg ?? 99) - (b.avg ?? 99));
   else if (sortBy === "hardest") list.sort((a, b) => (b.avg ?? -99) - (a.avg ?? -99));
@@ -7649,6 +7791,8 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
 }
 function renderH2hMatchups(body, teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
+  const list = state.h2hMatchups[key] || [];
+  const squadA = state.players.filter(p => p.teamId === teamA.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const squadB = state.players.filter(p => p.teamId === teamB.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const POS_ORDER = ["GK", "DEF", "MID", "FWD"];
   const POS_LABEL = { GK: "Goalkeepers", DEF: "Defenders", MID: "Midfielders", FWD: "Forwards" };
@@ -8237,7 +8381,7 @@ function setupRankingsControls() {
   };
   const resetModelBtn = document.getElementById("resetModelBtn");
   if (resetModelBtn) resetModelBtn.onclick = () => {
-    state.modelWeights = { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.6, copulaTheta: -0.3, piLearningRate: 0.06, piCrossInfluence: 0.6 };
+    state.modelWeights = { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -0.15, piLearningRate: 0.06, piCrossInfluence: 0.6 };
     saveModelWeights();
     renderRankings();
     renderFdrGrid();
