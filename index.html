@@ -176,6 +176,14 @@
   .tac-goal-box { position: absolute; left: 30%; width: 40%; height: 10%; border: 2px solid rgba(255,255,255,0.3); }
   .tac-goal-box.top { top: 0; border-top: none; }
   .tac-goal-box.bottom { bottom: 0; border-bottom: none; }
+  /* Horizontal orientation: same coordinate space, stretched into a
+     landscape box with goal ends on left/right instead of top/bottom. */
+  .tac-drag-pitch.horiz { aspect-ratio: 4 / 3; max-width: 640px; background: linear-gradient(90deg, #1e3d24, #234a2b); }
+  .tac-drag-pitch.horiz::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 10%, rgba(255,255,255,0.0) 10% 20%); }
+  .tac-drag-pitch.horiz .tac-halfway { left: 50%; right: auto; top: 4%; bottom: 4%; height: auto; width: 0; border-top: none; border-left: 2px solid rgba(255,255,255,0.35); }
+  .tac-drag-pitch.horiz .tac-goal-box { left: auto; top: 30%; width: 10%; height: 40%; }
+  .tac-drag-pitch.horiz .tac-goal-box.top { left: 0; border-top: 2px solid rgba(255,255,255,0.3); border-left: none; }
+  .tac-drag-pitch.horiz .tac-goal-box.bottom { right: 0; bottom: auto; border-bottom: 2px solid rgba(255,255,255,0.3); border-right: none; }
   .tac-token {
     position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -800,7 +808,7 @@
 
 <header>
   <div class="header-inner">
-    <div class="brand"><span class="brand-mark"><img src="fft-logo.png" alt="FFT" /></span>FFT</div>
+    <div class="brand"><span class="brand-mark"><img src="data:image/png;base64,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" alt="FFT" /></span>FFT</div>
     <div id="topTabs" class="top-tabs-row"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);white-space:nowrap;margin-left:auto">
       <input type="checkbox" id="preferKitsToggle" /> Show kits instead of photos
@@ -1126,14 +1134,13 @@
 
   <section id="tab-tacboard" style="display:none">
     <h1 class="page-title">Tactical board</h1>
-    <p class="page-sub">Pick a club to see its best available XI laid out on the pitch — a quick way to eyeball shape and personnel before a wildcard or a matchup, separate from Head-to-head's two-team comparison.</p>
-    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
-      <select id="tacboardFormation"></select>
+    <p class="page-sub">Pick two clubs and drag players around a shared pitch to plan matchups, press setups, or "what if" tactical tweaks — the same drag/drop board as Head-to-head's Player matchups sub-tab, as its own dedicated space.</p>
+    <div class="toolbar" style="margin-bottom:14px">
+      <select id="tacboardTeamA"></select>
+      <span style="color:var(--ink-dim);align-self:center">vs</span>
+      <select id="tacboardTeamB"></select>
     </div>
-    <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
-      <div id="tacboardTeamList" style="min-width:150px;max-width:190px;display:flex;flex-direction:column;gap:3px;max-height:70vh;overflow-y:auto"></div>
-      <div id="tacboardBody" style="flex:1;min-width:280px"></div>
-    </div>
+    <div id="tacboardBody"></div>
   </section>
 
   <section id="tab-rankings" style="display:none">
@@ -1994,7 +2001,7 @@ let state = {
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {},
-  h2hBoardManual: {}, h2hBoardFlip: {}, h2hSavedBoards: {}, h2hBoardMode: {},
+  h2hBoardManual: {}, h2hBoardFlip: {}, h2hSavedBoards: {}, h2hBoardMode: {}, tacOrientation: {}, tacboard: { teamA: null, teamB: null },
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
   h2hCombined: {}, h2hCombinedPickPos: null, h2hCombinedPickSlot: 0,
   h2hScoreboard: {}, h2hSaved: [],
@@ -8003,6 +8010,11 @@ function renderH2hTacticalBoard(teamA, teamB, matchups) {
 // matchup directly (same state.h2hMatchups list the "Add a matchup" form
 // below feeds), so the board itself is how matchups get made, not just a
 // picture of the squads.
+// Generic rerender hook so the draggable pitch board / matchups code
+// (shared between H2H's "Player matchups" sub-tab and the standalone
+// Tactical board tab) can trigger the right screen to redraw after a
+// drag/drop or button click, whichever tab is currently using it.
+let activeBoardRerender = () => {};
 function h2hDefaultTokenPos(pos, idx, n, isTeamA) {
   const rowY = { GK: 0.94, DEF: 0.78, MID: 0.62, FWD: 0.50 };
   const yBase = rowY[pos] ?? 0.7;
@@ -8100,6 +8112,9 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
       <span style="width:1px;background:var(--border);align-self:stretch"></span>
       <button class="chip-btn small" id="tacFlipA">⇋ Flip ${teamA.short_name}</button>
       <button class="chip-btn small" id="tacFlipB">⇋ Flip ${teamB.short_name}</button>
+      <span style="width:1px;background:var(--border);align-self:stretch"></span>
+      <button class="chip-btn small${(state.tacOrientation[key] || "vertical") === "vertical" ? " active" : ""}" id="tacOrientV">↕ Vertical</button>
+      <button class="chip-btn small${(state.tacOrientation[key] || "vertical") === "horizontal" ? " active" : ""}" id="tacOrientH">↔ Horizontal</button>
     </div>
     ${mode === "manual" ? `
       <div class="toolbar" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
@@ -8108,7 +8123,7 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
         <button class="dir-btn small" id="tacClearBoard">🧹 Clear board</button>
       </div>
     ` : ""}
-    <div class="tac-drag-pitch" id="tacDragPitch">
+    <div class="tac-drag-pitch${(state.tacOrientation[key] || "vertical") === "horizontal" ? " horiz" : ""}" id="tacDragPitch">
       <div class="tac-goal-box top"></div>
       <div class="tac-goal-box bottom"></div>
       <div class="tac-centre-circle"></div>
@@ -8167,11 +8182,14 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
   let dragTok = null, clickTimer = null;
 
   const modeAutoBtn = body.querySelector("#tacModeAuto"), modeManualBtn = body.querySelector("#tacModeManual");
-  if (modeAutoBtn) modeAutoBtn.onclick = () => { state.h2hBoardMode[key] = "auto"; saveH2hBoardMode(); renderH2H(); };
-  if (modeManualBtn) modeManualBtn.onclick = () => { state.h2hBoardMode[key] = "manual"; saveH2hBoardMode(); renderH2H(); };
+  if (modeAutoBtn) modeAutoBtn.onclick = () => { state.h2hBoardMode[key] = "auto"; saveH2hBoardMode(); activeBoardRerender(); };
+  if (modeManualBtn) modeManualBtn.onclick = () => { state.h2hBoardMode[key] = "manual"; saveH2hBoardMode(); activeBoardRerender(); };
   const flipABtn = body.querySelector("#tacFlipA"), flipBBtn = body.querySelector("#tacFlipB");
-  if (flipABtn) flipABtn.onclick = () => { flip.A = !flip.A; saveH2hBoardFlip(); renderH2H(); };
-  if (flipBBtn) flipBBtn.onclick = () => { flip.B = !flip.B; saveH2hBoardFlip(); renderH2H(); };
+  if (flipABtn) flipABtn.onclick = () => { flip.A = !flip.A; saveH2hBoardFlip(); activeBoardRerender(); };
+  if (flipBBtn) flipBBtn.onclick = () => { flip.B = !flip.B; saveH2hBoardFlip(); activeBoardRerender(); };
+  const orientVBtn = body.querySelector("#tacOrientV"), orientHBtn = body.querySelector("#tacOrientH");
+  if (orientVBtn) orientVBtn.onclick = () => { state.tacOrientation[key] = "vertical"; activeBoardRerender(); };
+  if (orientHBtn) orientHBtn.onclick = () => { state.tacOrientation[key] = "horizontal"; activeBoardRerender(); };
 
   const addA = body.querySelector("#tacAddA"), addB = body.querySelector("#tacAddB");
   if (addA) addA.onchange = () => {
@@ -8181,7 +8199,7 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
       roster.A.push({ tokId: "m" + Date.now(), playerId: id, x: 30 + Math.random() * 40, y: 20 + Math.random() * 60 });
       saveH2hBoardManual();
     }
-    renderH2H();
+    activeBoardRerender();
   };
   if (addB) addB.onchange = () => {
     const id = Number(addB.value);
@@ -8190,13 +8208,13 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
       roster.B.push({ tokId: "m" + Date.now(), playerId: id, x: 30 + Math.random() * 40, y: 20 + Math.random() * 60 });
       saveH2hBoardManual();
     }
-    renderH2H();
+    activeBoardRerender();
   };
   const clearBtn = body.querySelector("#tacClearBoard");
   if (clearBtn) clearBtn.onclick = () => {
     roster.A = []; roster.B = [];
     saveH2hBoardManual();
-    renderH2H();
+    activeBoardRerender();
   };
 
   const saveBtn = body.querySelector("#tacSaveBoard");
@@ -8213,7 +8231,7 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
     if (!state.h2hSavedBoards[key]) state.h2hSavedBoards[key] = {};
     state.h2hSavedBoards[key][name] = snapshot;
     saveH2hSavedBoards();
-    renderH2H();
+    activeBoardRerender();
   };
   body.querySelectorAll("[data-tac-load]").forEach(el => {
     el.onclick = () => {
@@ -8224,14 +8242,14 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
       if (snap.mode === "manual" && snap.manual) state.h2hBoardManual[key] = JSON.parse(JSON.stringify(snap.manual));
       state.h2hBoardFlip[key] = JSON.parse(JSON.stringify(snap.flip));
       saveH2hBoardMode(); saveH2hBoardPos(); saveH2hBoardManual(); saveH2hBoardFlip();
-      renderH2H();
+      activeBoardRerender();
     };
   });
   body.querySelectorAll("[data-tac-delete]").forEach(el => {
     el.onclick = () => {
       if (state.h2hSavedBoards[key]) delete state.h2hSavedBoards[key][el.dataset.tacDelete];
       saveH2hSavedBoards();
-      renderH2H();
+      activeBoardRerender();
     };
   });
 
@@ -8269,7 +8287,7 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
           saveH2hMatchups();
         }
         dragTok = null;
-        renderH2H();
+        activeBoardRerender();
       }
     };
   });
@@ -8297,7 +8315,7 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
       saveH2hBoardPos();
     }
     dragTok = null;
-    renderH2H();
+    activeBoardRerender();
   };
 }
 function renderH2hMatchups(body, teamA, teamB) {
@@ -8362,7 +8380,7 @@ function renderH2hMatchups(body, teamA, teamB) {
     const pa = state.players.find(p => p.id === playerAId), pb = state.players.find(p => p.id === playerBId);
     arr.push({ id: "m" + Date.now(), playerAId, playerBId, label: "", winner: null, edge: matchupAttributeEdge(pa, pb) });
     saveH2hMatchups();
-    renderH2H();
+    activeBoardRerender();
   };
   body.querySelectorAll("[data-matchup-label]").forEach(input => {
     let t;
@@ -8377,7 +8395,7 @@ function renderH2hMatchups(body, teamA, teamB) {
   body.querySelectorAll("[data-matchup-winner]").forEach(btn => {
     btn.onclick = () => {
       const m = list.find(x => x.id === btn.dataset.matchupWinner);
-      if (m) { m.winner = btn.dataset.winnerVal; saveH2hMatchups(); renderH2H(); }
+      if (m) { m.winner = btn.dataset.winnerVal; saveH2hMatchups(); activeBoardRerender(); }
     };
   });
   body.querySelectorAll("[data-matchup-use-edge]").forEach(el => {
@@ -8386,14 +8404,14 @@ function renderH2hMatchups(body, teamA, teamB) {
       if (!m) return;
       const pa = state.players.find(p => p.id === m.playerAId), pb = state.players.find(p => p.id === m.playerBId);
       const edge = m.edge || matchupAttributeEdge(pa, pb);
-      if (edge) { m.winner = edge.favoured; saveH2hMatchups(); renderH2H(); }
+      if (edge) { m.winner = edge.favoured; saveH2hMatchups(); activeBoardRerender(); }
     };
   });
   body.querySelectorAll("[data-matchup-remove]").forEach(btn => {
     btn.onclick = () => {
       state.h2hMatchups[key] = (state.h2hMatchups[key] || []).filter(x => x.id !== btn.dataset.matchupRemove);
       saveH2hMatchups();
-      renderH2H();
+      activeBoardRerender();
     };
   });
 }
@@ -8848,7 +8866,7 @@ function renderH2H() {
 
   if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "draftxi") { renderH2hDraftXi(body, teamA, teamB); return; }
-  if (state.h2hViewMode === "matchups") { renderH2hMatchups(body, teamA, teamB); return; }
+  if (state.h2hViewMode === "matchups") { activeBoardRerender = renderH2H; renderH2hMatchups(body, teamA, teamB); return; }
   if (state.h2hViewMode === "scoreboard") { renderH2hScoreboard(body, teamA, teamB); return; }
   // --- real data: this season's meetings between the two clubs ---
   const meetings = (state.allFixtures || []).filter(f =>
@@ -9100,83 +9118,38 @@ function setupRankingsPresets() {
 }
 
 // ---------- tactical board (standalone tab) ----------
-// Single-team version of the H2H tactical board: pick a club from a list,
-// see its best-available XI (reusing the same auto-draft-XI logic as
-// H2H's "Ability draft XI") laid out on a pitch in a chosen formation.
-// Kept deliberately separate from the H2H board — that one is about
-// comparing two teams' players slot-for-slot; this is about seeing one
-// team's shape/personnel at a glance.
-function tacboardAutoXi(team, formationKey) {
-  const formation = FORMATIONS_H2H[formationKey] || FORMATIONS_H2H["3-4-3"];
-  const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-  const out = { GK: [], DEF: [], MID: [], FWD: [] };
-  const used = new Set();
-  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
-    out[pos] = state.players
-      .filter(p => p.teamId === team.id && p.position === pos && !used.has(p.id))
-      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
-      .slice(0, need[pos]);
-    out[pos].forEach(p => used.add(p.id));
-  });
-  return { xi: out, need };
-}
-function renderTacboardTeamList() {
-  const listEl = document.getElementById("tacboardTeamList");
-  const teams = Object.values(state.teamsById || {}).sort((a, b) => a.name.localeCompare(b.name));
-  listEl.innerHTML = teams.map(t => `
-    <button class="chip-btn" data-tacboard-team="${t.id}" style="justify-content:flex-start;text-align:left;${state.tacboardTeamId === t.id ? "background:var(--pink);color:#0b1310;font-weight:700" : ""}">${t.name}</button>
-  `).join("");
-  listEl.querySelectorAll("[data-tacboard-team]").forEach(btn => {
-    btn.onclick = () => {
-      state.tacboardTeamId = Number(btn.dataset.tacboardTeam);
-      renderTacboardTab();
-    };
-  });
+// A dedicated home for the same draggable pitch board used inside H2H's
+// "Player matchups" sub-tab (renderH2hMatchups/renderH2hDraggablePitchBoard/
+// wireH2hDraggablePitchBoard) — reused as-is rather than duplicated, so
+// auto/manual XI, flip, orientation, save/load layouts, drag-to-matchup
+// and the matchups list all behave identically here. Uses its own
+// state.tacboard.{teamA,teamB} pair so picking teams here doesn't disturb
+// whatever's selected on the H2H tab; if the same pairing is chosen on
+// both tabs the underlying board/matchup data is shared, which is fine —
+// it's the same board either way.
+function populateTacboardSelects() {
+  const selA = document.getElementById("tacboardTeamA"), selB = document.getElementById("tacboardTeamB");
+  if (!selA || !selB || selA.options.length) return;
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  for (const sel of [selA, selB]) {
+    sel.innerHTML = sorted.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  }
+  state.tacboard.teamA = sorted[0]?.id;
+  state.tacboard.teamB = sorted[1]?.id;
+  selA.value = state.tacboard.teamA;
+  selB.value = state.tacboard.teamB;
 }
 function renderTacboardTab() {
-  renderTacboardTeamList();
+  populateTacboardSelects();
   const body = document.getElementById("tacboardBody");
-  const teams = Object.values(state.teamsById || {});
-  if (!teams.length) { body.innerHTML = ""; return; }
-  if (!state.tacboardTeamId) state.tacboardTeamId = teams.sort((a, b) => a.name.localeCompare(b.name))[0].id;
-  const team = state.teamsById[state.tacboardTeamId];
-  if (!team) { body.innerHTML = ""; return; }
-  const formationKey = state.tacboardFormation || "3-4-3";
-  const { xi, need } = tacboardAutoXi(team, formationKey);
-  function slotHtml(p) {
-    if (!p) return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">—</div></div>`;
-    return `
-      <div class="pitch-slot">
-        ${playerAvatarHtml(p, 40)}
-        <div class="name-tag">${p.webName}</div>
-        <div class="pts-tag mono">${p.totalPoints || 0} pts</div>
-      </div>
-    `;
-  }
-  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos => {
-    const slots = [];
-    for (let i = 0; i < need[pos]; i++) slots.push(slotHtml(xi[pos][i] || null));
-    return `<div class="pitch-row">${slots.join("")}</div>`;
-  }).join("");
-  const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => xi[pos].length < need[pos]);
-  body.innerHTML = `
-    <div class="proj-pitch-wrap" style="max-width:520px;margin:0 auto">
-      <div style="text-align:center;margin-bottom:10px">
-        <div style="font-size:15px;font-weight:700">${team.name}</div>
-        <div style="font-size:12px;color:var(--ink-faint)">Best-available XI, ${formationKey}, ranked by total points this season</div>
-        ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough contracted players to fill: ${missing.join(", ")}.</div>` : ""}
-      </div>
-      <div class="pitch">${pitchRows}</div>
-    </div>
-  `;
+  const teamA = state.teamsById[state.tacboard.teamA], teamB = state.teamsById[state.tacboard.teamB];
+  if (!teamA || !teamB || !body) return;
+  activeBoardRerender = renderTacboardTab;
+  renderH2hMatchups(body, teamA, teamB);
 }
 function setupTacboardControls() {
-  const formationSelect = document.getElementById("tacboardFormation");
-  if (formationSelect && !formationSelect.options.length) {
-    formationSelect.innerHTML = Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}">${f}</option>`).join("");
-    formationSelect.value = state.tacboardFormation || "3-4-3";
-    formationSelect.onchange = () => { state.tacboardFormation = formationSelect.value; renderTacboardTab(); };
-  }
+  document.getElementById("tacboardTeamA").onchange = (e) => { state.tacboard.teamA = Number(e.target.value); renderTacboardTab(); };
+  document.getElementById("tacboardTeamB").onchange = (e) => { state.tacboard.teamB = Number(e.target.value); renderTacboardTab(); };
 }
 
 // ---------- tabs ----------
