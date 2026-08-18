@@ -9,29 +9,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg-0: #0a0d16;
-    --bg-1: #0c0f1a;
-    --panel: rgba(255,255,255,0.055);
-    --panel-2: rgba(255,255,255,0.085);
-    --panel-3: rgba(255,255,255,0.13);
-    --border: rgba(255,255,255,0.10);
-    --border-strong: rgba(255,255,255,0.24);
-    --ink: #f2f3f8;
-    --ink-dim: #a6acc2;
-    --ink-faint: #767c92;
-    --gold: #ffb648;
-    --gold-bright: #ffcf80;
-    --gold-soft: rgba(255,182,72,0.16);
+    /* iOS26-style "Liquid Glass" monochrome theme: black/white/grey only.
+       --gold/--gold-bright are kept as variable NAMES (used as the app's
+       one accent color throughout hundreds of rules below) but now point
+       to a light-grey/white accent instead of amber, so every existing
+       rule that references var(--gold-bright) etc. re-themes for free
+       without touching each call site. */
+    --bg-0: #08090b;
+    --bg-1: #0a0b0d;
+    --panel: rgba(255,255,255,0.045);
+    --panel-2: rgba(255,255,255,0.075);
+    --panel-3: rgba(255,255,255,0.12);
+    --border: rgba(255,255,255,0.12);
+    --border-strong: rgba(255,255,255,0.28);
+    --ink: #f5f5f7;
+    --ink-dim: #a8a8ae;
+    --ink-faint: #7a7a80;
+    --gold: #d8d8dc;
+    --gold-bright: #ffffff;
+    --gold-soft: rgba(255,255,255,0.14);
     --emerald: #33d69a;
     --emerald-dim: rgba(51,214,154,0.16);
     --red: #ff6b7a;
     --red-soft: rgba(255,107,122,0.14);
-    --blue: #5ba3ff;
-    --pink: #ff3fa4;
-    --purple: #8b6bff;
-    --glass-blur: 28px;
+    --blue: #a8a8ae;
+    --pink: #c8c8ce;
+    --purple: #8b8b92;
+    --glass-blur: 34px;
     --radius-lg: 22px;
-    --shadow: 0 1px 1px rgba(0,0,0,0.2), 0 20px 44px -14px rgba(0,0,0,0.55);
+    --shadow: 0 1px 1px rgba(0,0,0,0.3), 0 20px 44px -14px rgba(0,0,0,0.7);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -41,9 +47,9 @@
     overflow-x: hidden;
     width: 100%;
     background:
-      radial-gradient(900px 500px at 8% -8%, rgba(255,63,164,0.16), transparent 60%),
-      radial-gradient(900px 500px at 96% 0%, rgba(91,163,255,0.13), transparent 55%),
-      radial-gradient(1100px 700px at 50% 110%, rgba(51,214,154,0.10), transparent 60%),
+      radial-gradient(900px 500px at 8% -8%, rgba(255,255,255,0.05), transparent 60%),
+      radial-gradient(900px 500px at 96% 0%, rgba(255,255,255,0.035), transparent 55%),
+      radial-gradient(1100px 700px at 50% 110%, rgba(255,255,255,0.03), transparent 60%),
       var(--bg-0);
     background-attachment: fixed;
     color: var(--ink);
@@ -161,13 +167,12 @@
   /* Draggable full-pitch tactical board (H2H) — two facing XIs on one
      vertical pitch, numbered circular tokens instead of avatar cards, so
      it reads like a real tactics board rather than a stat comparison. */
-  .tac-pitch-wrap { perspective: 1400px; padding-bottom: 22px; }
+  .tac-pitch-wrap { padding-bottom: 22px; }
   .tac-drag-pitch {
     position: relative; width: 100%; aspect-ratio: 3 / 4; max-width: 480px; margin: 0 auto;
     background: linear-gradient(180deg, #1e3d24, #234a2b); border: 2px solid rgba(255,255,255,0.25); border-radius: 10px;
     overflow: hidden; touch-action: none;
-    transform: rotateX(16deg); transform-origin: 50% 100%;
-    box-shadow: 0 40px 60px -25px rgba(0,0,0,0.65), inset 0 40px 60px -35px rgba(255,255,255,0.18);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .tac-drag-pitch::before {
     content: ""; position: absolute; inset: 0;
@@ -1224,10 +1229,10 @@ const FDR_COLOR = { 1: "#3ecf8e", 2: "#8fd9ab", 3: "#d9c98a", 4: "#e39a63", 5: "
 // score (not just the rounded bucket), so a 4.8 reads visibly harder/redder
 // than a 4.1 even though both round to the same FDR_COLOR step.
 const FDR_GRADIENT_STOPS = [
-  { at: 1, rgb: [60, 210, 90] },   // bright green
-  { at: 2, rgb: [150, 205, 110] }, // faded green
-  { at: 3, rgb: [235, 149, 50] },  // orange (midpoint)
-  { at: 4, rgb: [214, 92, 42] },   // deep orange / soft red
+  { at: 1, rgb: [92, 176, 118] },  // softened green — easier on the eye, still reads as "good fixture"
+  { at: 2, rgb: [150, 185, 148] }, // faded green
+  { at: 3, rgb: [150, 150, 156] }, // neutral grey (was orange)
+  { at: 4, rgb: [196, 108, 96] },  // muted red-orange
   { at: 5, rgb: [176, 42, 42] },   // deep red
 ];
 function fdrGradientColor(score) {
@@ -8217,7 +8222,7 @@ function renderH2hTacticalBoard(teamA, teamB, matchups) {
 // drag/drop or button click, whichever tab is currently using it.
 let activeBoardRerender = () => {};
 function h2hDefaultTokenPos(pos, idx, n, isTeamA) {
-  const rowY = { GK: 0.94, DEF: 0.78, MID: 0.62, FWD: 0.50 };
+  const rowY = { GK: 0.94, DEF: 0.80, MID: 0.66, FWD: 0.55 };
   const yBase = rowY[pos] ?? 0.7;
   const y = isTeamA ? yBase : 1 - yBase;
   const x = (idx + 1) / (n + 1);
