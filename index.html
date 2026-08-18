@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Touchline — FPL Decision Engine</title>
+<title>FFT — Fantasy Football Touchline</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -83,11 +83,10 @@
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; color: var(--ink); }
   .brand-mark {
     width: 24px; height: 24px; border-radius: 8px;
-    background: linear-gradient(135deg, var(--pink), var(--purple));
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 800; color: #fff;
-    box-shadow: 0 3px 12px -2px rgba(255,63,164,0.55);
+    overflow: hidden;
   }
+  .brand-mark img { width: 100%; height: 100%; object-fit: contain; }
   nav { display: flex; gap: 3px; font-size: 14px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 999px; border: 1px solid var(--border); }
   nav button {
     background: transparent; border: none; color: var(--ink-faint);
@@ -795,12 +794,13 @@
   <button data-tab="table"><span class="tb-icon">🏟️</span><span class="tb-label">Teams</span></button>
   <button data-tab="fdr"><span class="tb-icon">📅</span><span class="tb-label">FDR</span></button>
   <button data-tab="h2h"><span class="tb-icon">⚔️</span><span class="tb-label">Head-to-head</span></button>
+  <button data-tab="tacboard"><span class="tb-icon">🧭</span><span class="tb-label">Tactical board</span></button>
   <button data-tab="rankings"><span class="tb-icon">🏆</span><span class="tb-label">Rankings</span></button>
 </nav>
 
 <header>
   <div class="header-inner">
-    <div class="brand"><span class="brand-mark">T</span>Touchline</div>
+    <div class="brand"><span class="brand-mark"><img src="fft-logo.png" alt="FFT" /></span>FFT</div>
     <div id="topTabs" class="top-tabs-row"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-dim);white-space:nowrap;margin-left:auto">
       <input type="checkbox" id="preferKitsToggle" /> Show kits instead of photos
@@ -824,8 +824,8 @@
         <option value="MID">MID</option>
         <option value="FWD">FWD</option>
       </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Min minutes <input type="number" id="projMinMinutes" value="90" style="width:64px" /></label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Max £ <input type="number" step="0.5" id="projMaxPrice" placeholder="budget" style="width:64px" /></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim);white-space:nowrap">Min minutes <input type="number" id="projMinMinutes" value="900" style="width:70px;min-width:70px" /></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim);white-space:nowrap">Max £ <input type="number" step="0.5" id="projMaxPrice" placeholder="budget" style="width:70px;min-width:70px" /></label>
       <select id="projFormFilter">
         <option value="ALL">All players</option>
         <option value="NEW">New / no Prem data yet</option>
@@ -1122,6 +1122,18 @@
     </div>
 
     <div id="h2hBody"></div>
+  </section>
+
+  <section id="tab-tacboard" style="display:none">
+    <h1 class="page-title">Tactical board</h1>
+    <p class="page-sub">Pick a club to see its best available XI laid out on the pitch — a quick way to eyeball shape and personnel before a wildcard or a matchup, separate from Head-to-head's two-team comparison.</p>
+    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+      <select id="tacboardFormation"></select>
+    </div>
+    <div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap">
+      <div id="tacboardTeamList" style="min-width:150px;max-width:190px;display:flex;flex-direction:column;gap:3px;max-height:70vh;overflow-y:auto"></div>
+      <div id="tacboardBody" style="flex:1;min-width:280px"></div>
+    </div>
   </section>
 
   <section id="tab-rankings" style="display:none">
@@ -4544,7 +4556,7 @@ function renderProjectionsTab() {
   let fromGw = state.projFromGw || Number(fromSelect?.value);
   let toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
   const posFilter = state.projPosFilter || "ALL";
-  const minMinutes = state.projMinMinutes ?? 90;
+  const minMinutes = state.projMinMinutes ?? 900;
   const maxPrice = state.projMaxPrice;
   const formFilter = state.projFormFilter || "ALL";
   const rotationThreshold = state.projRotationThreshold ?? 70;
@@ -4558,7 +4570,7 @@ function renderProjectionsTab() {
   // so it ignores the position filter specifically (all other filters —
   // min minutes, price, form — still apply, same pool logic otherwise).
   let pool = state.players.filter(p => p.minutes >= minMinutes && (pitchView || posFilter === "ALL" || p.position === posFilter));
-  if (maxPrice) pool = pool.filter(p => (p.nowCost || 0) <= maxPrice);
+  if (maxPrice) pool = pool.filter(p => ((p.nowCost || 0) / 10) <= maxPrice);
   if (formFilter === "NEW") pool = pool.filter(p => (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0);
   if (formFilter === "BREAKOUT") pool = pool.filter(p => (p.minutes || 0) > 0 && (p.minutes || 0) < 900 && ((p.xg90 || 0) + (p.xa90 || 0)) > 0.35);
   let rows = pool.map(p => computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, state.projProvenWeight));
@@ -4587,7 +4599,7 @@ function renderProjectionsTab() {
             ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
             : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
             <td class="mono" style="text-align:center;font-weight:700;${heatOn && ranges ? heatmapBg(r.projPerGame, ranges.projPerGame.min, ranges.projPerGame.max, false) : ""}">${r.projPerGame.toFixed(1)}</td>
           </tr>`;
@@ -4620,7 +4632,7 @@ function renderProjectionsTab() {
             ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
             : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
             ${cell("proj", r.proj, r.proj.toFixed(1))}
             ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
@@ -9087,16 +9099,97 @@ function setupRankingsPresets() {
   renderRankingsPresetList();
 }
 
+// ---------- tactical board (standalone tab) ----------
+// Single-team version of the H2H tactical board: pick a club from a list,
+// see its best-available XI (reusing the same auto-draft-XI logic as
+// H2H's "Ability draft XI") laid out on a pitch in a chosen formation.
+// Kept deliberately separate from the H2H board — that one is about
+// comparing two teams' players slot-for-slot; this is about seeing one
+// team's shape/personnel at a glance.
+function tacboardAutoXi(team, formationKey) {
+  const formation = FORMATIONS_H2H[formationKey] || FORMATIONS_H2H["3-4-3"];
+  const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
+  const out = { GK: [], DEF: [], MID: [], FWD: [] };
+  const used = new Set();
+  ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+    out[pos] = state.players
+      .filter(p => p.teamId === team.id && p.position === pos && !used.has(p.id))
+      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0))
+      .slice(0, need[pos]);
+    out[pos].forEach(p => used.add(p.id));
+  });
+  return { xi: out, need };
+}
+function renderTacboardTeamList() {
+  const listEl = document.getElementById("tacboardTeamList");
+  const teams = Object.values(state.teamsById || {}).sort((a, b) => a.name.localeCompare(b.name));
+  listEl.innerHTML = teams.map(t => `
+    <button class="chip-btn" data-tacboard-team="${t.id}" style="justify-content:flex-start;text-align:left;${state.tacboardTeamId === t.id ? "background:var(--pink);color:#0b1310;font-weight:700" : ""}">${t.name}</button>
+  `).join("");
+  listEl.querySelectorAll("[data-tacboard-team]").forEach(btn => {
+    btn.onclick = () => {
+      state.tacboardTeamId = Number(btn.dataset.tacboardTeam);
+      renderTacboardTab();
+    };
+  });
+}
+function renderTacboardTab() {
+  renderTacboardTeamList();
+  const body = document.getElementById("tacboardBody");
+  const teams = Object.values(state.teamsById || {});
+  if (!teams.length) { body.innerHTML = ""; return; }
+  if (!state.tacboardTeamId) state.tacboardTeamId = teams.sort((a, b) => a.name.localeCompare(b.name))[0].id;
+  const team = state.teamsById[state.tacboardTeamId];
+  if (!team) { body.innerHTML = ""; return; }
+  const formationKey = state.tacboardFormation || "3-4-3";
+  const { xi, need } = tacboardAutoXi(team, formationKey);
+  function slotHtml(p) {
+    if (!p) return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">—</div></div>`;
+    return `
+      <div class="pitch-slot">
+        ${playerAvatarHtml(p, 40)}
+        <div class="name-tag">${p.webName}</div>
+        <div class="pts-tag mono">${p.totalPoints || 0} pts</div>
+      </div>
+    `;
+  }
+  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos => {
+    const slots = [];
+    for (let i = 0; i < need[pos]; i++) slots.push(slotHtml(xi[pos][i] || null));
+    return `<div class="pitch-row">${slots.join("")}</div>`;
+  }).join("");
+  const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => xi[pos].length < need[pos]);
+  body.innerHTML = `
+    <div class="proj-pitch-wrap" style="max-width:520px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:10px">
+        <div style="font-size:15px;font-weight:700">${team.name}</div>
+        <div style="font-size:12px;color:var(--ink-faint)">Best-available XI, ${formationKey}, ranked by total points this season</div>
+        ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough contracted players to fill: ${missing.join(", ")}.</div>` : ""}
+      </div>
+      <div class="pitch">${pitchRows}</div>
+    </div>
+  `;
+}
+function setupTacboardControls() {
+  const formationSelect = document.getElementById("tacboardFormation");
+  if (formationSelect && !formationSelect.options.length) {
+    formationSelect.innerHTML = Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}">${f}</option>`).join("");
+    formationSelect.value = state.tacboardFormation || "3-4-3";
+    formationSelect.onchange = () => { state.tacboardFormation = formationSelect.value; renderTacboardTab(); };
+  }
+}
+
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "projections", "shortlist", "team", "planner", "table", "fdr", "h2h", "rankings"];
-const TAB_ICONS = { stats: "📈", projections: "🔮", shortlist: "⭐", team: "👤", planner: "✏️", table: "🏟️", fdr: "📅", h2h: "⚔️", rankings: "🏆" };
-const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", rankings: "Rankings" };
+const TAB_NAMES = ["stats", "projections", "shortlist", "team", "planner", "table", "fdr", "h2h", "tacboard", "rankings"];
+const TAB_ICONS = { stats: "📈", projections: "🔮", shortlist: "⭐", team: "👤", planner: "✏️", table: "🏟️", fdr: "📅", h2h: "⚔️", tacboard: "🧭", rankings: "🏆" };
+const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", rankings: "Rankings" };
 function switchTab(name) {
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
     document.getElementById("tab-" + n).style.display = n === name ? "block" : "none";
   });
   if (name === "projections") renderProjectionsTab();
+  if (name === "tacboard") renderTacboardTab();
 }
 function setupTabs() {
   document.querySelectorAll("#tabs button").forEach(btn => {
@@ -9135,6 +9228,7 @@ setupTableControls();
 setupFdrControls();
 setupRankingsControls();
 setupH2hControls();
+setupTacboardControls();
 // Anchored (sticky) table headers are offset below the app's own sticky
 // top bar via --header-h, since the top bar's real height varies with
 // viewport (mobile nav wraps differently). Measure it for real instead
