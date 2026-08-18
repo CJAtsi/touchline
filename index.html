@@ -276,6 +276,17 @@
   .sl-card-chevron { font-size: 10px; color: var(--ink-faint); }
   .sl-card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
   .sl-stats-wrap { border-radius: 14px; overflow: hidden; border: 1px solid var(--border); }
+  .tier-list-wrap { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .tier-row { display: flex; align-items: stretch; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+  .tier-row-label { width: 46px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #0b1310; }
+  .tier-row-players { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; align-items: center; min-height: 44px; }
+  .tier-chip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px; }
+  .tier-chip-name { font-size: 12px; font-weight: 600; line-height: 1.1; }
+  .tier-chip-sub { font-size: 10px; color: var(--ink-faint); line-height: 1.1; }
+  .tier-chip-picker { display: flex; gap: 2px; margin-left: 4px; }
+  .tier-pick-btn { width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--ink-faint); font-size: 9px; font-weight: 700; cursor: pointer; padding: 0; line-height: 1; }
+  .tier-pick-btn:hover { border-color: var(--tp-color); color: var(--tp-color); }
+  .tier-pick-btn.active { background: var(--tp-color); color: #0b1310; border-color: var(--tp-color); }
   .sl-stats-wrap table { border-collapse: separate; border-spacing: 0; }
   .sl-stats-wrap tbody tr { transition: background 0.1s ease; }
   .sl-stats-wrap tbody tr:nth-child(even) { background: rgba(255,255,255,0.02); }
@@ -2881,7 +2892,7 @@ async function loadShortlistFromStorage() {
   try {
     const raw = await persistGet("shortlist");
     state.shortlist = raw ? JSON.parse(raw) : [];
-    state.shortlist.forEach(s => { if (!Array.isArray(s.groups)) s.groups = []; });
+    state.shortlist.forEach(s => { if (!Array.isArray(s.groups)) s.groups = []; if (s.tier === undefined) s.tier = null; });
   } catch (e) { state.shortlist = []; }
   try {
     const rawG = await persistGet("shortlistGroups");
@@ -2900,7 +2911,7 @@ function isShortlisted(id) { return state.shortlist.some(s => s.playerId === id)
 function toggleShortlist(id, offerGroupPicker) {
   const wasShortlisted = isShortlisted(id);
   if (wasShortlisted) state.shortlist = state.shortlist.filter(s => s.playerId !== id);
-  else state.shortlist.push({ playerId: id, note: "", groups: [] });
+  else state.shortlist.push({ playerId: id, note: "", groups: [], tier: null });
   saveShortlist();
   renderStats();
   renderShortlist();
@@ -3766,6 +3777,69 @@ let shortlistStatsSort = { key: "totalPoints", dir: "desc" };
 // scrolled right to a column and then want to sort by it. Track the last
 // scroll position here and restore it right after rebuilding.
 let shortlistStatsScrollLeft = 0;
+const TIER_DEFS = [
+  { id: "S", label: "S tier", color: "#e0529a" },
+  { id: "A", label: "A tier", color: "#e0a94f" },
+  { id: "B", label: "B tier", color: "#3cd25a" },
+  { id: "C", label: "C tier", color: "#3ba7ff" },
+  { id: "D", label: "D tier", color: "#8a8fa3" },
+];
+// Simple click-to-assign tier board for a Shortlist group — not drag-and-drop
+// (no drag lib in this codebase), but a one-click tier picker per player so
+// a big watchlist can be sorted into S/A/B/C/D at a glance.
+function buildTierListEl(items) {
+  const wrap = document.createElement("div");
+  wrap.className = "tier-list-wrap";
+  const rowsData = items.map(item => ({ item, p: state.players.find(pl => pl.id === item.playerId) })).filter(r => r.p);
+  const rowsHtml = TIER_DEFS.map(tier => {
+    const inTier = rowsData.filter(r => r.item.tier === tier.id);
+    return `
+      <div class="tier-row" style="--tier-color:${tier.color}">
+        <div class="tier-row-label" style="background:${tier.color}">${tier.id}</div>
+        <div class="tier-row-players">
+          ${inTier.length ? inTier.map(({ item, p }) => tierChipHtml(item, p)).join("") : `<div style="color:var(--ink-faint);font-size:12px;padding:6px">—</div>`}
+        </div>
+      </div>
+    `;
+  }).join("");
+  const unranked = rowsData.filter(r => !r.item.tier);
+  wrap.innerHTML = `
+    ${rowsHtml}
+    <div class="tier-row" style="--tier-color:#3a3a44">
+      <div class="tier-row-label" style="background:#3a3a44;color:var(--ink-dim)">–</div>
+      <div class="tier-row-players">
+        ${unranked.length ? unranked.map(({ item, p }) => tierChipHtml(item, p)).join("") : `<div style="color:var(--ink-faint);font-size:12px;padding:6px">All players tiered</div>`}
+      </div>
+    </div>
+  `;
+  wrap.querySelectorAll("[data-tier-assign]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const [playerId, tierId] = btn.dataset.tierAssign.split("|");
+      const item = state.shortlist.find(s => s.playerId === Number(playerId));
+      if (!item) return;
+      item.tier = item.tier === tierId ? null : tierId;
+      saveShortlist();
+      renderShortlist();
+    };
+  });
+  return wrap;
+}
+function tierChipHtml(item, p) {
+  const team = state.teamsById[p.teamId];
+  return `
+    <div class="tier-chip">
+      ${playerAvatarHtml(p, 26)}
+      <div class="tier-chip-info">
+        <div class="tier-chip-name">${p.webName}</div>
+        <div class="tier-chip-sub">${team ? team.short_name : ""} · ${p.position}</div>
+      </div>
+      <div class="tier-chip-picker">
+        ${TIER_DEFS.map(t => `<button class="tier-pick-btn${item.tier === t.id ? " active" : ""}" style="--tp-color:${t.color}" data-tier-assign="${p.id}|${t.id}" title="${t.label}">${t.id}</button>`).join("")}
+      </div>
+    </div>
+  `;
+}
 function buildMiniStatsTableEl(items) {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap sl-stats-wrap";
@@ -3922,6 +3996,7 @@ function renderShortlist() {
     <button class="dir-btn" id="compareProfilesShortlistBtn">📊 Compare profiles</button>
     <button class="dir-btn" id="addSelectedToGroupBtnSL">+ Add selected to group</button>
     <button class="dir-btn" id="shortlistStatsTableBtn">📊 Statistics table</button>
+    <button class="dir-btn" id="shortlistTierListBtn">🏅 Tier list</button>
     ${activeGroup !== "ALL" ? '<button class="dir-btn" id="shortlistGroupEditBtn">Rename / delete group</button>' : ""}
   `;
   el.innerHTML = "";
@@ -3947,6 +4022,12 @@ function renderShortlist() {
   };
   document.getElementById("shortlistStatsTableBtn").onclick = () => {
     state.shortlistShowStatsTable = !state.shortlistShowStatsTable;
+    if (state.shortlistShowStatsTable) state.shortlistShowTierList = false;
+    renderShortlist();
+  };
+  document.getElementById("shortlistTierListBtn").onclick = () => {
+    state.shortlistShowTierList = !state.shortlistShowTierList;
+    if (state.shortlistShowTierList) state.shortlistShowStatsTable = false;
     renderShortlist();
   };
   if (activeGroup !== "ALL") document.getElementById("shortlistGroupEditBtn").onclick = renameOrDeleteActiveGroup;
@@ -3961,6 +4042,10 @@ function renderShortlist() {
   }
   if (state.shortlistShowStatsTable) {
     el.appendChild(buildMiniStatsTableEl(items));
+    return;
+  }
+  if (state.shortlistShowTierList) {
+    el.appendChild(buildTierListEl(items));
     return;
   }
 
@@ -4426,6 +4511,106 @@ const PROJ_OPTIONAL_COLS = [
   ["minsPerStart", "Mins/start"], ["teamXg", "Team xG"], ["csPct", "CS%"],
   ["contribution", "Team contrib%"], ["defConPct", "DefCon%"], ["bonusExp", "Exp. bonus"],
 ];
+// Per-gameweek projected points for one player, reusing the exact same
+// scoring formula as computeProjectionRow but keyed by gw instead of
+// summed across the whole range — needed for the Player pairs table,
+// which has to show/compare individual gameweeks, not just a season total.
+// Double-gameweek fixtures are summed into that gw's single value.
+function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAbilityWeight) {
+  const startProb = projStartProb(p, assume90, rotationThreshold);
+  const minsFactor = projMinsFactor(p, assume90, rotationThreshold);
+  const provenW = provenAbilityWeight ?? 0.8;
+  const provenAbility = p.pointsPerGame || p.pointsPer90 || 0;
+  const byGw = {};
+  for (let g = fromGw; g <= toGw; g++) {
+    const fixturesThisGw = (state.fixturesByTeam[p.teamId] || []).filter(f => f.event === g);
+    if (!fixturesThisGw.length) { byGw[g] = null; continue; }
+    let total = 0;
+    fixturesThisGw.forEach(fx => {
+      const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
+      const fixtureMult = fdrScore !== null ? fdrToMultiplier(fdrScore) : 1;
+      const provenProj = assume90 ? Math.max(provenAbility, p.pointsPer90 || 0) * fixtureMult : provenAbility * fixtureMult * startProb;
+      const appearancePts = projAppearancePts(startProb, minsFactor);
+      const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
+      const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
+      const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
+      const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
+      const defConProb = defConProbability(p, minsFactor, fdrScore);
+      const defConPts = defConProb * 2;
+      const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
+      const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
+      total += provenProj * provenW + underlyingProj * (1 - provenW);
+    });
+    byGw[g] = total;
+  }
+  return byGw;
+}
+// Player pairs: suggests two players (always from different clubs, since
+// pairing two players who share a fixture list can't smooth anything)
+// whose gameweek-to-gameweek fixture swings complement each other — i.e.
+// weeks where one has a tough match tend to be weeks the other doesn't.
+// Same "best-of-both, averaged across the range" convention as the FDR
+// tab's team-fixture-pairings grid, just computed on each player's own
+// projected points instead of a club's FDR score.
+function renderProjectionsPairs(pool, fromGw, toGw, assume90, rotationThreshold, provenWeight) {
+  const body = document.getElementById("projectionsBody");
+  const gwIds = []; for (let g = fromGw; g <= toGw; g++) gwIds.push(g);
+  // Cap the candidate pool for pairing math — quadratic in pool size, and
+  // beyond ~40 players the pairs table would be unreadably long anyway.
+  const candidates = pool
+    .map(p => ({ p, byGw: computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenWeight) }))
+    .map(c => ({ ...c, avg: gwIds.reduce((s, g) => s + (c.byGw[g] || 0), 0) / (gwIds.length || 1) }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 40);
+  const pairs = [];
+  for (let i = 0; i < candidates.length; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      const a = candidates[i], b = candidates[j];
+      if (a.p.teamId === b.p.teamId) continue;
+      let sum = 0, n = 0, combinedTotal = 0;
+      for (const g of gwIds) {
+        const va = a.byGw[g], vb = b.byGw[g];
+        const validA = va !== null && va !== undefined, validB = vb !== null && vb !== undefined;
+        if (!validA && !validB) continue;
+        const best = validA && validB ? Math.max(va, vb) : (validA ? va : vb);
+        sum += best; n++;
+        combinedTotal += (validA ? va : 0) + (validB ? vb : 0);
+      }
+      if (n === 0) continue;
+      pairs.push({ a: a.p, b: b.p, byGwA: a.byGw, byGwB: b.byGw, bestOfBothAvg: sum / n, combinedTotal, n });
+    }
+  }
+  pairs.sort((x, y) => y.bestOfBothAvg - x.bestOfBothAvg);
+  const top = pairs.slice(0, 25);
+  const showGws = gwIds.slice(0, 10); // keep the table readable on a long range
+  const gwHead = showGws.map(g => `<th>GW${g}</th>`).join("");
+  const fmtCell = (va, vb) => {
+    if ((va === null || va === undefined) && (vb === null || vb === undefined)) return `<span style="color:var(--ink-faint)">–</span>`;
+    const aTxt = va === null || va === undefined ? "–" : va.toFixed(1);
+    const bTxt = vb === null || vb === undefined ? "–" : vb.toFixed(1);
+    const aBetter = (va || 0) >= (vb || 0);
+    return `<span style="color:${aBetter ? "var(--gold-bright)" : "var(--ink-faint)"};font-weight:${aBetter ? 700 : 400}">${aTxt}</span> / <span style="color:${!aBetter ? "var(--gold-bright)" : "var(--ink-faint)"};font-weight:${!aBetter ? 700 : 400}">${bTxt}</span>`;
+  };
+  const rowsHtml = top.map(pr => {
+    const teamA = state.teamsById[pr.a.teamId], teamB = state.teamsById[pr.b.teamId];
+    return `<tr>
+      <td class="label-col">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">${playerAvatarHtml(pr.a, 20)}<span style="font-weight:600">${pr.a.webName}</span><span style="color:var(--ink-faint);font-size:10px">${teamA ? teamA.short_name : ""} · ${fmtPrice(pr.a.nowCost)}</span></div>
+        <div style="display:flex;align-items:center;gap:6px">${playerAvatarHtml(pr.b, 20)}<span style="font-weight:600">${pr.b.webName}</span><span style="color:var(--ink-faint);font-size:10px">${teamB ? teamB.short_name : ""} · ${fmtPrice(pr.b.nowCost)}</span></div>
+      </td>
+      ${showGws.map(g => `<td class="mono" style="font-size:11px">${fmtCell(pr.byGwA[g], pr.byGwB[g])}</td>`).join("")}
+      <td class="mono" style="font-size:13px;font-weight:700;color:var(--green,#3bb273)">${pr.bestOfBothAvg.toFixed(1)}</td>
+      <td class="mono" style="font-size:12px;color:var(--ink-dim)">${pr.combinedTotal.toFixed(1)}</td>
+    </tr>`;
+  }).join("");
+  body.innerHTML = `
+    <p class="field-desc" style="margin:0 0 10px">Ranked by best-of-both average — for each gameweek, whichever of the two scores higher counts; pairs where that alternates well (rather than both peaking/dipping together) rank highest. Different clubs only.${gwIds.length > showGws.length ? ` Showing the first ${showGws.length} of ${gwIds.length} selected gameweeks.` : ""}</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th class="label-col">Pair</th>${gwHead}<th>Best-of-both avg</th><th>Combined total</th></tr></thead>
+      <tbody>${rowsHtml || `<tr><td colspan="${showGws.length + 3}" class="foot-note" style="padding:10px">Not enough players/fixtures in this range and filter set to build pairs.</td></tr>`}</tbody>
+    </table></div>
+  `;
+}
 function renderProjViewModeRow() {
   const row = document.getElementById("projViewModeRow");
   if (!row) return;
@@ -4436,6 +4621,9 @@ function renderProjViewModeRow() {
     </button>
     <button class="mode-btn${view === "pitch" ? " active" : ""}" data-proj-view="pitch" style="--mode-glow:rgba(76,201,138,0.55)">
       <span class="mode-btn-icon">⚽</span>Best XI
+    </button>
+    <button class="mode-btn${view === "pairs" ? " active" : ""}" data-proj-view="pairs" style="--mode-glow:rgba(224,82,154,0.55)">
+      <span class="mode-btn-icon">🤝</span>Player pairs
     </button>
   `;
   row.querySelectorAll("[data-proj-view]").forEach(btn => {
@@ -4596,6 +4784,10 @@ function renderProjectionsTab() {
 
   if (pitchView) {
     renderProjectionsPitch(rows);
+    return;
+  }
+  if ((state.projView || "table") === "pairs") {
+    renderProjectionsPairs(pool, fromGw, toGw, assume90, rotationThreshold, state.projProvenWeight);
     return;
   }
 
