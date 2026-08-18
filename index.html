@@ -1057,6 +1057,7 @@
         Finds each club's best run of favourable fixtures in the range above, across three tiers. A run doesn't need every single game to be easy — it just needs the <strong>average FDR across the run</strong> to stay under the tier's threshold, so one tougher game can be absorbed if the rest of the run is easy enough. Edit each tier's minimum run length and max average FDR below.
       </p>
       <div id="fixtureRunTierEditor" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div class="mode-btn-row" id="fixtureRunSortRow" style="margin-bottom:10px"></div>
       <div class="table-wrap"><table id="fixtureRunGrid"></table></div>
       <p class="foot-note" id="fixtureRunSuggestion" style="margin-top:10px"></p>
       <div class="detail-block-title" style="margin-top:16px">Fun facts</div>
@@ -1483,11 +1484,21 @@ function heatmapBg(value, min, max, invert) {
 }
 // Builds { key: {min,max} } for a set of numeric columns across a set of
 // rows, where getVal(row, key) returns the number for that row/column.
-function computeHeatmapRanges(rows, keys, getVal) {
+// Optional getMinutes(row) restricts the min/max computation to a
+// "qualified" pool (>=450 mins, ~5 full games) when enough rows clear that
+// bar — otherwise a single low-minute player with a fluky per-90 ratio (a
+// few shots in 20 minutes producing an extreme rate) stretches the whole
+// column's scale and makes genuinely good, well-established performers
+// shade orange/red instead of green. Every row (qualified or not) is still
+// coloured against that same qualified-pool range — nobody is excluded
+// from the table, only from setting the scale.
+function computeHeatmapRanges(rows, keys, getVal, getMinutes) {
   const ranges = {};
+  const qualified = getMinutes ? rows.filter(r => (getMinutes(r) || 0) >= 450) : rows;
+  const scaleRows = (getMinutes && qualified.length >= 3) ? qualified : rows;
   keys.forEach(key => {
     let min = Infinity, max = -Infinity;
-    rows.forEach(row => {
+    scaleRows.forEach(row => {
       const v = getVal(row, key);
       if (typeof v === "number" && !Number.isNaN(v)) { if (v < min) min = v; if (v > max) max = v; }
     });
@@ -1509,15 +1520,25 @@ function percentileRank(value, pool) {
   return Math.round((below / pool.length) * 99) + 1;
 }
 function computeFcAttributes(p) {
-  const posPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
-  const pick = (key) => posPool.map(x => x[key] || 0);
+  // Percentile pool requires >=450 mins (~5 full games), not just 90 —
+  // a player with one or two fluky appearances (e.g. a single goal in 90
+  // minutes) can otherwise produce a wildly unrepresentative per-90 rate
+  // that then reads as an extreme attribute number (e.g. Shooting 19,
+  // Finishing 1 for a player who's actually fine, just low-sample). Raising
+  // the bar means the percentile scale itself is set by players with an
+  // established sample, which is also what keeps individual attribute
+  // numbers closer to what a real scout/FM rating would reflect.
+  const posPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 450);
+  const fallbackPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
+  const pool = posPool.length >= 5 ? posPool : fallbackPool;
+  const pick = (key) => pool.map(x => x[key] || 0);
   const per90 = (p, key) => p.minutes > 0 ? (p[key] || 0) / (p.minutes / 90) : 0;
-  const pace = percentileRank(per90(p, "threat"), posPool.map(x => per90(x, "threat")));
-  const shooting = percentileRank((p.xg90 || 0) + (p.goalsScored || 0) * 0.01, posPool.map(x => (x.xg90 || 0) + (x.goalsScored || 0) * 0.01));
-  const passing = percentileRank(per90(p, "creativity"), posPool.map(x => per90(x, "creativity")));
-  const dribbling = percentileRank((p.xa90 || 0), posPool.map(x => x.xa90 || 0));
-  const defending = percentileRank(p.defensiveContributionPer90 || 0, posPool.map(x => x.defensiveContributionPer90 || 0));
-  const physical = percentileRank(per90(p, "influence"), posPool.map(x => per90(x, "influence")));
+  const pace = percentileRank(per90(p, "threat"), pool.map(x => per90(x, "threat")));
+  const shooting = percentileRank((p.xg90 || 0) + (p.goalsScored || 0) * 0.01, pool.map(x => (x.xg90 || 0) + (x.goalsScored || 0) * 0.01));
+  const passing = percentileRank(per90(p, "creativity"), pool.map(x => per90(x, "creativity")));
+  const dribbling = percentileRank((p.xa90 || 0), pool.map(x => x.xa90 || 0));
+  const defending = percentileRank(p.defensiveContributionPer90 || 0, pool.map(x => x.defensiveContributionPer90 || 0));
+  const physical = percentileRank(per90(p, "influence"), pool.map(x => per90(x, "influence")));
   // Extra FM-style attributes, same percentile-vs-own-position-pool
   // approach as the six above, so every player always gets a 1-99 number
   // (nothing left blank) even though these aren't real FPL fields:
@@ -1531,12 +1552,12 @@ function computeFcAttributes(p) {
   //    (starts a bigger share of available minutes = graft/fitness proxy).
   const finishing = percentileRank(
     (p.goalsScored || 0) / Math.max(0.5, p.expectedGoals || 0.5),
-    posPool.map(x => (x.goalsScored || 0) / Math.max(0.5, x.expectedGoals || 0.5))
+    pool.map(x => (x.goalsScored || 0) / Math.max(0.5, x.expectedGoals || 0.5))
   );
-  const decisionMaking = percentileRank(per90(p, "bps"), posPool.map(x => per90(x, "bps")));
+  const decisionMaking = percentileRank(per90(p, "bps"), pool.map(x => per90(x, "bps")));
   const workRate = percentileRank(
     (p.defensiveContributionPer90 || 0) + (p.minsPerStart ? Math.min(1, p.minsPerStart / 90) * 20 : 0),
-    posPool.map(x => (x.defensiveContributionPer90 || 0) + (x.minsPerStart ? Math.min(1, x.minsPerStart / 90) * 20 : 0))
+    pool.map(x => (x.defensiveContributionPer90 || 0) + (x.minsPerStart ? Math.min(1, x.minsPerStart / 90) * 20 : 0))
   );
   return [
     { label: "Pace", value: pace },
@@ -1955,6 +1976,7 @@ let state = {
     medium:  { label: "Fairly easy",   minLen: 3, maxAvg: 2.7 },
     lenient: { label: "Lenient",       minLen: 3, maxAvg: 3.2 },
   },
+  fixtureRunSortMetric: "fdr",
   rankingsPresets: {}, // name -> { fdrFormula, rankFormula, modelWeights } — see "Saved setting slots"
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
@@ -2984,7 +3006,7 @@ function getFiltered() {
   // across many stats (rather than one big spike) ranks highest.
   if (f.sort === "heatAvg") {
     const cols = activeColumns();
-    const ranges = computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p));
+    const ranges = computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p), (p) => p.minutes);
     const heatAvgFor = (p0) => {
       const p = scopedPlayer(p0);
       let sum = 0, n = 0;
@@ -3532,7 +3554,7 @@ function renderStats() {
   // screen (respects filters/theme), so shading is always relative to
   // what you're actually looking at, not the whole player pool.
   const heatRanges = state.statsHeatmap
-    ? computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p))
+    ? computeHeatmapRanges(list.map(p0 => scopedPlayer(p0)), cols.map(c => c[0]), (p, key) => numericColValue(key, p), (p) => p.minutes)
     : null;
   const body = document.getElementById("playerBody");
   body.innerHTML = "";
@@ -3711,6 +3733,11 @@ const SHORTLIST_STATS_GROUPS = (() => {
 })();
 const SHORTLIST_GROUP_COLORS = ["#e0529a", "#7c6cf0", "#3cd25a", "#e0a94f", "#4fc0e0", "#e05d5d", "#a05de0"];
 let shortlistStatsSort = { key: "totalPoints", dir: "desc" };
+// Sorting rebuilds this table's whole innerHTML (via renderShortlist()),
+// which silently resets any horizontal scroll to 0 — annoying once you've
+// scrolled right to a column and then want to sort by it. Track the last
+// scroll position here and restore it right after rebuilding.
+let shortlistStatsScrollLeft = 0;
 function buildMiniStatsTableEl(items) {
   const wrap = document.createElement("div");
   wrap.className = "table-wrap sl-stats-wrap";
@@ -3748,8 +3775,11 @@ function buildMiniStatsTableEl(items) {
     </tr>`;
   }).join("");
   wrap.innerHTML = `<table>${head}<tbody>${rows}</tbody></table>`;
+  wrap.scrollLeft = shortlistStatsScrollLeft;
+  wrap.onscroll = () => { shortlistStatsScrollLeft = wrap.scrollLeft; };
   wrap.querySelectorAll("[data-sl-sort]").forEach(th => {
     th.onclick = () => {
+      shortlistStatsScrollLeft = wrap.scrollLeft;
       const key = th.dataset.slSort;
       if (shortlistStatsSort.key === key) shortlistStatsSort.dir = shortlistStatsSort.dir === "desc" ? "asc" : "desc";
       else shortlistStatsSort = { key, dir: "desc" };
@@ -4405,23 +4435,54 @@ function renderProjViewModeRow() {
 // player per slot for whichever formation is selected, captain = highest
 // projected starter, reusing the same pitch-row/pitch-slot visual language
 // as the Planner and H2H boards.
+// Greedy constrained XI fill — not a true optimal knapsack (that would
+// need solving across positions jointly), but a practical approximation:
+// fills each position's slots by highest projected points first, skipping
+// any candidate that would blow the remaining budget or breach the
+// per-club cap, moving to the next-best candidate in that position
+// instead. Good enough for "give me a realistic best XI under these
+// constraints" without the complexity of true multi-position optimization.
+function pickConstrainedXI(rows, need, useBudget, useClubLimit) {
+  const BUDGET = 100.0, MAX_PER_CLUB = 3;
+  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+  for (const r of rows) byPos[r.p.position].push(r);
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) byPos[pos].sort((a, b) => b.proj - a.proj);
+  const clubCount = {};
+  let spent = 0;
+  const picked = { GK: [], DEF: [], MID: [], FWD: [] };
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    for (const r of byPos[pos]) {
+      if (picked[pos].length >= need[pos]) break;
+      const price = (r.p.nowCost || 0) / 10;
+      if (useBudget && spent + price > BUDGET) continue;
+      if (useClubLimit && (clubCount[r.p.teamId] || 0) >= MAX_PER_CLUB) continue;
+      picked[pos].push(r);
+      spent += price;
+      clubCount[r.p.teamId] = (clubCount[r.p.teamId] || 0) + 1;
+    }
+  }
+  return { picked, spent };
+}
 function renderProjectionsPitch(rows) {
   const body = document.getElementById("projectionsBody");
   const formationKey = state.projFormation || "3-4-3";
   const formation = FORMATIONS_H2H[formationKey] || FORMATIONS_H2H["3-4-3"];
   const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
-  for (const r of rows) byPos[r.p.position].push(r);
-  for (const pos of ["GK", "DEF", "MID", "FWD"]) byPos[pos].sort((a, b) => b.proj - a.proj);
-  const picked = { GK: byPos.GK.slice(0, need.GK), DEF: byPos.DEF.slice(0, need.DEF), MID: byPos.MID.slice(0, need.MID), FWD: byPos.FWD.slice(0, need.FWD) };
+  const useBudget = !!state.projPitchBudget, useClubLimit = !!state.projPitchClubLimit;
+  const { picked, spent } = pickConstrainedXI(rows, need, useBudget, useClubLimit);
   const allPicked = [...picked.GK, ...picked.DEF, ...picked.MID, ...picked.FWD];
   const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
   const totalProj = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
   const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => picked[pos].length < need[pos]);
   function fixLabel(r) {
-    return r.fixtures.length
-      ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:1px 5px;margin:1px;font-size:8px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
-      : "";
+    // Only ever the NEXT fixture here, not the whole selected GW range —
+    // once you're looking at a multi-GW range the full fixture list per
+    // player made the pitch unreadably busy. A "(+N more)" pill covers
+    // the rest without listing them all.
+    if (!r.fixtures.length) return "";
+    const first = r.fixtures[0];
+    const extra = r.fixtures.length - 1;
+    return `<span class="fdr-pill" style="width:auto;padding:1px 5px;margin:1px;font-size:8px;background:${fdrGradientColor(first.fdrScore)};color:#0b1310">${first.opp ? first.opp.short_name : "?"} ${first.isHome ? "(H)" : "(A)"}</span>${extra > 0 ? `<span style="font-size:8px;color:var(--ink-faint)">+${extra} more</span>` : ""}`;
   }
   function slotHtml(r) {
     if (!r) return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">—</div></div>`;
@@ -4442,15 +4503,23 @@ function renderProjectionsPitch(rows) {
     return `<div class="pitch-row">${slots.join("")}</div>`;
   }).join("");
   body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 £100m budget cap</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projPitchClubChk" ${useClubLimit ? "checked" : ""} /> 🚫 Max 3 per club</label>
+    </div>
     <div class="proj-pitch-wrap" style="max-width:520px;margin:0 auto">
       <div style="text-align:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--ink-faint)">Best XI, ${formationKey}, over the selected GW range</div>
         <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${totalProj.toFixed(1)} pts</div>
-        ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough eligible players at current filters to fill: ${missing.join(", ")} — loosen min-minutes or price filters.</div>` : ""}
+        ${useBudget ? `<div style="font-size:11px;color:var(--ink-faint)">Squad cost: £${spent.toFixed(1)}m / £100.0m</div>` : ""}
+        ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough eligible players at current filters${useBudget ? "/budget" : ""}${useClubLimit ? "/club limit" : ""} to fill: ${missing.join(", ")} — loosen filters.</div>` : ""}
       </div>
       <div class="pitch">${pitchRows}</div>
     </div>
   `;
+  const budgetChk = document.getElementById("projPitchBudgetChk"), clubChk = document.getElementById("projPitchClubChk");
+  if (budgetChk) budgetChk.onchange = () => { state.projPitchBudget = budgetChk.checked; renderProjectionsTab(); };
+  if (clubChk) clubChk.onchange = () => { state.projPitchClubLimit = clubChk.checked; renderProjectionsTab(); };
 }
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
@@ -4504,7 +4573,7 @@ function renderProjectionsTab() {
 
   if (simpleView) {
     const heatKeys = ["projPerGame"];
-    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
+    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k], (r) => r.p.minutes) : null;
     const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
     body.innerHTML = `
       <div class="table-wrap"><table>
@@ -4529,7 +4598,7 @@ function renderProjectionsTab() {
     if (!state.projColumns) state.projColumns = Object.fromEntries(PROJ_OPTIONAL_COLS.map(([k]) => [k, true]));
     const cols = state.projColumns;
     const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp"];
-    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k]) : null;
+    const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k], (r) => r.p.minutes) : null;
     const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
     const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
     body.innerHTML = `
@@ -6691,12 +6760,24 @@ const FDR_MODES = {
       // "does this team actually keep clean sheets" — weighted heaviest.
       // The scoreline-model estimates (grid + independent Poisson from
       // this specific fixture's oppXg) fill in fixture-specific context
-      // (an easy/hard opponent) on top of that real baseline. Previously
-      // this was grid-only-derived and came out too generous.
+      // (an easy/hard opponent) on top of that real baseline.
       const realGaRate = teamRealGaRate(est.teamId);
       const realCS = realGaRate !== null ? Math.exp(-realGaRate) : null;
-      if (realCS !== null) return (realCS * 0.5 + gridCS * 0.3 + poissonCS * 0.2) * 100;
-      return (gridCS * 0.75 + poissonCS * 0.25) * 100;
+      // Real bookmaker odds, when matched for this fixture, add a fourth
+      // grounded signal — the market has no direct clean-sheet line, but a
+      // standard proxy (own-win prob weighted ~0.55 + draw prob weighted
+      // ~0.4, since a chunk of draws are 0-0 but most aren't) is a widely
+      // used approximation and pulls the estimate toward what bookmakers
+      // actually price the match at, rather than only this app's own model
+      // — this was the missing real-world check that kept CS% too generous.
+      const odds = oddsForFixture(est.teamId, est.oppId, isHome);
+      const oddsCS = odds ? Math.max(0, Math.min(1, odds.teamWin * 0.55 + odds.draw * 0.40)) : null;
+      let blended;
+      if (realCS !== null && oddsCS !== null) blended = realCS * 0.40 + gridCS * 0.20 + poissonCS * 0.15 + oddsCS * 0.25;
+      else if (realCS !== null) blended = realCS * 0.5 + gridCS * 0.3 + poissonCS * 0.2;
+      else if (oddsCS !== null) blended = oddsCS * 0.4 + gridCS * 0.35 + poissonCS * 0.25;
+      else blended = gridCS * 0.75 + poissonCS * 0.25;
+      return blended * 100;
     },
     fmt: (v) => Math.round(v) + "%",
     buckets: [10, 18, 26, 34, 42, 50],
@@ -6761,16 +6842,22 @@ function scorelineProbabilityGrid(homeXg, awayXg) {
     else if (c.home === c.away) draw += c.p;
     else awayWin += c.p;
   });
-  // Headline prediction is the grid's own single most-probable cell (the
-  // mode) — deliberately kept separate from the Avg GF/Avg GA season
-  // aggregate, which uses the expected-goals MEAN instead (see
-  // renderFdrGrid). The two represent different questions: "what's the
-  // single most likely scoreline in this exact match" (mode) vs "what's
-  // this team on track to average across a run of fixtures" (mean) — for
-  // a right-skewed, zero-heavy distribution these can legitimately
-  // differ, and collapsing them together hid that distinction.
-  const top = grid[0];
-  const alternates = grid.slice(1, 4);
+  // Headline prediction: NOT pure mode selection anymore. The grid's single
+  // most-probable cell (pure argmax) is very often something low like 1-0
+  // or 1-1 even when the underlying means are higher, because that's how a
+  // right-skewed, zero-heavy count distribution's mode behaves — mode <
+  // mean, always, for this shape. Repeated feedback across sessions was
+  // that the headline prediction reads as too low-scoring versus what the
+  // model's own means imply. Practical fix: among cells within a tolerance
+  // band of the true top probability (80% of it — still a genuinely
+  // plausible outcome, not a long-shot), pick the one with the most total
+  // goals rather than blindly the single highest-probability cell. This
+  // keeps the headline score anchored to what's actually likely while no
+  // longer systematically favouring the lowest-scoring near-tie.
+  const topP = grid[0].p;
+  const plausible = grid.filter(c => c.p >= topP * 0.80);
+  const top = plausible.reduce((best, c) => ((c.home + c.away) > (best.home + best.away) || ((c.home + c.away) === (best.home + best.away) && c.p > best.p)) ? c : best, plausible[0]);
+  const alternates = grid.filter(c => c !== top).slice(0, 3);
   return { grid, top, alternates, homeWin, draw, awayWin };
 }
 // Blends the raw scoreline-model outcome % with Pi-ratings and (when
@@ -6865,8 +6952,8 @@ function estimateScoreline(teamId, oppId, isHome) {
   if (oppOv.attack === null) oa5 = stretch(oa5);
   if (oppOv.defence === null) d5 = stretch(d5);
   if (teamOv.defence === null) od5 = stretch(od5);
-  const baseTeamXg = 1.35 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.12 : 0.9);
-  const baseOppXg = 1.35 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.9 : 1.12);
+  const baseTeamXg = 1.45 * (a5 / 3) * ((6 - d5) / 3) * (isHome ? 1.16 : 0.87);
+  const baseOppXg = 1.45 * (oa5 / 3) * ((6 - od5) / 3) * (isHome ? 0.87 : 1.16);
 
   // Real observed data now DRIVES the estimate, with the editable
   // attack/defence rating formula above only as a minor supporting
@@ -6929,7 +7016,7 @@ function estimateScoreline(teamId, oppId, isHome) {
   model.draw = blended.draw;
 
   return {
-    teamId, teamGoals: isHome ? model.top.home : model.top.away,
+    teamId, oppId, teamGoals: isHome ? model.top.home : model.top.away,
     oppGoals: isHome ? model.top.away : model.top.home,
     teamXg, oppXg, model,
     usedForm: true, usedEmpirical: !!(empiricalTeamXg != null && empiricalOppXg != null), usedH2h: !!h2h,
@@ -7342,19 +7429,54 @@ function renderFixtureRunTierEditor() {
 // list here is the same per-team array renderFdrGrid already built
 // ({ t, scoresInOrder, ... }), so this reuses that work rather than
 // recomputing FDR scores a second time.
+function renderFixtureRunSortRow() {
+  const row = document.getElementById("fixtureRunSortRow");
+  if (!row) return;
+  const metric = state.fixtureRunSortMetric || "fdr";
+  const opts = [["fdr", "📊 Rank by FDR"], ["xg", "🔥 Rank by xG/game"], ["cs", "🔒 Rank by CS%"]];
+  row.innerHTML = opts.map(([key, label]) => `<button class="mode-btn${metric === key ? " active" : ""}" data-run-sort="${key}" style="--mode-glow:rgba(224,169,79,0.55)">${label}</button>`).join("");
+  row.querySelectorAll("[data-run-sort]").forEach(btn => {
+    btn.onclick = () => { state.fixtureRunSortMetric = btn.dataset.runSort; renderFixtureRunFinder(); };
+  });
+}
 function renderFixtureRunFinder() {
+  renderFixtureRunSortRow();
   const grid = document.getElementById("fixtureRunGrid");
   const suggestionEl = document.getElementById("fixtureRunSuggestion");
   if (!grid) return;
   const { list, gwIds } = computeFixtureRunFullSeasonData();
   const tiers = state.fixtureRunTiers;
   const tierKeys = Object.keys(tiers);
+  const metric = state.fixtureRunSortMetric || "fdr";
   const head = `<tr><th class="label-col">Club</th>${tierKeys.map(k => `<th>${tiers[k].label}</th>`).join("")}</tr>`;
   const perTeamRuns = list.map(({ t, scoresInOrder, xgInOrder, csInOrder }) => {
     const runs = {};
     for (const k of tierKeys) runs[k] = bestFixtureRun(scoresInOrder, gwIds, tiers[k].minLen, tiers[k].maxAvg, xgInOrder, csInOrder);
     return { t, runs };
   });
+  // Rank rows by whichever metric is selected — default (FDR) keeps the
+  // team-id ordering the table always had; xG/game and CS% instead sort by
+  // that team's best qualifying run across all tiers on that stat, so you
+  // can find "who has the best-attacking run coming up" directly instead
+  // of only ever being able to rank by fixture difficulty.
+  function bestMetricAcrossTiers(runs, key) {
+    const vals = tierKeys.map(k => runs[k] && runs[k][key] != null ? runs[k][key] : null).filter(v => v !== null);
+    if (!vals.length) return null;
+    return key === "avg" ? Math.min(...vals) : Math.max(...vals);
+  }
+  if (metric === "xg") {
+    perTeamRuns.sort((a, b) => {
+      const av = bestMetricAcrossTiers(a.runs, "avgXg"), bv = bestMetricAcrossTiers(b.runs, "avgXg");
+      if (av === null) return 1; if (bv === null) return -1;
+      return bv - av;
+    });
+  } else if (metric === "cs") {
+    perTeamRuns.sort((a, b) => {
+      const av = bestMetricAcrossTiers(a.runs, "avgCs"), bv = bestMetricAcrossTiers(b.runs, "avgCs");
+      if (av === null) return 1; if (bv === null) return -1;
+      return bv - av;
+    });
+  }
   // Goals/clean-sheet info alongside the FDR average, so a run that looks
   // "easy" on fixture difficulty alone but is actually low-scoring (or vice
   // versa) doesn't get missed.
@@ -7365,12 +7487,18 @@ function renderFixtureRunFinder() {
   grid.innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
 
   // Suggestion line: which club has the best run to target, per tier —
-  // "best" = longest run, tie-broken by lowest average FDR.
+  // ranking metric follows the same selector (default: longest run,
+  // tie-broken by lowest average FDR; xG/CS modes rank by that stat
+  // instead, still requiring a qualifying run within the tier's FDR cap).
   const suggestions = tierKeys.map(k => {
-    const withRun = perTeamRuns.filter(x => x.runs[k]).sort((a, b) => b.runs[k].len - a.runs[k].len || a.runs[k].avg - b.runs[k].avg);
+    const withRun = perTeamRuns.filter(x => x.runs[k]).sort((a, b) => {
+      if (metric === "xg") return (b.runs[k].avgXg ?? -Infinity) - (a.runs[k].avgXg ?? -Infinity);
+      if (metric === "cs") return (b.runs[k].avgCs ?? -Infinity) - (a.runs[k].avgCs ?? -Infinity);
+      return b.runs[k].len - a.runs[k].len || a.runs[k].avg - b.runs[k].avg;
+    });
     if (!withRun.length) return `${tiers[k].label}: no club has a qualifying run in this range.`;
     const top = withRun[0];
-    return `${tiers[k].label}: target <strong>${top.t.name}</strong> (GW${top.runs[k].startGw}–GW${top.runs[k].endGw}, ${top.runs[k].len} games, avg ${top.runs[k].avg.toFixed(1)} FDR).`;
+    return `${tiers[k].label}: target <strong>${top.t.name}</strong> (GW${top.runs[k].startGw}–GW${top.runs[k].endGw}, ${top.runs[k].len} games, avg ${top.runs[k].avg.toFixed(1)} FDR${metric === "xg" && top.runs[k].avgXg != null ? `, ${top.runs[k].avgXg.toFixed(2)} xG/gm` : ""}${metric === "cs" && top.runs[k].avgCs != null ? `, ${Math.round(top.runs[k].avgCs)}% CS` : ""}).`;
   });
   suggestionEl.innerHTML = suggestions.join("<br>");
   renderFdrFunFacts(list);
@@ -8480,6 +8608,87 @@ const PLAYSTYLE_BY_SHORT = {
 };
 
 // Last N results (most recent last), e.g. "LWDWW". Null if nothing played yet.
+// Real, data-driven playstyle profile — built from this season's actual
+// full-time results (not a hardcoded blurb), so "playstyle" reflects what
+// the club has actually done rather than a static label that goes stale.
+// FPL's fixtures endpoint only exposes full-time scores (no HT split), so
+// this sticks to derivable full-time metrics: tempo (goals/game either
+// way), defensive solidity (clean sheets + goals conceded rate), and
+// scoring reliability (BTTS/failed-to-score rates).
+function computeClubPlaystyleProfile(teamId) {
+  const fx = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null && (f.team_h === teamId || f.team_a === teamId));
+  const n = fx.length;
+  if (!n) return null;
+  let gf = 0, ga = 0, cleanSheets = 0, btts = 0, failedToScore = 0, highTempo = 0, twoPlusGoals = 0;
+  fx.forEach(f => {
+    const isHome = f.team_h === teamId;
+    const teamGf = isHome ? f.team_h_score : f.team_a_score;
+    const teamGa = isHome ? f.team_a_score : f.team_h_score;
+    gf += teamGf; ga += teamGa;
+    if (teamGa === 0) cleanSheets++;
+    if (teamGf === 0) failedToScore++;
+    if (teamGf > 0 && teamGa > 0) btts++;
+    if (teamGf + teamGa >= 3) highTempo++;
+    if (teamGf >= 2) twoPlusGoals++;
+  });
+  return {
+    n,
+    gfPerGame: gf / n, gaPerGame: ga / n,
+    cleanSheetPct: (cleanSheets / n) * 100,
+    bttsPct: (btts / n) * 100,
+    failedToScorePct: (failedToScore / n) * 100,
+    highTempoPct: (highTempo / n) * 100,
+    twoPlusGoalsPct: (twoPlusGoals / n) * 100,
+  };
+}
+// Rule-based tags from the computed profile, thresholds picked against
+// realistic PL-season ranges — not per-team hardcoding, so a club's tags
+// shift automatically as its actual results change over the season.
+function playstyleTagsHtml(profile) {
+  if (!profile) return `<span class="foot-note">No matches played yet this season</span>`;
+  const tags = [];
+  if (profile.gfPerGame >= 1.8) tags.push(["High-tempo attack", "#3cd25a"]);
+  else if (profile.gfPerGame <= 1.0) tags.push(["Struggles to create", "#e0529a"]);
+  if (profile.gaPerGame <= 1.0) tags.push(["Defensively tight", "#3cd25a"]);
+  else if (profile.gaPerGame >= 1.8) tags.push(["Leaky at the back", "#e0529a"]);
+  if (profile.cleanSheetPct >= 40) tags.push(["Frequent clean sheets", "#3ba7ff"]);
+  if (profile.bttsPct >= 55) tags.push(["Games tend to have goals both ends", "#e0a94f"]);
+  if (profile.failedToScorePct >= 30) tags.push(["Can go quiet in attack", "#e0529a"]);
+  if (profile.highTempoPct >= 55) tags.push(["High-scoring games common", "#e0a94f"]);
+  if (!tags.length) tags.push(["Balanced, no strong tendency either way", "#8a8fa3"]);
+  return tags.map(([t, c]) => `<span class="pos-pill" style="background:${c}33;color:${c};margin:2px 4px 2px 0">${t}</span>`).join("");
+}
+function playstyleHeadToHeadHtml(teamA, teamB) {
+  const pa = computeClubPlaystyleProfile(teamA.id), pb = computeClubPlaystyleProfile(teamB.id);
+  if (!pa || !pb) return `<p class="foot-note">Not enough matches played yet this season for a playstyle read.</p>`;
+  const barPct = (a, b, invert) => {
+    const tot = a + b;
+    if (tot <= 0) return 50;
+    const pct = (a / tot) * 100;
+    return invert ? 100 - pct : pct;
+  };
+  const bar = (label, pct, valA, valB) => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-bottom:3px"><span class="mono">${valA}</span><span>${label}</span><span class="mono">${valB}</span></div>
+      <div style="height:8px;border-radius:999px;overflow:hidden;display:flex;background:var(--panel-3,#333)">
+        <div style="width:${pct}%;background:var(--gold-bright)"></div>
+        <div style="width:${100 - pct}%;background:var(--pink)"></div>
+      </div>
+    </div>`;
+  return `
+    <div style="max-width:460px;margin:0 auto 12px">
+      ${bar("Goals scored/game", barPct(pa.gfPerGame, pb.gfPerGame), pa.gfPerGame.toFixed(2), pb.gfPerGame.toFixed(2))}
+      ${bar("Defensive solidity (lower GA/game wins)", barPct(pa.gaPerGame, pb.gaPerGame, true), pa.gaPerGame.toFixed(2), pb.gaPerGame.toFixed(2))}
+      ${bar("Clean sheet %", barPct(pa.cleanSheetPct, pb.cleanSheetPct), pa.cleanSheetPct.toFixed(0) + "%", pb.cleanSheetPct.toFixed(0) + "%")}
+      ${bar("Both-teams-to-score %", barPct(pa.bttsPct, pb.bttsPct), pa.bttsPct.toFixed(0) + "%", pb.bttsPct.toFixed(0) + "%")}
+      ${bar("High-tempo (3+ goal) games %", barPct(pa.highTempoPct, pb.highTempoPct), pa.highTempoPct.toFixed(0) + "%", pb.highTempoPct.toFixed(0) + "%")}
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center">
+      <div style="text-align:center;flex:1;min-width:200px">${playstyleTagsHtml(pa)}</div>
+      <div style="text-align:center;flex:1;min-width:200px">${playstyleTagsHtml(pb)}</div>
+    </div>
+  `;
+}
 function teamRecentForm(teamId, n) {
   const fx = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null && (f.team_h === teamId || f.team_a === teamId))
     .sort((a, b) => (b.event || 0) - (a.event || 0)).slice(0, n || 5);
@@ -8513,13 +8722,14 @@ function formBreakdownHtml(team) {
 }
 function clubProfileHtml(team) {
   const mgr = MANAGER_BY_SHORT[team.short_name];
-  const style = PLAYSTYLE_BY_SHORT[team.short_name];
   const form = teamRecentForm(team.id, 5);
+  const profile = computeClubPlaystyleProfile(team.id);
   return `
     <div class="card" style="flex:1;min-width:280px">
       <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${kitSvg(team.id, 20)}${team.name} — profile (gathered)</div>
       <p class="foot-note" style="margin-bottom:4px"><strong>Manager:</strong> ${mgr ? `${mgr.name} (since ${mgr.since})` : "Not on file — add in notes below"}</p>
-      <p class="foot-note" style="margin-bottom:4px"><strong>Known playstyle:</strong> ${style || "No established track record yet at this club — add your own read in the notes below"}</p>
+      <p class="foot-note" style="margin-bottom:6px"><strong>Playstyle (from this season's actual results):</strong></p>
+      <div style="margin-bottom:6px">${playstyleTagsHtml(profile)}</div>
       <p class="foot-note"><strong>Form (last 5):</strong> ${form || "No matches played yet this season"}</p>
     </div>
   `;
@@ -8721,6 +8931,12 @@ function renderH2H() {
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
       ${clubProfileHtml(teamA)}
       ${clubProfileHtml(teamB)}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Playstyle vs playstyle (real data, this season)</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Derived from actual full-time results — attacking tempo, defensive solidity, clean sheets, both-teams-to-score rate, and high-scoring-game frequency. Tags update automatically as each club's results change; there's no half-time data in the FPL API, so this is full-time-derived only.</p>
+      ${playstyleHeadToHeadHtml(teamA, teamB)}
     </div>
 
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
