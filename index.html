@@ -492,7 +492,20 @@
   tbody td.label-col { text-align: left; }
   tbody tr.player-row { cursor: pointer; transition: background 0.1s ease; }
   tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
-  tbody tr.detail-row td { background: rgba(255,255,255,0.02); border-top: none; padding: 0; }
+  tbody tr.detail-row td {
+    background: rgba(255,255,255,0.02); border-top: none; padding: 0;
+    /* The player list table can be wider than the viewport (many stat
+       columns) and scrolls horizontally within .table-wrap — but the
+       expanded detail panel is conceptually separate content, not another
+       column, so it shouldn't require scrolling that same horizontal
+       distance to see. Sticking it to the left edge of the scrollport
+       keeps it in view regardless of scroll position; its actual width is
+       set from JS to match .table-wrap's visible width exactly (see
+       renderStats), since colspan alone would otherwise size it to the
+       sum of the (possibly much wider) real column widths.
+    */
+    position: sticky; left: 0;
+  }
   .table-wrap {
     overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
     background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
@@ -504,11 +517,17 @@
      right columns fall off-screen. */
   .table-scroll-shell { position: relative; }
   .table-scroll-arrow {
-    position: absolute; top: 50%; transform: translateY(-50%); z-index: 8;
+    /* top is set inline by JS (initTableScrollArrow), pinned to the
+       vertical center of whatever's actually visible in the viewport right
+       now — NOT 50% of the shell's total height. A shell containing an
+       expanded player detail row can be 2000px+ tall, and a flat 50% would
+       land the arrow wherever that midpoint happens to fall (e.g. directly
+       on top of the attribute sliders), regardless of what's on screen. */
+    position: absolute; transform: translateY(-50%); z-index: 8;
     width: 34px; height: 34px; border-radius: 50%; display: none; align-items: center; justify-content: center;
     background: rgba(10,14,12,0.85); border: 1px solid var(--border-strong); color: var(--gold-bright);
     font-size: 16px; cursor: pointer; box-shadow: var(--shadow); backdrop-filter: blur(8px);
-    transition: background 0.12s ease, transform 0.12s ease;
+    transition: background 0.12s ease;
   }
   .table-scroll-arrow:hover { background: var(--gold-soft); transform: translateY(-50%) scale(1.08); }
   .table-scroll-arrow.left { left: -4px; }
@@ -4407,6 +4426,21 @@ function renderStats() {
         // shorter viewports the panel can open mostly/entirely below the
         // fold and look "cut off" even though it's just unscrolled-to.
         requestAnimationFrame(() => dtr.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+        // The player list table itself can be wider than the viewport
+        // (many stat columns) and scrolls horizontally — but the detail
+        // panel isn't another column, it's a full-width content block.
+        // Snap scroll back to 0 (in case the table was scrolled right when
+        // this row was expanded) and pin the sticky detail cell's width to
+        // the wrap's own visible width, not colspan's natural (much wider)
+        // sum of real column widths, so the panel is always fully visible
+        // without needing any horizontal scroll of its own.
+        const tw = td.closest(".table-wrap");
+        if (tw) {
+          tw.scrollLeft = 0;
+          const syncWidth = () => { td.style.width = tw.clientWidth + "px"; td.style.maxWidth = tw.clientWidth + "px"; };
+          syncWidth();
+          window.addEventListener("resize", syncWidth);
+        }
       }
     }
     body.querySelectorAll(".star-btn").forEach(btn => {
@@ -5948,9 +5982,12 @@ function renderCaptaincyTab() {
     });
   }
   // Button toggle instead of a native <select> for the source picker.
+  // Defaults to "Any player" (see the source-resolution logic just below)
+  // so this reflects that default rather than always highlighting "My
+  // team's squad only".
   const sourceToggle = document.getElementById("capSourceToggle");
   if (sourceToggle) {
-    const cur = state.capSource || "myteam";
+    const cur = state.capSource || "all";
     sourceToggle.querySelectorAll("[data-cap-source]").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.capSource === cur);
       btn.onclick = () => { state.capSource = btn.dataset.capSource; renderCaptaincyTab(); };
@@ -5958,14 +5995,18 @@ function renderCaptaincyTab() {
   }
   const gwId = state.capGwId || (gwSelect ? Number(gwSelect.value) : null);
   if (!gwId) { body.innerHTML = `<div class="empty-state">No upcoming gameweek data yet.</div>`; return; }
-  const source = state.capSource || "myteam";
+  // Default to "Any player" so this tab always shows real candidates the
+  // instant you open it — "My team's squad only" needs a team ID loaded
+  // first (My team tab) and used to dead-end into an empty state with
+  // nothing to look at otherwise. If "My team" is explicitly selected but
+  // no team is loaded yet, fall back to showing the "Any player" pool
+  // (with a note) instead of a blank page.
+  const requestedSource = state.capSource || "all";
+  const noTeamLoaded = requestedSource === "myteam" && !(state.myTeamSquadIds && state.myTeamSquadIds.length);
+  const source = noTeamLoaded ? "all" : requestedSource;
   let pool;
-  if (source === "myteam" && state.myTeamSquadIds && state.myTeamSquadIds.length) {
+  if (source === "myteam") {
     pool = state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean);
-  } else if (source === "myteam") {
-    body.innerHTML = `<div class="empty-state">Load your team on the My team tab first, or switch to "Any player" above.</div>`;
-    renderCaptaincyTracker();
-    return;
   } else {
     pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
   }
@@ -6027,6 +6068,7 @@ function renderCaptaincyTab() {
     </tr>`;
   }).join("");
   body.innerHTML = `
+    ${noTeamLoaded ? `<p class="field-desc" style="margin:0 0 10px;color:var(--gold-bright)">Showing "Any player" — load your team on the My team tab to switch to your own squad only.</p>` : ""}
     <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon). Pin (📍) a player to keep them visible while browsing others.</p>
     <div class="table-wrap"><table>
       <thead><tr><th class="label-col">Player</th><th>Captaincy score</th><th>Base proj</th><th>Floor</th><th>Routes</th><th>Playstyle</th></tr></thead>
@@ -6213,7 +6255,7 @@ function renderCapBestChart() {
   if (!el) return;
   const myToken = ++_capBestChartToken;
   const gwIds = getHorizonGws(38);
-  const source = state.capSource || "myteam";
+  const source = state.capSource || "all";
   const pool = (source === "myteam" && state.myTeamSquadIds && state.myTeamSquadIds.length)
     ? state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
     : null; // null = full league-wide pool (default inside computeTheoreticalBestCaptaincy)
@@ -12157,6 +12199,36 @@ function simMatchOutputForPlayer(p, stat, winProb) {
   const mult = 1 + (winProb - 0.5) * 0.8;
   return { value: Math.max(0, base * mult), isReal: real != null };
 }
+// Auto-generates a sensible default set of player-vs-player matchups for a
+// team pairing when nothing has been manually pinned on the Tactical board
+// yet — picking two teams should show SOMETHING immediately rather than
+// sending the user off to a separate tab to set up matchups by hand first.
+// Ranks each team's players within a position by season total points and
+// pairs them positionally (best GK vs best GK, then DEF-DEF/MID-MID/FWD-FWD
+// in descending points order) — a reasonable like-for-like matchup guess,
+// capped at a realistic XI-sized 11 pairings. This never writes to
+// state.h2hMatchups (so it doesn't clutter the Tactical board's saved
+// matchups) — it's purely a display-time fallback for this view.
+function autoGenerateMatchups(teamAId, teamBId) {
+  const byPos = (teamId) => {
+    const grouped = { GK: [], DEF: [], MID: [], FWD: [] };
+    for (const p of state.players.filter(pl => pl.teamId === teamId)) {
+      if (grouped[p.position]) grouped[p.position].push(p);
+    }
+    for (const pos of ["GK", "DEF", "MID", "FWD"]) grouped[pos].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    return grouped;
+  };
+  const aByPos = byPos(teamAId), bByPos = byPos(teamBId);
+  const counts = { GK: 1, DEF: 4, MID: 4, FWD: 2 }; // a plausible 4-4-2-shaped XI worth of pairings
+  const pairs = [];
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const n = Math.min(counts[pos], aByPos[pos].length, bByPos[pos].length);
+    for (let i = 0; i < n; i++) {
+      pairs.push({ id: "auto" + pos + i, playerAId: aByPos[pos][i].id, playerBId: bByPos[pos][i].id, label: "", winner: null, edge: null, isAuto: true });
+    }
+  }
+  return pairs;
+}
 function renderSimMatchBody() {
   const bodyEl = document.getElementById("simMatchBody");
   if (!bodyEl) return;
@@ -12165,9 +12237,11 @@ function renderSimMatchBody() {
   const teamA = state.teamsById[teamAId], teamB = state.teamsById[teamBId];
   if (!teamA || !teamB) { bodyEl.innerHTML = `<div class="empty-state">Pick both teams above.</div>`; return; }
   const key = h2hMatchupKey(teamAId, teamBId);
-  const matchups = state.h2hMatchups[key] || [];
+  const pinnedMatchups = state.h2hMatchups[key] || [];
+  const usingAutoMatchups = pinnedMatchups.length === 0;
+  const matchups = usingAutoMatchups ? autoGenerateMatchups(teamAId, teamBId) : pinnedMatchups;
   if (!matchups.length) {
-    bodyEl.innerHTML = `<div class="empty-state">No matchups pinned yet for ${teamA.short_name} vs ${teamB.short_name}. Go to the Tactical board tab, pick this team pairing, and add player matchups there — they'll show up here automatically.</div>`;
+    bodyEl.innerHTML = `<div class="empty-state">Not enough player data for ${teamA.short_name} vs ${teamB.short_name} to build matchups yet.</div>`;
     return;
   }
   const rows = matchups.map(m => {
@@ -12227,13 +12301,31 @@ function renderSimMatchBody() {
   bodyEl.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">Projected match output — ${teamA.short_name} vs ${teamB.short_name}</div>
-      <p class="field-desc" style="margin:0 0 10px">Rolled up from all ${rows.length} pinned matchup(s) below. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers, unlike the other rows which use real season shot/chance/tackle/aerial data scaled to a per-90 rate.</p>
+      <p class="field-desc" style="margin:0 0 10px">Rolled up from ${rows.length} matchup(s) below. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers, unlike the other rows which use real season shot/chance/tackle/aerial data scaled to a per-90 rate.</p>
       ${statRowsHtml}
     </div>
     <div class="detail-block-title">Matchups feeding this simulation</div>
-    <p class="field-desc" style="margin:0 0 10px">Edit these on the Tactical board tab — this view just reads them.</p>
+    ${usingAutoMatchups
+      ? `<p class="field-desc" style="margin:0 0 10px">Auto-generated by pairing each team's top scorer at each position (best GK vs best GK, then DEF/MID/FWD in points order) — no matchups have been manually pinned for this pairing yet. <button type="button" id="simSendToTacboardBtn" class="chip-btn small" style="cursor:pointer">Send these to the Tactical board to customise →</button></p>`
+      : `<p class="field-desc" style="margin:0 0 10px">Pulled from your saved matchups on the Tactical board — edit them there, this view just reads them.</p>`}
     <div class="matchup-grid">${matchupRowsHtml}</div>
   `;
+  const sendBtn = document.getElementById("simSendToTacboardBtn");
+  if (sendBtn) {
+    sendBtn.onclick = () => {
+      // Persist the auto-generated pairing as real saved matchups (minus
+      // our internal isAuto/id-prefix bookkeeping) so the Tactical board
+      // opens with a ready-made starting point to tweak, instead of blank.
+      state.h2hMatchups[key] = matchups.map(m => ({
+        id: "m" + Date.now() + Math.random().toString(36).slice(2, 7),
+        playerAId: m.playerAId, playerBId: m.playerBId, label: m.label || "", winner: null,
+        edge: matchupAttributeEdge(state.players.find(p => p.id === m.playerAId), state.players.find(p => p.id === m.playerBId)),
+      }));
+      saveH2hMatchups();
+      state.tacboard.teamA = teamAId; state.tacboard.teamB = teamBId;
+      switchTab("tacboard");
+    };
+  }
 }
 function setupSimMatchControls() {
   const selA = document.getElementById("simMatchTeamA"), selB = document.getElementById("simMatchTeamB");
@@ -12340,13 +12432,41 @@ function initTableScrollArrow(wrap) {
   const scrollAmount = () => Math.max(160, Math.round(wrap.clientWidth * 0.6));
   left.onclick = () => wrap.scrollBy({ left: -scrollAmount(), behavior: "smooth" });
   right.onclick = () => wrap.scrollBy({ left: scrollAmount(), behavior: "smooth" });
+  // Vertical position: center the arrows on whatever part of the shell is
+  // actually visible in the viewport right now, clamped to the shell's own
+  // bounds — not a flat 50% of the shell's total height. A table with an
+  // expanded detail row open can be far taller than the screen, so a flat
+  // 50% would park the arrows wherever that midpoint of ALL content lands
+  // (this was landing directly on top of the player attribute sliders).
+  const repositionVertically = () => {
+    const rect = shell.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const visibleTop = Math.max(rect.top, 0);
+    const visibleBottom = Math.min(rect.bottom, viewportH);
+    const visibleMidViewport = (visibleTop + visibleBottom) / 2;
+    // Convert that viewport-relative midpoint into a position within the
+    // shell itself, then clamp so the arrow never sits off the shell.
+    let localTop = visibleMidViewport - rect.top;
+    localTop = Math.max(24, Math.min(rect.height - 24, localTop));
+    left.style.top = localTop + "px";
+    right.style.top = localTop + "px";
+  };
   const refresh = () => {
-    const canScroll = wrap.scrollWidth > wrap.clientWidth + 2;
+    // While a player detail row is expanded, the table is far taller than
+    // just its header + rows, and the detail panel's own content (which
+    // isn't part of the horizontally-scrolling table at all) has nowhere
+    // safe for these arrows to sit without floating on top of it — so
+    // just hide them until the row is collapsed again, rather than trying
+    // to find a position that never overlaps.
+    const hasExpandedRow = !!wrap.querySelector("tr.detail-row");
+    const canScroll = !hasExpandedRow && wrap.scrollWidth > wrap.clientWidth + 2;
     left.classList.toggle("show", canScroll && wrap.scrollLeft > 4);
     right.classList.toggle("show", canScroll && wrap.scrollLeft < wrap.scrollWidth - wrap.clientWidth - 4);
+    if (!hasExpandedRow) repositionVertically();
   };
   wrap.addEventListener("scroll", refresh, { passive: true });
   window.addEventListener("resize", refresh);
+  window.addEventListener("scroll", repositionVertically, { passive: true });
   refresh();
   wrap._scrollArrowRefresh = refresh;
 }
