@@ -2756,6 +2756,44 @@ function clearPlayerClubOverride(playerId) {
 // Re-applies every stored override onto the already-loaded state.players
 // pool (used after the user changes an override without a full data
 // reload, and once right after the initial bootstrap load/restore).
+//
+// Single choke point for the override's downstream effects: most of the
+// app (fixture lookups, FDR, simulation squad membership) reads p.teamId
+// live every time, so mutating it above is already enough for those. But
+// a handful of team-aggregate numbers are memoized/cached rather than
+// recomputed on every read, for performance (some are hot paths called
+// per-player-per-gameweek), and those caches are keyed by team membership
+// at the time they were built — if a player's teamId changes after that,
+// the cached numbers silently go stale and keep reflecting his OLD club's
+// aggregate (or a since-changed captaincy score) even though p.teamId
+// itself is correct. Rather than hunt down and patch every call site that
+// happens to read one of these, drop/recompute them all right here so a
+// club override is guaranteed to propagate everywhere the moment it's
+// applied:
+//   - p.teamGoalShare / p.teamXgiShare (computeTeamContributionShares) are
+//     written directly onto each player object from a one-time grouping
+//     by teamId — must be fully recomputed, not just invalidated.
+//   - _teamXgiTotals / _teamDefConAvg / _leagueDefConAvg (team-aggregate
+//     memoization used by teamContributionShare/teamStyleMultiplier, which
+//     feed computeProjectionRow) are only otherwise reset at the top of
+//     renderProjectionsTab() — cleared here too so anything reading them
+//     before that tab next renders (e.g. captaincy scoring below) doesn't
+//     see stale team totals.
+//   - _capScoreCache/_capBestCache (captaincyScoreForGw/computeTheoretical
+//     BestCaptaincy) are memoized per (playerId, gwId) "for the lifetime
+//     of the loaded dataset" per their own comment — an override changes
+//     that player's fixtures/FDR inputs, which is exactly the kind of
+//     change that comment says should invalidate them.
+//   - _leagueAvgCsPct is a league-wide average built by walking every
+//     team's next fixture — a player switching clubs doesn't change which
+//     fixtures exist, only which one that player is attached to, so this
+//     one isn't actually team-membership-cached in the affected sense,
+//     but it's cheap to drop alongside the others for safety since it's
+//     just a lazily-recomputed scalar.
+// (_teamGaRateCache is deliberately NOT touched here — it's built purely
+// from real match results via computeLiveTable/state.allFixtures, keyed
+// by real team id, with no player-pool involvement, so a player override
+// can't make it stale.)
 function applyPlayerClubOverrides() {
   const overrides = state.playerClubOverrides || {};
   for (const p of state.players || []) {
@@ -2768,6 +2806,9 @@ function applyPlayerClubOverrides() {
       p.clubOverridden = false;
     }
   }
+  if (typeof computeTeamContributionShares === "function") computeTeamContributionShares();
+  _teamXgiTotals = null; _teamDefConAvg = null; _leagueDefConAvg = null; _leagueAvgCsPct = null;
+  if (typeof invalidateCaptaincyScoreCache === "function") invalidateCaptaincyScoreCache();
 }
 function playerClubOverrideEditorHtml(playerId) {
   const p = state.players.find(pl => pl.id === playerId);
@@ -5969,69 +6010,424 @@ function myTeamBudgetCapTenths() {
   if (!draft || !draft.squad || !draft.squad.length) return BUDGET;
   return squadCost(draft.squad) + (draft.bank || 0);
 }
-// Full Bench Boost 15: picks the XI under the formation's own fixed
-// budget (same pickConstrainedXI used by the normal Best XI pitch — same
-// budget guarantee applies), then fills the remaining 4 bench slots (1
-// spare GK + whichever outfield slots are left to reach the real FPL
-// squad shape of 2 GK / 5 DEF / 5 MID / 3 FWD) with the CHEAPEST eligible
-// remaining players, using whatever's left of the overall budgetCap
-// (defaults to the full £100m) after the XI's own spend — this is what
-// "fill the bench to £100m but keep the XI's own budget intact" means:
-// the XI never sacrifices its own budget rule to make room for a pricier
-// bench, since bench players don't score in a normal week and are only
-// there to be legal (a real Bench Boost week is the exception, which is
-// exactly why this Bench Boost checker exists as a separate view).
+// ---------- Joint 15-player optimizer (shared by the Projections Best-15
+// checker and Squad Builder's Bench Boost pickers) ----------
+// Previous design (kept here in history/spirit only — no longer what runs):
+// pick the XI under the formation's own fixed budget, then fill the
+// remaining 4 bench slots with the CHEAPEST eligible remaining players.
+// That's correct for a normal week (bench doesn't score, so cash saved on
+// the bench is cash better spent on the XI) but wrong for what this picker
+// actually simulates: a Bench Boost week, where all 15 score and captain
+// doubles whichever of them projects highest. Under that scoring rule a
+// bench player who costs a bit more than the cheapest option at his
+// position but projects meaningfully higher points is worth taking, the
+// same as any starter would be — "XI then cheapest bench" systematically
+// leaves those points on the table. See jointOptimizeSquad below, which
+// treats all 15 slots as one budget-constrained optimization instead.
+//
+// A full brute-force joint search over the whole player pool (~600+
+// players, 15 slots, continuous budget) is not tractable synchronously in
+// a browser click handler. Instead: greedy construction (fill every one of
+// the 15 slots — not just the XI — by highest projected value first,
+// reserving enough budget for every other still-open slot at its live
+// price floor, same reserve technique autoPickSquad/solveBenchBoostForGw
+// already use) followed by iterative pairwise-exchange local search (find
+// the single legal same-position swap, anywhere in the 15, that improves
+// total squad value the most; apply it; repeat until no improving swap
+// remains or the iteration cap is hit). This is the standard
+// construct-then-improve heuristic for a knapsack-shaped problem like this
+// one, and — unlike the old code — it can and does trade a cheap bench
+// filler for a pricier, better-projecting one when the budget allows it.
+// Legality (budget, max-3-per-club) is checked before any swap is ever
+// accepted, so it's a hard constraint by construction, not something
+// reconciled after the fact — but a final repair pass still runs as a
+// backstop (matching this file's own established budget-repair/
+// club-limit-repair convention elsewhere), since floating-point tenths
+// arithmetic and the "never leave a slot empty" fallback below can in
+// principle disagree with the incremental bookkeeping by a rounding hair.
+//
+// valueFor(p) returns this player's score for whatever the caller is
+// optimizing (GW-specific projected points for the Projections checker,
+// season priorityScore for Squad Builder's pickers) — kept generic so both
+// callers share one exchange engine instead of two near-duplicate ones.
+function jointOptimizeSquad(pool, valueFor, useClubLimit, budgetCap, lockedIds) {
+  const locked = new Set(lockedIds || []);
+  const priceOf = (p) => p.nowCost || 0; // tenths
+  const clubOkFor = (p, clubCount) => !useClubLimit || p.clubOverridden || (clubCount[p.teamId] || 0) < 3;
+  // ---- construction: fill all 15 slots by highest value first, budget-
+  // reserve-aware exactly like autoPickSquad/solveBenchBoostForGw already
+  // are, just applied to every slot instead of stopping at the XI. ----
+  const squad = [...locked]; // player ids, in pick order
+  const squadSet = new Set(squad);
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    let need = SQUAD_RULES[pos] - squad.filter(id => pool.byId.get(id)?.position === pos).length;
+    while (need > 0) {
+      const spent = squad.reduce((s, id) => s + priceOf(pool.byId.get(id)), 0);
+      const clubCount = {};
+      for (const id of squad) { const pp = pool.byId.get(id); if (pp) clubCount[pp.teamId] = (clubCount[pp.teamId] || 0) + 1; }
+      const reserve = minReserveForRemainingSlots(squad, pos);
+      const remaining = budgetCap - spent;
+      let candidates = pool.byPos[pos]
+        .filter(p => !squadSet.has(p.id) && clubOkFor(p, clubCount) && priceOf(p) <= remaining - reserve)
+        .sort((a, b) => valueFor(b) - valueFor(a));
+      if (!candidates.length) {
+        // Reserve heuristic left no room — same fallback as autoPickSquad:
+        // relax the reserve and just take the cheapest legal option so
+        // the squad still completes.
+        candidates = pool.byPos[pos]
+          .filter(p => !squadSet.has(p.id) && clubOkFor(p, clubCount) && priceOf(p) <= remaining)
+          .sort((a, b) => priceOf(a) - priceOf(b));
+      }
+      if (!candidates.length) {
+        // Budget/club-limit genuinely leaves nothing legal at this price —
+        // completing a full 15 matters more than the reserve heuristic, so
+        // drop straight to cheapest legal-by-club option regardless of
+        // budget (mirrors autoPickSquad's own last-resort fallback). Club
+        // limit is NEVER relaxed here — a bench spot still has to be legal.
+        candidates = pool.byPos[pos]
+          .filter(p => !squadSet.has(p.id) && clubOkFor(p, clubCount))
+          .sort((a, b) => priceOf(a) - priceOf(b));
+      }
+      const pick = candidates[0];
+      if (!pick) break; // genuinely no legal candidate left at this position at all
+      squad.push(pick.id); squadSet.add(pick.id);
+      need--;
+    }
+  }
+  const totalSpend = () => squad.reduce((s, id) => s + priceOf(pool.byId.get(id)), 0);
+  // ---- budget repair: downgrade whichever non-locked player frees the
+  // most £ per point of value given up (mirrors pickConstrainedXI's own
+  // repair pass), until back under budget or genuinely infeasible. Deals
+  // with construction's own last-resort fallback tier above (which
+  // deliberately ignores budget entirely rather than leave a slot empty)
+  // BEFORE improvement runs — this has to happen first, not just as an
+  // end-of-function backstop: the improvement loop below prices every
+  // candidate swap against "how much headroom is left under budgetCap
+  // given the current total spend", and if that total spend already
+  // starts over budgetCap, EVERY candidate's headroom is artificially
+  // squeezed by the overage, which can silently block genuinely great
+  // swaps (a clearly-better replacement gets rejected as "too expensive"
+  // purely because the squad was already over budget for an unrelated
+  // reason) rather than just blocking illegal ones. Runs again after
+  // improvement/club-repair too, in case either of those reintroduces an
+  // overage — each call is a cheap no-op once already under budget. ----
+  function repairBudget() {
+    let guard = 0;
+    while (totalSpend() > budgetCap + 1e-9 && guard++ < 200) {
+      let bestSwap = null;
+      const spent = totalSpend();
+      for (let idx = 0; idx < squad.length; idx++) {
+        const currentId = squad[idx];
+        if (locked.has(currentId)) continue;
+        const current = pool.byId.get(currentId);
+        if (!current) continue;
+        for (const cand of pool.byPos[current.position]) {
+          if (squadSet.has(cand.id)) continue;
+          const saved = priceOf(current) - priceOf(cand);
+          if (saved <= 1e-9) continue;
+          const valueLost = valueFor(current) - valueFor(cand);
+          const score = valueLost <= 0 ? Infinity : saved / valueLost;
+          if (!bestSwap || score > bestSwap.score || (score === bestSwap.score && saved > bestSwap.saved)) {
+            bestSwap = { idx, cand, saved, score };
+          }
+        }
+      }
+      if (!bestSwap) break; // genuinely infeasible — nothing left to cut
+      const oldId = squad[bestSwap.idx];
+      squad[bestSwap.idx] = bestSwap.cand.id;
+      squadSet.delete(oldId); squadSet.add(bestSwap.cand.id);
+    }
+  }
+  // ---- club-limit repair: swap out an offending-club player for the best
+  // legal same-position replacement, until no club exceeds 3 (excluding
+  // clubOverridden players) or genuinely infeasible. The replacement's OWN
+  // club must also be under the limit before the swap (not just "not the
+  // offender") — otherwise "fixing" one club's breach by moving in a
+  // player from an ALREADY-at-the-limit club just creates a new breach
+  // there, which without this check can oscillate forever between two
+  // clubs each "fixing" the other into a fresh violation. Same safeguard
+  // pickConstrainedXI's own club-limit repair pass uses
+  // (`clubCount[r.p.teamId] < MAX_PER_CLUB`).
+  //
+  // Tries every non-locked player from the offending club, weakest-value
+  // first (not just THE single weakest) — a squad can have an offending
+  // club spread across multiple positions (e.g. 2 DEF + 2 MID from the
+  // same club), and the single weakest offender might have no legal
+  // same-position replacement available (every alternative already
+  // picked, already at ITS OWN club limit, or unaffordable) while a
+  // different offender at another position does. Giving up after only
+  // the single weakest candidate fails — as pickConstrainedXI's own
+  // equivalent pass does — can leave a genuinely fixable violation
+  // unfixed; this is a hard legality rule for this solver, so it keeps
+  // trying every option before reporting infeasible. ----
+  function repairClubLimit() {
+    if (!useClubLimit) return;
+    let guard = 0;
+    while (guard++ < 200) {
+      const clubCount = {};
+      for (const id of squad) { const pp = pool.byId.get(id); if (pp && !pp.clubOverridden) clubCount[pp.teamId] = (clubCount[pp.teamId] || 0) + 1; }
+      const offenderEntry = Object.entries(clubCount).find(([, c]) => c > 3);
+      if (!offenderEntry) break;
+      const offenderTeamId = Number(offenderEntry[0]);
+      const offenders = []; // every non-locked player from the offending club, weakest value first
+      for (let idx = 0; idx < squad.length; idx++) {
+        const currentId = squad[idx];
+        if (locked.has(currentId)) continue;
+        const current = pool.byId.get(currentId);
+        if (!current || current.teamId !== offenderTeamId || current.clubOverridden) continue;
+        offenders.push({ idx, value: valueFor(current), current });
+      }
+      offenders.sort((a, b) => a.value - b.value);
+      let applied = false;
+      for (const off of offenders) {
+        const spentWithoutOff = totalSpend() - priceOf(off.current);
+        const replacement = pool.byPos[off.current.position]
+          .filter(p => !squadSet.has(p.id) && p.teamId !== offenderTeamId && spentWithoutOff + priceOf(p) <= budgetCap + 1e-9)
+          .filter(p => p.clubOverridden || (clubCount[p.teamId] || 0) < 3)
+          .sort((a, b) => valueFor(b) - valueFor(a))[0];
+        if (!replacement) continue; // this offender has no legal fix — try the next one
+        squadSet.delete(squad[off.idx]); squad[off.idx] = replacement.id; squadSet.add(replacement.id);
+        applied = true;
+        break;
+      }
+      if (!applied) break; // every offending-club player (not just the weakest) has no legal same-position replacement — genuinely infeasible
+    }
+  }
+  repairBudget(); // run BEFORE improvement so its headroom math starts from a legal budget baseline — see comment above
+  // ---- improvement: repeated best-available legal single-player exchange,
+  // anywhere in the 15, until nothing improves total value any further. ----
+  function singleSwapPass() {
+    let improved = false;
+    let guard = 0;
+    const MAX_ITERS = 400; // generous — position pools here are small enough this converges in well under this
+    while (guard++ < MAX_ITERS) {
+      const spent = totalSpend();
+      const clubCount = {};
+      for (const id of squad) { const pp = pool.byId.get(id); if (pp) clubCount[pp.teamId] = (clubCount[pp.teamId] || 0) + 1; }
+      let best = null; // { idx, replacement, gain }
+      for (let idx = 0; idx < squad.length; idx++) {
+        const currentId = squad[idx];
+        if (locked.has(currentId)) continue; // never swap out a caller-locked player
+        const current = pool.byId.get(currentId);
+        if (!current) continue;
+        const currentPrice = priceOf(current);
+        const currentValue = valueFor(current);
+        const budgetAfterRemoval = budgetCap - (spent - currentPrice);
+        const clubCountWithoutCurrent = { ...clubCount };
+        clubCountWithoutCurrent[current.teamId] = (clubCountWithoutCurrent[current.teamId] || 0) - 1;
+        for (const cand of pool.byPos[current.position]) {
+          if (squadSet.has(cand.id)) continue;
+          if (priceOf(cand) > budgetAfterRemoval) continue; // would breach the overall budget cap
+          if (!clubOkFor(cand, clubCountWithoutCurrent)) continue; // would breach max-3-per-club
+          const gain = valueFor(cand) - currentValue;
+          if (gain > 1e-9 && (!best || gain > best.gain)) best = { idx, replacement: cand, gain };
+        }
+      }
+      if (!best) break; // no legal swap anywhere in the 15 improves total value — converged
+      const oldId = squad[best.idx];
+      squad[best.idx] = best.replacement.id;
+      squadSet.delete(oldId); squadSet.add(best.replacement.id);
+      improved = true;
+    }
+    return improved;
+  }
+  // ---- 2-slot exchange pass: a "joint reshuffle" of two squad slots at
+  // once, which the single-swap pass above can structurally never find.
+  // Single-swap only ever accepts a replacement that is BOTH affordable
+  // under the squad's CURRENT spend/club-counts AND higher-value than what
+  // it replaces in complete isolation — it can never see a combined move
+  // where EITHER half only becomes legal/affordable because the other half
+  // is happening in the same move. Two distinct real cases need this:
+  //   (a) budget-coupling — e.g. downgrading a GK (itself a value loss)
+  //       frees enough budget to afford upgrading a weak bench FWD that
+  //       alone isn't affordable. Construction fills GK/DEF/MID/FWD in a
+  //       fixed order and can over-spend on an earlier position, leaving a
+  //       later one (typically FWD, filled last) budget-starved.
+  //   (b) club-limit-coupling — e.g. a MID at club X can't be added alone
+  //       because club X is already at the 3-player cap, but swapping OUT a
+  //       DIFFERENT-position player who ALSO happens to be at club X in the
+  //       very same move keeps club X's count legal throughout, and the
+  //       replacement for THAT vacated slot can come from any club with
+  //       room. Single-swap can never see this because it only ever
+  //       evaluates one slot changing at a time.
+  // For every ordered pair of non-locked squad slots (i, j), this tries
+  // each slot's own best legal replacement (by value, i.e. not merely
+  // "cheapest" — that alone would miss case (b), where the useful "out" pick
+  // may be a value GAIN, not a sacrifice) evaluated JOINTLY against the
+  // OTHER slot's simultaneous change for both budget and club-limit
+  // legality, and accepts the pair only if the combined net value change is
+  // positive. Candidates per slot are capped to the top few by value so
+  // this stays cheap (O(15 × 15 × small constant)) even against large
+  // position pools. ----
+  function twoSlotExchangePass() {
+    const TOP_K = 6; // candidates tried per slot — plenty since only the highest-value legal one ever wins a fair 1-for-1 swap; this pass only needs a few beyond that to also catch budget/club-freeing sacrifices
+    let improvedAny = false;
+    let guard = 0;
+    while (guard++ < 60) {
+      const spent = totalSpend();
+      const clubCount = {};
+      for (const id of squad) { const pp = pool.byId.get(id); if (pp) clubCount[pp.teamId] = (clubCount[pp.teamId] || 0) + 1; }
+      let best = null; // { idxA, replacementA, idxB, replacementB, gain }
+      for (let idxA = 0; idxA < squad.length; idxA++) {
+        const idA = squad[idxA];
+        if (locked.has(idA)) continue;
+        const currentA = pool.byId.get(idA);
+        if (!currentA) continue;
+        const priceA = priceOf(currentA);
+        const valueA = valueFor(currentA);
+        // top few legal-if-this-were-the-only-change candidates for slot A,
+        // by value (not cost) — covers both "this is a straight upgrade"
+        // and "this is a deliberate value-losing sacrifice that frees
+        // budget/club-room for slot B" since both cases are tried.
+        const candsA = pool.byPos[currentA.position]
+          .filter(p => !squadSet.has(p.id) && p.id !== idA)
+          .sort((a, b) => valueFor(b) - valueFor(a))
+          .slice(0, TOP_K);
+        for (let idxB = idxA + 1; idxB < squad.length; idxB++) {
+          const idB = squad[idxB];
+          if (locked.has(idB)) continue;
+          const currentB = pool.byId.get(idB);
+          if (!currentB || currentB.position === currentA.position) continue; // same-position pairs are already covered by single-swap trying each independently; this pass targets cross-position coupling
+          const priceB = priceOf(currentB);
+          const valueB = valueFor(currentB);
+          const candsB = pool.byPos[currentB.position]
+            .filter(p => !squadSet.has(p.id) && p.id !== idB)
+            .sort((a, b) => valueFor(b) - valueFor(a))
+            .slice(0, TOP_K);
+          const budgetForBoth = budgetCap - (spent - priceA - priceB);
+          for (const candA of candsA) {
+            for (const candB of candsB) {
+              if (candA.id === candB.id) continue;
+              if (priceOf(candA) + priceOf(candB) > budgetForBoth + 1e-9) continue;
+              const cw = { ...clubCount };
+              cw[currentA.teamId] = (cw[currentA.teamId] || 0) - 1;
+              cw[currentB.teamId] = (cw[currentB.teamId] || 0) - 1;
+              // candA/candB must each be legal against the club counts AFTER
+              // both originals are removed AND accounting for each other —
+              // order doesn't matter for a >= check as long as both removals
+              // are applied before either addition is tested.
+              if (!clubOkFor(candA, cw)) continue;
+              const cwAfterA = { ...cw }; cwAfterA[candA.teamId] = (cwAfterA[candA.teamId] || 0) + 1;
+              if (!clubOkFor(candB, cwAfterA)) continue;
+              const gain = (valueFor(candA) - valueA) + (valueFor(candB) - valueB);
+              if (gain > 1e-9 && (!best || gain > best.gain)) {
+                best = { idxA, replacementA: candA, idxB, replacementB: candB, gain };
+              }
+            }
+          }
+        }
+      }
+      if (!best) break;
+      const oldAId = squad[best.idxA];
+      const oldBId = squad[best.idxB];
+      squad[best.idxA] = best.replacementA.id;
+      squad[best.idxB] = best.replacementB.id;
+      squadSet.delete(oldAId); squadSet.add(best.replacementA.id);
+      squadSet.delete(oldBId); squadSet.add(best.replacementB.id);
+      improvedAny = true;
+    }
+    return improvedAny;
+  }
+  // Alternate the two passes: a 2-slot exchange can open up new single-swap
+  // improvements (and vice versa), so keep cycling until BOTH report no
+  // further improvement. Bounded to a handful of rounds — in practice this
+  // converges in 1-3 rounds since each round strictly increases total value
+  // and the pool is finite.
+  for (let round = 0; round < 8; round++) {
+    const a = singleSwapPass();
+    const b = twoSlotExchangePass();
+    if (!a && !b) break;
+  }
+  // ---- repair backstop: same spirit as pickConstrainedXI's own budget-
+  // repair/club-limit-repair passes elsewhere in this file — construction
+  // and improvement above never KNOWINGLY accept an illegal swap, so this
+  // should normally be a no-op, but it's cheap insurance against any edge
+  // case (e.g. two locked players alone exceeding budget or the same
+  // club's limit) neither earlier pass could route around because locked
+  // players can't be touched. Budget repair runs once more first (in case
+  // improvement's own swaps somehow drifted it, though they shouldn't),
+  // then club-limit repair, then budget repair again in case club-limit
+  // repair's own swaps pushed spend back over. ----
+  repairBudget();
+  repairClubLimit();
+  repairBudget();
+  return squad;
+}
+// Full Bench Boost 15 for one gameweek: jointOptimizeSquad picks all 15
+// slots together (see comment above) so a bench player who costs a bit
+// more but projects meaningfully higher is chosen over the cheapest
+// option, same as a starter would be — this is the actual "every one of
+// the 15 counts on a Bench Boost week" behaviour, replacing the old
+// "XI under formation budget, then cheapest-fill the bench" design.
+// The formation shape (`need`) still determines which `need[pos]` of each
+// position's picks are "the XI" for captain/points-display purposes
+// afterward — see the XI/bench split below.
 function solveBest15ForGw(gwId, formationKey, useClubLimit, overallBudgetCap) {
   const formation = FORMATIONS_H2H[formationKey] || FORMATIONS_H2H["3-4-3"];
   const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-  const rows = state.players.map(p => computeProjectionRow(p, gwId, gwId, false, 70, 0.8)).filter(r => r.fixtures.length);
-  const xiResult = pickConstrainedXI(rows, need, true, useClubLimit, new Set(), [], formationKey);
-  const xiIds = new Set([...xiResult.picked.GK, ...xiResult.picked.DEF, ...xiResult.picked.MID, ...xiResult.picked.FWD].map(r => r.p.id));
-  const clubCount = {};
-  for (const r of [...xiResult.picked.GK, ...xiResult.picked.DEF, ...xiResult.picked.MID, ...xiResult.picked.FWD]) {
-    clubCount[r.p.teamId] = (clubCount[r.p.teamId] || 0) + 1;
-  }
-  const benchNeed = { GK: 1, DEF: 5 - need.DEF, MID: 5 - need.MID, FWD: 3 - need.FWD };
   const budgetCap = overallBudgetCap != null ? overallBudgetCap : BUDGET; // tenths
-  let spent = xiResult.spent * 10; // xiResult.spent is in £m, convert to tenths to match nowCost
+  // Deliberately NOT filtered to fixture-having players only — a blank-GW
+  // player (no fixture this week) is still legal SQUAD membership (he can
+  // sit on the bench and simply bank 0 that week), only illegal as one of
+  // the "XI" for this specific gameweek. Filtering the whole pool down to
+  // fixture-havers here (like the old XI-only `rows` did) would starve
+  // jointOptimizeSquad's bench slots of otherwise-fine candidates on a
+  // week with a lot of blanks. Blank-GW players still can't win an XI
+  // slot or the value-maximizing exchange search in practice, since
+  // valueFor scores them 0 (never better than a real fixture's positive
+  // proj) — but they remain legally pickable so the squad always
+  // completes to 15.
+  const rows = state.players.map(p => computeProjectionRow(p, gwId, gwId, false, 70, 0.8));
+  const rowById = new Map(rows.map(r => [r.p.id, r]));
+  const pool = {
+    byId: new Map(rows.map(r => [r.p.id, r.p])),
+    byPos: {
+      GK: rows.filter(r => r.p.position === "GK").map(r => r.p),
+      DEF: rows.filter(r => r.p.position === "DEF").map(r => r.p),
+      MID: rows.filter(r => r.p.position === "MID").map(r => r.p),
+      FWD: rows.filter(r => r.p.position === "FWD").map(r => r.p),
+    },
+  };
+  const valueFor = (p) => {
+    if (!p) return 0;
+    const r = rowById.get(p.id);
+    return r && r.fixtures.length ? r.proj : 0; // blank GW this week — no projection to draw on, worth 0
+  };
+  const squadIds = jointOptimizeSquad(pool, valueFor, useClubLimit, budgetCap, []);
+  // Split the chosen 15 into "XI" (top need[pos] by proj, per position,
+  // fixture-having players only) and bench (the rest, including any
+  // blank-GW squad members) — same highest-scorers-start semantic the old
+  // code used, just applied to a squad that was chosen jointly rather
+  // than pre-split into an XI-first budget silo. A blank-GW player is
+  // excluded from XI contention outright (not just outranked) — sorting
+  // by proj alone would already keep him out in virtually every real
+  // case, but this guarantees it rather than relying on 0 always losing
+  // every tiebreak.
+  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
+  for (const id of squadIds) {
+    const r = rowById.get(id);
+    if (r) byPos[r.p.position].push(r);
+  }
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) byPos[pos].sort((a, b) => b.proj - a.proj);
+  const picked = { GK: [], DEF: [], MID: [], FWD: [] };
   const bench = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    const need2 = benchNeed[pos];
-    if (need2 <= 0) continue;
-    // Cheapest-first, never already in the XI. Club-limit eligibility is
-    // checked LIVE per-candidate inside the loop (not filtered once up
-    // front) — clubCount changes as bench picks are made, including
-    // within this same position's own loop, so a club that hits 3 partway
-    // through must stop being eligible for the rest of this loop too, not
-    // just for candidates filtered before any picks happened.
-    const sortedCandidates = state.players
-      .filter(p => p.position === pos && !xiIds.has(p.id))
-      .sort((a, b) => (a.nowCost || 0) - (b.nowCost || 0));
-    const clubOk = (p) => !useClubLimit || p.clubOverridden || (clubCount[p.teamId] || 0) < 3;
-    for (const p of sortedCandidates) {
-      if (bench[pos].length >= need2) break;
-      if (!clubOk(p)) continue;
-      if (spent + (p.nowCost || 0) > budgetCap) continue; // would breach the overall £100m cap — skip to next cheapest
-      bench[pos].push(p);
-      spent += (p.nowCost || 0);
-      clubCount[p.teamId] = (clubCount[p.teamId] || 0) + 1;
-    }
-    // If nothing fit under the remaining budget (very tight edge case),
-    // fall back to the cheapest option regardless of budget — but the
-    // club limit is still a hard rule, never relaxed here (same
-    // never-leave-a-slot-empty principle as pickConstrainedXI's fallback
-    // passes, just without ever breaching max-3-per-club, which stays a
-    // strict rule for a legal bench too).
-    for (const p of sortedCandidates) {
-      if (bench[pos].length >= need2) break;
-      if (bench[pos].some(b => b.id === p.id)) continue;
-      if (!clubOk(p)) continue;
-      bench[pos].push(p);
-      spent += (p.nowCost || 0);
-      clubCount[p.teamId] = (clubCount[p.teamId] || 0) + 1;
-    }
+    const eligible = byPos[pos].filter(r => r.fixtures.length);
+    const blank = byPos[pos].filter(r => !r.fixtures.length);
+    picked[pos] = eligible.slice(0, need[pos]);
+    bench[pos] = [...eligible.slice(need[pos]), ...blank].map(r => r.p); // bench keeps raw player objects, same contract bestFifteenPitchHtml already relies on
   }
-  return { xi: xiResult, need, bench, benchNeed, totalSpent: spent, budgetCap, formationKey };
+  const totalSpent = squadIds.reduce((s, id) => s + (pool.byId.get(id)?.nowCost || 0), 0);
+  const clubCountAll = {};
+  for (const id of squadIds) { const p = pool.byId.get(id); if (p && !p.clubOverridden) clubCountAll[p.teamId] = (clubCountAll[p.teamId] || 0) + 1; }
+  const clubLimitInfeasible = useClubLimit && Object.values(clubCountAll).some(c => c > 3);
+  // Only `picked` and `clubLimitInfeasible` are actually read by any
+  // caller (bestFifteenPitchHtml) — the old fixed-per-formation "XI
+  // budget"/"XI spend"/"XI budget infeasible" fields this object used to
+  // carry are gone now that the whole 15 shares one joint budget
+  // (totalSpent/budgetCap below), not a separate XI-only sub-budget.
+  const xiResult = { picked, clubLimitInfeasible };
+  return { xi: xiResult, need, bench, totalSpent, budgetCap, formationKey };
 }
 // Best legal starting XI (captain applied) from a fixed 15-man squad for
 // one gameweek, using the SAME projection engine (computeProjectionRow)
@@ -6122,7 +6518,8 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
     return `<div class="pitch-row">${slots.join("")}</div>`;
   }).join("");
   const benchList = [...bench.GK, ...bench.DEF, ...bench.MID, ...bench.FWD];
-  const benchShort = benchList.length < 4;
+  const benchShort = benchList.length < 4; // defensive only — jointOptimizeSquad fills all 15 slots the same way, so this shouldn't trigger with real data
+  const squadBudgetInfeasible = totalSpent > result.budgetCap + 1e-9;
   const benchHtml = `<div class="bench-strip"><div class="bench-label">Bench</div>${benchList.map(benchSlotHtml).join("")}</div>`;
   // vs-standard-team delta: how many more points this Bench Boost 15's
   // own best XI would score than your actual standard team's best XI
@@ -6142,9 +6539,9 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
       <div style="text-align:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--ink-faint)">${label} — ${formationKey}, GW${gwId}</div>
         <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${xiProj.toFixed(1)} pts <span style="font-size:12px;font-weight:400;color:var(--ink-faint)">(XI)</span></div>
-        <div style="font-size:11px;color:var(--ink-faint)">Squad cost: £${(totalSpent / 10).toFixed(1)}m / £100.0m · XI budget: £${xi.spent.toFixed(1)}m / £${xi.budget.toFixed(1)}m</div>
-        ${xi.budgetInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ XI could not fit fully under its own formation budget with the current pool</div>` : ""}
-        ${useClubLimit && xi.clubLimitInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ XI could not fully respect max-3-per-club with the current pool</div>` : ""}
+        <div style="font-size:11px;color:${squadBudgetInfeasible ? "var(--warn,#e0a94f)" : "var(--ink-faint)"}">Squad cost: £${(totalSpent / 10).toFixed(1)}m / £${(result.budgetCap / 10).toFixed(1)}m — all 15 optimized jointly under this cap, not XI-then-cheapest-bench</div>
+        ${squadBudgetInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ Could not fit the full 15 under budget with the current pool — every remaining swap is already the cheapest legal option</div>` : ""}
+        ${useClubLimit && xi.clubLimitInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ Could not fully respect max-3-per-club across the 15 with the current pool</div>` : ""}
         ${benchShort ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ Could not fill the full bench (${benchList.length}/4) within the remaining budget/club limits</div>` : ""}
         ${deltaHtml}
       </div>
@@ -6152,140 +6549,6 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
       ${benchHtml}
     </div>
   `;
-}
-// ---------- Bench Boost potential: season-long BB-vs-normal-week graph ----------
-// For one gameweek: the best possible normal-week XI total (11 players,
-// captain doubled — the points you'd actually bank on a normal week,
-// where the bench doesn't score) vs the best possible Bench Boost 15's
-// FULL total (all 15, captain doubled — what you'd bank if THIS was a
-// Bench Boost week). The gap between these two is the real "how many
-// extra points does playing Bench Boost this week actually bank you" —
-// comparing 11-vs-11 (the XI portion of both) would show ~zero every
-// week, since both pickers optimize the same 11 slots under the same
-// budget; the whole point of Bench Boost is the other 4 players scoring
-// too, so the bench's own points are exactly what this needs to capture.
-// This is deliberately the general best-possible-squad comparison (not
-// the user's personal squad — that's the separate vs-standard-team delta
-// on the pitch above), since the point of this graph is "which weeks
-// does the Bench Boost mechanic itself have the most inherent value",
-// independent of what squad anyone actually owns.
-function benchBoostPotentialForGw(gwId) {
-  const rows = state.players.map(p => computeProjectionRow(p, gwId, gwId, false, 70, 0.8)).filter(r => r.fixtures.length);
-  if (!rows.length) return { gwId, xiPts: 0, bbPts: 0, delta: 0 }; // blank gameweek league-wide
-  let bestXiPts = -Infinity;
-  for (const formationKey of Object.keys(FORMATIONS_H2H)) {
-    const formation = FORMATIONS_H2H[formationKey];
-    const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-    const result = pickConstrainedXI(rows, need, true, true, new Set(), [], formationKey);
-    const allPicked = [...result.picked.GK, ...result.picked.DEF, ...result.picked.MID, ...result.picked.FWD];
-    if (allPicked.length < 11) continue; // formation couldn't be filled at all this GW — skip it
-    const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
-    const total = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
-    if (total > bestXiPts) bestXiPts = total;
-  }
-  if (bestXiPts === -Infinity) bestXiPts = 0;
-  // Best Bench Boost 15 for this GW — try every formation's shape, keep
-  // the highest-scoring FULL 15 (XI + bench, captain doubled), since a
-  // Bench Boost week banks every one of the 15, not just the starters.
-  let bestBbPts = -Infinity;
-  for (const formationKey of Object.keys(FORMATIONS_H2H)) {
-    const result = solveBest15ForGw(gwId, formationKey, true, BUDGET);
-    const allXi = [...result.xi.picked.GK, ...result.xi.picked.DEF, ...result.xi.picked.MID, ...result.xi.picked.FWD];
-    const allBench = [...result.bench.GK, ...result.bench.DEF, ...result.bench.MID, ...result.bench.FWD];
-    if (allXi.length < 11) continue;
-    const captain = allXi.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
-    const xiTotal = allXi.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
-    // Bench players carry a price/name (from solveBest15ForGw's cheapest-
-    // fill), not a pre-computed proj — score them the same way here.
-    const benchTotal = allBench.reduce((sum, p) => {
-      const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
-      return sum + (row.fixtures.length ? row.proj : 0);
-    }, 0);
-    const total = xiTotal + benchTotal;
-    if (total > bestBbPts) bestBbPts = total;
-  }
-  if (bestBbPts === -Infinity) bestBbPts = 0;
-  return { gwId, xiPts: bestXiPts, bbPts: bestBbPts, delta: bestBbPts - bestXiPts };
-}
-// Diverging bar chart (delta can be positive or negative around a zero
-// baseline — the right form for a polarity value, not a line) showing
-// the Bench Boost 15 vs normal-week Best XI point gap per gameweek across
-// the whole season, so standout weeks (biggest bars) are immediately
-// visible without reading 38 individual numbers.
-function benchBoostPotentialChartSvg(results) {
-  const valid = results.filter(r => r != null);
-  if (!valid.length) return `<div class="empty-state">No data yet.</div>`;
-  const maxAbs = Math.max(1, ...valid.map(r => Math.abs(r.delta)));
-  const barW = 16, gap = 6, padL = 34, padR = 10, padT = 14, padB = 24;
-  const plotH = 160;
-  const midY = padT + plotH / 2;
-  const w = padL + padR + valid.length * (barW + gap);
-  const h = padT + plotH + padB;
-  const yFor = (delta) => midY - (delta / maxAbs) * (plotH / 2);
-  const bars = valid.map((r, i) => {
-    const x = padL + i * (barW + gap);
-    const y0 = midY, y1 = yFor(r.delta);
-    const top = Math.min(y0, y1), barH = Math.max(1, Math.abs(y1 - y0));
-    const positive = r.delta >= 0;
-    const color = positive ? "var(--emerald,#3cd25a)" : "var(--rose,#e05d5d)";
-    return `
-      <g>
-        <rect x="${x}" y="${top}" width="${barW}" height="${barH}" rx="3" fill="${color}" opacity="0.85">
-          <title>GW${r.gwId}: Bench Boost 15 ${r.bbPts.toFixed(1)} vs normal Best XI ${r.xiPts.toFixed(1)} — ${positive ? "+" : ""}${r.delta.toFixed(1)} pts</title>
-        </rect>
-        ${i % 2 === 0 ? `<text x="${x + barW / 2}" y="${h - 8}" font-size="8" fill="var(--ink-faint)" text-anchor="middle">GW${r.gwId}</text>` : ""}
-      </g>`;
-  }).join("");
-  return `
-    <div style="overflow-x:auto">
-      <svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="min-width:${w}px">
-        <line x1="${padL}" y1="${midY}" x2="${w - padR}" y2="${midY}" stroke="var(--border-strong)" stroke-width="1" />
-        <text x="4" y="${padT + 4}" font-size="8" fill="var(--ink-faint)">+${maxAbs.toFixed(0)}</text>
-        <text x="4" y="${h - padB - 4}" font-size="8" fill="var(--ink-faint)">-${maxAbs.toFixed(0)}</text>
-        ${bars}
-      </svg>
-    </div>
-  `;
-}
-let _bbPotentialToken = 0;
-function renderBenchBoostPotentialSection() {
-  const el = document.getElementById("bbPotentialBody");
-  if (!el) return;
-  const myToken = ++_bbPotentialToken;
-  const gwIds = getHorizonGws(38);
-  if (!gwIds.length) { el.innerHTML = `<div class="empty-state">No upcoming gameweeks found.</div>`; return; }
-  el.innerHTML = `<div class="empty-state">Computing across the season (this can take a moment)…</div>`;
-  const VISIBLE_WINDOW = 6, CHUNK_SIZE = 4;
-  const results = [];
-  const renderProgress = () => {
-    if (myToken !== _bbPotentialToken) return;
-    const avgDelta = results.length ? results.reduce((s, r) => s + r.delta, 0) / results.length : 0;
-    const best = results.reduce((b, r) => (!b || r.delta > b.delta) ? r : b, null);
-    el.innerHTML = `
-      <div style="margin-bottom:8px;font-size:12px;color:var(--ink-faint)">
-        <strong style="color:var(--ink);font-size:16px;font-family:'JetBrains Mono',monospace">${avgDelta >= 0 ? "+" : ""}${avgDelta.toFixed(1)} pts</strong> average Bench Boost potential per gameweek so far (${results.length}/${gwIds.length} computed)
-        ${best ? ` · biggest standout: <strong style="color:var(--gold-bright)">GW${best.gwId}</strong> (${best.delta >= 0 ? "+" : ""}${best.delta.toFixed(1)} pts)` : ""}
-      </div>
-      ${benchBoostPotentialChartSvg(results)}
-    `;
-  };
-  const visible = gwIds.slice(0, VISIBLE_WINDOW);
-  for (const gw of visible) results.push(benchBoostPotentialForGw(gw));
-  renderProgress();
-  const remaining = gwIds.slice(VISIBLE_WINDOW);
-  if (!remaining.length) return;
-  const scheduleChunk = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16));
-  let i = 0;
-  const runChunk = () => {
-    if (myToken !== _bbPotentialToken) return;
-    const slice = remaining.slice(i, i + CHUNK_SIZE);
-    if (!slice.length) return;
-    for (const gw of slice) results.push(benchBoostPotentialForGw(gw));
-    i += CHUNK_SIZE;
-    renderProgress();
-    if (i < remaining.length) scheduleChunk(runChunk);
-  };
-  scheduleChunk(runChunk);
 }
 function renderProjectionsPitch(rows, gwId) {
   const body = document.getElementById("projectionsBody");
@@ -6432,13 +6695,6 @@ function renderProjectionsPitch(rows, gwId) {
       <button type="button" id="projBest15MineBtn" class="chip-btn small${best15Mode === "mine" ? " active" : ""}" style="cursor:pointer" title="Same Bench Boost checker, capped at your active Squad Builder draft's total value (squad cost + bank) instead of a fantasy £100m.">💥 Best 15 (my budget)</button>
     </div>
     ${best15Body}
-    <div style="max-width:700px;margin:20px auto 0;border-top:1px solid var(--border);padding-top:14px">
-      <div style="text-align:center;margin-bottom:8px">
-        <button type="button" id="projBbPotentialBtn" class="chip-btn small" style="cursor:pointer">📈 Bench Boost potential — full season</button>
-        <div style="font-size:10.5px;color:var(--ink-faint);margin-top:4px">Computes normal-week Best XI vs Bench Boost 15's XI for every remaining gameweek — heavier, runs on demand</div>
-      </div>
-      <div id="bbPotentialBody"></div>
-    </div>
   `;
   const budgetChk = document.getElementById("projPitchBudgetChk"), clubChk = document.getElementById("projPitchClubChk");
   if (budgetChk) budgetChk.onchange = () => { state.projPitchBudget = budgetChk.checked; renderProjectionsTab(); };
@@ -6448,8 +6704,6 @@ function renderProjectionsPitch(rows, gwId) {
   const best15FullBtn = document.getElementById("projBest15FullBtn"), best15MineBtn = document.getElementById("projBest15MineBtn");
   if (best15FullBtn) best15FullBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "full" ? null : "full"; renderProjectionsTab(); };
   if (best15MineBtn) best15MineBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "mine" ? null : "mine"; renderProjectionsTab(); };
-  const bbPotentialBtn = document.getElementById("projBbPotentialBtn");
-  if (bbPotentialBtn) bbPotentialBtn.onclick = () => { renderBenchBoostPotentialSection(); };
   if (!best15Mode) {
     body.querySelectorAll(".pitch-slot-swap-btn").forEach(btn => {
       btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; renderProjectionsTab(); };
@@ -7744,75 +7998,67 @@ function autoPickSquad(draft, opts) {
   draft.manualStarterIds = null;
 }
 
+// Builds the { byId, byPos } pool shape jointOptimizeSquad expects, from
+// the live player pool (used by both Bench Boost squad finders below so
+// they share the exact same joint-optimization engine solveBest15ForGw
+// uses on the Projections tab, rather than each having its own solver).
+function fullPlayerPoolForOptimizer() {
+  return {
+    byId: new Map(state.players.map(p => [p.id, p])),
+    byPos: {
+      GK: state.players.filter(p => p.position === "GK"),
+      DEF: state.players.filter(p => p.position === "DEF"),
+      MID: state.players.filter(p => p.position === "MID"),
+      FWD: state.players.filter(p => p.position === "FWD"),
+    },
+  };
+}
 // "Best 15" finder for Bench Boost weeks: every one of the 15 counts that
 // week, not just the starting XI, so this optimizes total squad points
 // under the full £100m budget rather than treating the bench as an
 // afterthought (unlike the normal Auto Pick flow, which is meant to top up
-// an existing squad and preserves whatever's already picked). Reuses the
-// same greedy-fill-then-upgrade machinery as autoPickSquad, just starting
-// from a fully empty squad with the "points" priority — a real budget-
-// constrained knapsack across 15 slots and 4 positions jointly would need
-// a much heavier solver; this greedy approach reliably lands on a strong,
-// legal 15 without that complexity.
+// an existing squad and preserves whatever's already picked — a different
+// job, so autoPickSquad itself is left as-is for that feature). Scored on
+// season-long totalPoints (priorityScore with the "points" priority) since
+// this variant isn't tied to any one gameweek. Uses the same
+// jointOptimizeSquad construct-then-improve engine as solveBest15ForGw on
+// the Projections tab (see the comment above that function for why —
+// TL;DR: a cheap-bench-first fill leaves points on the table on a week
+// where the whole 15 scores), so both Best-15 pickers in this app are now
+// consistent with each other.
 function findBenchBoostSquad(draft) {
-  draft.squad = [];
-  draft.bank = BUDGET;
-  autoPickSquad(draft, { priority: "points", risk: "med" });
+  const pool = fullPlayerPoolForOptimizer();
+  const valueFor = (p) => (p ? priorityScore(p, "points", "med") : 0);
+  draft.squad = jointOptimizeSquad(pool, valueFor, true, BUDGET, []);
+  draft.bank = BUDGET - squadCost(draft.squad);
+  draft.builderCaptainId = null; draft.builderViceCaptainId = null;
+  draft.manualStarterIds = null;
 }
 
 // GW-specific Bench Boost solver: unlike findBenchBoostSquad (which
-// optimizes for season-long totalPoints via autoPickSquad), this
-// optimizes for a single chosen gameweek's PROJECTED points
-// (computeProjectionRow for exactly that gw), since a Bench Boost is
-// played on one specific week and a squad that's great over a season
-// isn't necessarily the strongest possible 15 for that particular
-// fixture set (e.g. teams with a double gameweek, or a run of very
-// friendly/hostile fixtures that week). Same greedy fill-by-position
-// approach as autoPickSquad — a true 15-slot/4-position knapsack solver
-// would be far heavier for a marginal accuracy gain — but scored on
-// gw-specific projected points instead of season totals, and budget-aware
-// via the same reserve-for-remaining-slots logic used elsewhere.
-// `budgetCap` in tenths (e.g. 1000 = £100.0m); `lockedIds` (optional) are
-// player ids that must remain in the squad (used by the "within my
-// current squad value" variant to keep the actual owned players evaluated
-// as part of the pool rather than starting from nothing).
+// optimizes for season-long totalPoints), this optimizes for a single
+// chosen gameweek's PROJECTED points (computeProjectionRow for exactly
+// that gw), since a Bench Boost is played on one specific week and a
+// squad that's great over a season isn't necessarily the strongest
+// possible 15 for that particular fixture set (e.g. teams with a double
+// gameweek, or a run of very friendly/hostile fixtures that week). Same
+// jointOptimizeSquad engine as solveBest15ForGw/findBenchBoostSquad above
+// — construct-then-improve across all 15 slots together, not XI-then-
+// cheapest-bench. `budgetCap` in tenths (e.g. 1000 = £100.0m); `lockedIds`
+// (optional) are player ids that must remain in the squad (used by the
+// "within my current squad value" variant to keep the actual owned
+// players evaluated as part of the pool rather than starting from
+// nothing).
 function solveBenchBoostForGw(gwId, budgetCap, lockedIds) {
-  const squad = [...(lockedIds || [])];
-  const scoreCache = new Map();
-  const gwScore = (p) => {
-    if (scoreCache.has(p.id)) return scoreCache.get(p.id);
-    const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
-    const s = row.fixtures.length ? row.proj : -1; // no fixture this GW (blank) — never worth picking
-    scoreCache.set(p.id, s);
-    return s;
+  const rows = state.players.map(p => computeProjectionRow(p, gwId, gwId, false, 70, 0.8));
+  const rowById = new Map(rows.map(r => [r.p.id, r]));
+  const valueFor = (p) => {
+    if (!p) return 0;
+    const r = rowById.get(p.id);
+    return r && r.fixtures.length ? r.proj : -1; // no fixture this GW (blank) — never worth picking
   };
-  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    let need = SQUAD_RULES[pos] - squad.filter(id => state.players.find(p => p.id === id)?.position === pos).length;
-    while (need > 0) {
-      const spent = squadCost(squad);
-      const clubCounts = clubCountsFor(squad);
-      const reserve = minReserveForRemainingSlots(squad, pos);
-      const remaining = budgetCap - spent;
-      const candidates = state.players
-        .filter(p => p.position === pos && !squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3) && p.nowCost <= remaining - reserve)
-        .sort((a, b) => gwScore(b) - gwScore(a));
-      let pick = candidates[0];
-      if (!pick) {
-        // Reserve heuristic left no room at this price floor (can happen
-        // near the end with an unlucky combination) — fall back to the
-        // cheapest legal option for this position so the squad still
-        // completes, same fallback pattern as autoPickSquad.
-        const cheap = state.players
-          .filter(p => p.position === pos && !squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3) && p.nowCost <= remaining)
-          .sort((a, b) => a.nowCost - b.nowCost);
-        pick = cheap[0];
-      }
-      if (!pick) break; // genuinely no legal candidate left at this position
-      squad.push(pick.id);
-      need--;
-    }
-  }
-  return squad;
+  const pool = fullPlayerPoolForOptimizer();
+  return jointOptimizeSquad(pool, valueFor, true, budgetCap, lockedIds || []);
 }
 // Variant A: fixed £100m budget, ignores your current squad entirely —
 // "if I had a completely free hand, who's the best 15 for this GW".
@@ -13525,17 +13771,49 @@ function buildSimMatchState(teamAId, teamBId) {
   const pinnedMatchups = state.h2hMatchups[key] || [];
   const usingAutoMatchups = pinnedMatchups.length === 0;
   const matchups = usingAutoMatchups ? autoGenerateMatchups(teamAId, teamBId) : pinnedMatchups;
+  // Team-level attacking/defensive context for THIS fixture — computed
+  // before the rows below so it can nudge individual duel odds, not just
+  // scale output volume afterwards. baselineA/B already blend this
+  // fixture's FDR score with estimateScoreline's fully-modelled xG (which
+  // itself already accounts for the opponent's real defensive strength,
+  // squad value, form, H2H, empirical goals for/against — see
+  // estimateScoreline), so this is a single number that genuinely
+  // represents "how much attacking threat should this side produce against
+  // this specific opponent", not a naive team-vs-league-average figure.
+  const baselineA = teamAttackBaseline(teamAId, teamBId, isAHome);
+  const baselineB = teamAttackBaseline(teamBId, teamAId, !isAHome);
   const rows = matchups.map(m => {
     const pa = state.players.find(p => p.id === m.playerAId);
     const pb = state.players.find(p => p.id === m.playerBId);
     if (!pa || !pb) return null;
     const edge = m.edge || matchupAttributeEdge(pa, pb);
-    const probA = edge ? edge.pctA / 100 : 0.5;
+    let probA = edge ? edge.pctA / 100 : 0.5;
+    // Nudge the raw attribute-based duel odds by each side's real team
+    // context — without this, a duel between two similarly-rated players
+    // (by individual FM attributes alone) comes out ~50/50 whether it's a
+    // title-favourite's back line facing a bottom-club attack or the exact
+    // reverse, which isn't realistic: a player performing for a genuinely
+    // stronger attacking side (better service, more territory, tactical
+    // platform) should come out on top of a similar individual duel more
+    // often than a like-for-like player at a side the model rates weaker,
+    // and vice versa on the defensive end. baselineA/B (1 = league-average
+    // context) is converted to the same 1-20ish FM attribute scale
+    // duelWinProbability expects via a log-based transform (baseline 2x =
+    // +6, matching a real "clearly the better context" attribute gap;
+    // baseline 0.5x = -6) so the SAME Elo-style curve/scale already used
+    // for every individual duel in SIM_DUELS drives this too, rather than
+    // introducing a separately-tuned formula. Weighted at 35% versus the
+    // attribute edge's 65% — team context matters, but the player's own
+    // individual attributes still do most of the work, consistent with how
+    // lightly-weighted the SQUAD_W/MGR_W adjustments are inside
+    // estimateScoreline itself.
+    const contextAttrA = 10 + Math.log2(Math.max(0.1, baselineA)) * 6;
+    const contextAttrB = 10 + Math.log2(Math.max(0.1, baselineB)) * 6;
+    const contextProbA = duelWinProbability(contextAttrA, contextAttrB, 6);
+    probA = probA * 0.65 + contextProbA * 0.35;
     return { m, pa, pb, probA, probB: 1 - probA };
   }).filter(Boolean);
-  if (!rows.length) return { teamA, teamB, isAHome, usingAutoMatchups, matchups, key, rows: [] };
-  const baselineA = teamAttackBaseline(teamAId, teamBId, isAHome);
-  const baselineB = teamAttackBaseline(teamBId, teamAId, !isAHome);
+  if (!rows.length) return { teamA, teamB, isAHome, usingAutoMatchups, matchups, key, rows: [], baselineA, baselineB };
   // Per-minute ascendancy weight — which side is "on the ball" driving
   // play that minute, proportional to relative attacking baseline (a
   // stronger side at home to a weak defence dominates more minutes).
