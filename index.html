@@ -596,14 +596,20 @@
   .detail-panel > div { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
   .detail-panel .radar-block { min-width: 0; min-height: 0; width: fit-content; max-width: 100%; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 0 auto; }
   .detail-panel .empty-block-compact { padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--ink-faint); font-size: 12px; }
-  /* Flows into new columns after ~5 rows instead of a fixed 2-column
-     layout that stretched to 10-11 rows tall for the full 21-attribute
-     set — keeps the block a predictable height so it sits neatly
-     alongside the fixture ticker / radar / club-override blocks around
-     it instead of towering over them. */
-  .attr-editor-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(5, auto); column-gap: 16px; overflow-x: auto; padding-bottom: 2px; }
-  .attr-editor-grid > .attr-row { min-width: 190px; }
-  @media (max-width: 480px) { .attr-editor-grid { grid-template-rows: repeat(6, auto); } .attr-editor-grid > .attr-row { min-width: 160px; } }
+  /* Two explicit columns instead of the generic auto-fit flow above: a
+     narrow fixed column (fixtures / radar / club override, stacked) and a
+     wide flexible column for the attribute editor, which needs real width
+     to spread its 21 sliders out instead of competing for a 320px slot
+     alongside much shorter blocks. */
+  .detail-panel-two-col { grid-template-columns: 340px minmax(0, 1fr) !important; align-items: start; }
+  @media (max-width: 900px) { .detail-panel-two-col { grid-template-columns: 1fr !important; } }
+  .detail-panel-narrow { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+  .detail-panel-wide { min-width: 0; }
+  /* Spreads into as many columns as the wide panel's real width allows
+     (each column a comfortable ~200px) instead of a fixed 5-row layout
+     that forced horizontal scrolling for the full 21-attribute set. */
+  .attr-editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 20px; }
+  .attr-editor-grid > .attr-row { min-width: 0; }
   .attr-editor .attr-row { flex-wrap: wrap; min-width: 0; }
   .attr-editor .attr-row > span:first-child { flex: 1 1 90px; min-width: 90px; }
   .detail-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-bottom: 10px; }
@@ -4605,46 +4611,31 @@ function renderStats() {
         const td = document.createElement("td");
         td.colSpan = totalCols;
         td.innerHTML = `
-          <div class="detail-panel">
-            <div>
-              <div class="detail-block-title">Underlying &amp; per-90</div>
+          <div class="detail-panel detail-panel-two-col">
+            <div class="detail-panel-narrow">
               <div style="font-weight:700;margin-bottom:8px">${p.webName}${captaincyBadgeHtml(p, currentEventId())}</div>
-              <div class="stat-mini-grid">
-                <div class="stat-mini"><div class="stat-mini-label">xG (season)</div><div class="stat-mini-value">${p.expectedGoals.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">xA (season)</div><div class="stat-mini-value">${p.expectedAssists.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">xG /90</div><div class="stat-mini-value">${p.xg90.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">xA /90</div><div class="stat-mini-value">${p.xa90.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">xGC /90</div><div class="stat-mini-value">${p.xgc90.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Saves /90</div><div class="stat-mini-value">${p.saves90.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Threat</div><div class="stat-mini-value">${p.threat.toFixed(0)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Creativity</div><div class="stat-mini-value">${p.creativity.toFixed(0)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Influence</div><div class="stat-mini-value">${p.influence.toFixed(0)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">DefCon /90</div><div class="stat-mini-value">${p.defensiveContributionPer90.toFixed(2)}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Dreamteam</div><div class="stat-mini-value">${p.dreamteamCount}${p.inDreamteam ? " ★" : ""}</div></div>
-                <div class="stat-mini"><div class="stat-mini-label">Price Δ (GW)</div><div class="stat-mini-value" style="color:${p.costChangeEvent >= 0 ? "var(--emerald)" : "var(--red)"}">${p.costChangeEvent >= 0 ? "+" : ""}${(p.costChangeEvent / 10).toFixed(1)}</div></div>
+              <div>
+                <div class="detail-block-title">Next 5 fixtures (your custom FDR)</div>
+                ${fixtureTickerHtml(p.teamId, 5)}
+              </div>
+              <div>
+                <div class="detail-block-title">Attribute profile (computed from real stats vs same-position players, 1-99)</div>
+                <div class="radar-block">${radarChartSvg(computeFcAttributes(p), 300)}</div>
+              </div>
+              ${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? `
+              <div>
+                <div class="detail-block-title">Prior-league projection (no Prem data yet)</div>
+                <div id="priorleague-stats-${p.id}">${priorLeagueEditorHtml(p.id)}</div>
+              </div>
+              ` : ""}
+              <div>
+                <div class="detail-block-title">Manual club override</div>
+                <div id="cluboverride-stats-${p.id}">${playerClubOverrideEditorHtml(p.id)}</div>
               </div>
             </div>
-            <div>
-              <div class="detail-block-title">Next 5 fixtures (your custom FDR)</div>
-              ${fixtureTickerHtml(p.teamId, 5)}
-            </div>
-            ${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? `
-            <div>
-              <div class="detail-block-title">Prior-league projection (no Prem data yet)</div>
-              <div id="priorleague-stats-${p.id}">${priorLeagueEditorHtml(p.id)}</div>
-            </div>
-            ` : ""}
-            <div>
+            <div class="detail-panel-wide">
               <div class="detail-block-title">Player attributes (1-20, FM-style)</div>
               <div id="attrs-stats-${p.id}">${attributeEditorHtml(p.id)}</div>
-            </div>
-            <div>
-              <div class="detail-block-title">Attribute profile (computed from real stats vs same-position players, 1-99)</div>
-              <div class="radar-block">${radarChartSvg(computeFcAttributes(p), 300)}</div>
-            </div>
-            <div>
-              <div class="detail-block-title">Manual club override</div>
-              <div id="cluboverride-stats-${p.id}">${playerClubOverrideEditorHtml(p.id)}</div>
             </div>
           </div>
         `;
@@ -5720,25 +5711,34 @@ function renderProjViewModeRow() {
 // prices move over a season and a stale hardcoded number understates the
 // true floor once they do.
 const POSITION_MIN_PRICE = { GK: 4.0, DEF: 4.0, MID: 4.5, FWD: 4.5 };
-function xiBudgetForFormation(need, excludeIds) {
+// Fixed per-formation XI budget, set explicitly rather than computed from
+// live bench-price floors — the computed version drifted as prices moved
+// and could disagree with what "the £X.Xm budget" actually meant from one
+// day to the next. These are deliberately fixed numbers per formation.
+const XI_BUDGET_BY_FORMATION = {
+  "4-3-3": 83, "4-4-2": 83, "3-5-2": 83.5, "3-4-3": 83.5,
+  "5-3-2": 82.5, "5-4-1": 82.5, "4-5-1": 83,
+};
+function xiBudgetForFormation(need, excludeIds, formationKey) {
+  if (formationKey && XI_BUDGET_BY_FORMATION[formationKey] != null) {
+    return XI_BUDGET_BY_FORMATION[formationKey];
+  }
+  // Fallback for callers that don't pass a known formation key — same
+  // live bench-price-floor calculation as before.
   const benchGK = 1; // always exactly 1 spare GK (squad always carries 2)
   const benchDEF = Math.max(0, 5 - (need.DEF || 0));
   const benchMID = Math.max(0, 5 - (need.MID || 0));
   const benchFWD = Math.max(0, 3 - (need.FWD || 0));
-  // Live cheapest-available prices (see cheapestAvailableByPos), not the
-  // static POSITION_MIN_PRICE guess — a back-3 genuinely gets a higher XI
-  // budget than a back-5 because it needs fewer bench DEF slots at
-  // whatever DEF's real current price floor is, not a fixed £4.0m assumption.
   const cheapest = typeof cheapestAvailableByPos === "function" ? cheapestAvailableByPos(excludeIds) : null;
   const priceFor = (pos) => cheapest ? cheapest[pos] / 10 : POSITION_MIN_PRICE[pos];
   const minBenchCost = benchGK * priceFor("GK") + benchDEF * priceFor("DEF") +
     benchMID * priceFor("MID") + benchFWD * priceFor("FWD");
   return 100 - minBenchCost;
 }
-function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows) {
+function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey) {
   // Formation-aware XI budget (see xiBudgetForFormation above) rather than
   // one flat number for every formation.
-  const BUDGET = xiBudgetForFormation(need), MAX_PER_CLUB = 3;
+  const BUDGET = xiBudgetForFormation(need, excludedIds, formationKey), MAX_PER_CLUB = 3;
   const excluded = excludedIds || new Set();
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const r of rows) { if (excluded.has(r.p.id)) continue; byPos[r.p.position].push(r); }
@@ -5791,9 +5791,110 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   fillPass(true, false, false);  // relax budget cap
   fillPass(true, true, false);   // relax club limit too
   fillPass(true, true, true);    // last resort: ignore current filter/exclusion pool entirely
-  return { picked, spent, budget: BUDGET };
+  // Repair pass: the fallback passes above exist purely so a slot is never
+  // left empty (see comment above), but relaxing the budget check to fill
+  // a slot must NOT mean the final XI is allowed to breach the budget —
+  // that was the actual bug ("budget cap" shown in the UI while the real
+  // total quietly exceeded it). If we're over budget and useBudget is on,
+  // repeatedly downgrade whichever swap frees the most £ per projected
+  // point lost, among players NOT locked by the user, until back under
+  // budget or no further downgrade is possible (every remaining player in
+  // every position is already the cheapest eligible option — genuinely
+  // infeasible, which we report via budgetInfeasible rather than hiding).
+  let budgetInfeasible = false;
+  if (useBudget) {
+    const lockedIdSet = new Set((lockedRows || []).map(r => r.p.id));
+    let guard = 0;
+    while (spent > BUDGET + 1e-9 && guard++ < 200) {
+      let bestSwap = null; // { pos, idx, replacement, savedPerPtLost }
+      for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+        for (let idx = 0; idx < picked[pos].length; idx++) {
+          const current = picked[pos][idx];
+          if (lockedIdSet.has(current.p.id)) continue; // never downgrade a manual lock
+          const curPrice = (current.p.nowCost || 0) / 10;
+          const pickedIdsAtPos = new Set(picked[pos].map(x => x.p.id));
+          // Cheapest alternative in this slot's position that's actually
+          // cheaper than what's there now (ignores budget/club caps for
+          // the search itself — we're trying to CUT spend here — but
+          // still respects the excluded-players set and current XI).
+          const candidates = [...rows]
+            .filter(r => r.p.position === pos && !excluded.has(r.p.id) && !pickedIdsAtPos.has(r.p.id));
+          for (const cand of candidates) {
+            const candPrice = (cand.p.nowCost || 0) / 10;
+            const saved = curPrice - candPrice;
+            if (saved <= 1e-9) continue;
+            const ptsLost = current.proj - cand.proj; // may be negative (an actual upgrade)
+            // Prefer the swap that frees the most £ per point given up —
+            // ties broken by simply freeing the most money, so we
+            // converge in the fewest swaps.
+            const score = ptsLost <= 0 ? Infinity : saved / ptsLost;
+            if (!bestSwap || score > bestSwap.score || (score === bestSwap.score && saved > bestSwap.saved)) {
+              bestSwap = { pos, idx, replacement: cand, saved, score };
+            }
+          }
+        }
+      }
+      if (!bestSwap) { budgetInfeasible = true; break; } // no player/position can free any more money
+      const old = picked[bestSwap.pos][bestSwap.idx];
+      picked[bestSwap.pos][bestSwap.idx] = bestSwap.replacement;
+      spent += ((bestSwap.replacement.p.nowCost || 0) / 10) - ((old.p.nowCost || 0) / 10);
+      clubCount[old.p.teamId] = (clubCount[old.p.teamId] || 0) - 1;
+      clubCount[bestSwap.replacement.p.teamId] = (clubCount[bestSwap.replacement.p.teamId] || 0) + 1;
+    }
+    if (spent > BUDGET + 1e-9 && guard >= 200) budgetInfeasible = true;
+  }
+  return { picked, spent, budget: BUDGET, budgetInfeasible: useBudget ? (spent > BUDGET + 1e-9) : false };
 }
-function renderProjectionsPitch(rows) {
+// Total value (squad cost + bank) of the active Squad Builder draft, in
+// tenths to match nowCost/BUDGET units — the budget cap for the "my
+// team's budget" Best 15 checker. Falls back to the full £100m if there's
+// no active draft yet (nothing to base a "my budget" figure on).
+function myTeamBudgetCapTenths() {
+  const draft = state.drafts.find(d => d.id === state.activeDraftId);
+  if (!draft || !draft.squad || !draft.squad.length) return BUDGET;
+  return squadCost(draft.squad) + (draft.bank || 0);
+}
+// Renders a read-only "Best 15" preview (Bench Boost style — every squad
+// slot counts, not just the XI) for a single gameweek, using the same
+// solveBenchBoostForGw solver already used by the Squad Builder tab's
+// Bench Boost buttons. Unlike those buttons, this does NOT touch any
+// squad draft — it's purely a what-if checker so you can see the optimal
+// 15 for a week without overwriting your actual planned squad.
+function bestFifteenPreviewHtml(gwId, budgetCap, label) {
+  if (!gwId) return `<div class="empty-state">Pick a "From" gameweek above to check a specific week.</div>`;
+  const squadIds = solveBenchBoostForGw(gwId, budgetCap, []);
+  const bySlot = { GK: [], DEF: [], MID: [], FWD: [] };
+  let totalCost = 0, totalProj = 0;
+  for (const id of squadIds) {
+    const p = state.players.find(pl => pl.id === id);
+    if (!p) continue;
+    const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
+    const proj = row.fixtures.length ? row.proj : 0;
+    bySlot[p.position].push({ p, proj });
+    totalCost += (p.nowCost || 0) / 10;
+    totalProj += proj;
+  }
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) bySlot[pos].sort((a, b) => b.proj - a.proj);
+  const rowHtml = ({ p, proj }) => {
+    const team = state.teamsById[p.teamId];
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.03)">
+      <span style="display:flex;align-items:center;gap:6px;min-width:0"><span class="pos-pill" style="flex-shrink:0;font-size:9px;color:${POS_COLOR[p.position]};border:1px solid ${POS_COLOR[p.position]}">${p.position}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.webName}</span><span style="color:var(--ink-faint);font-size:11px;flex-shrink:0">${team ? team.short_name : ""}</span></span>
+      <span style="display:flex;gap:10px;flex-shrink:0"><span class="mono" style="color:var(--gold-bright)">${fmtPrice(p.nowCost)}</span><span class="mono" style="font-weight:700;min-width:32px;text-align:right">${proj.toFixed(1)}</span></span>
+    </div>`;
+  };
+  return `
+    <div style="border:1px solid var(--border-strong);border-radius:12px;padding:12px;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px">${label} — GW${gwId}</div>
+        <div style="font-size:12px;color:var(--ink-faint)">Cost <span class="mono" style="color:var(--gold-bright)">£${totalCost.toFixed(1)}m</span> / £${(budgetCap / 10).toFixed(1)}m · Total proj <span class="mono" style="font-weight:700">${totalProj.toFixed(1)} pts</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        ${["GK", "DEF", "MID", "FWD"].map(pos => bySlot[pos].map(rowHtml).join("")).join("")}
+      </div>
+    </div>
+  `;
+}
+function renderProjectionsPitch(rows, gwId) {
   const body = document.getElementById("projectionsBody");
   const useBudget = !!state.projPitchBudget, useClubLimit = !!state.projPitchClubLimit;
   // Manual overrides: player ids the user has removed from the auto-pick
@@ -5813,23 +5914,27 @@ function renderProjectionsPitch(rows) {
   function buildForFormation(formationKey) {
     const formation = FORMATIONS_H2H[formationKey];
     const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-    const result = pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows);
+    const result = pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey);
     const allPicked = [...result.picked.GK, ...result.picked.DEF, ...result.picked.MID, ...result.picked.FWD];
     const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
     const totalProj = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
     const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => result.picked[pos].length < need[pos]);
-    return { formationKey, need, picked: result.picked, spent: result.spent, budget: result.budget, allPicked, captain, totalProj, missing };
+    return { formationKey, need, picked: result.picked, spent: result.spent, budget: result.budget, budgetInfeasible: result.budgetInfeasible, allPicked, captain, totalProj, missing };
   }
   let best;
   if (selectedFormation === "AUTO") {
     best = Object.keys(FORMATIONS_H2H)
       .map(buildForFormation)
-      // Prefer formations with fewer missing slots first, then highest total points.
-      .sort((a, b) => (a.missing.length - b.missing.length) || (b.totalProj - a.totalProj))[0];
+      // Prefer formations with fewer missing slots first, then ones that
+      // actually respect the budget, then highest total points — a
+      // formation that can only be filled by breaching the budget
+      // shouldn't be preferred over one that fits, even if its raw
+      // projected total is marginally higher.
+      .sort((a, b) => (a.missing.length - b.missing.length) || ((a.budgetInfeasible ? 1 : 0) - (b.budgetInfeasible ? 1 : 0)) || (b.totalProj - a.totalProj))[0];
   } else {
     best = buildForFormation(FORMATIONS_H2H[selectedFormation] ? selectedFormation : "3-4-3");
   }
-  const { formationKey, need, picked, spent, budget, allPicked, captain, totalProj, missing } = best;
+  const { formationKey, need, picked, spent, budget, budgetInfeasible, allPicked, captain, totalProj, missing } = best;
   const swapOpenSlot = state.projXiSwapSlot || null; // { pos, index }
   function fixLabel(r) {
     // Only ever the NEXT fixture here, not the whole selected GW range —
@@ -5898,7 +6003,7 @@ function renderProjectionsPitch(rows) {
   const hasOverrides = excludedIds.size > 0 || lockedIds.size > 0;
   body.innerHTML = `
     <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center">
-      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="Less than the full £100m squad budget, to leave realistic room for a 4-man bench at minimum prices. This varies by formation — a back-3 leaves a higher XI budget than a back-5, since bench defenders are cheaper (£4.0m floor) than bench mids/forwards (£4.5m floor)."><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 £${budget.toFixed(1)}m budget cap (bench-adjusted)</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="Fixed XI budget per formation, leaving realistic room for a 4-man bench at minimum prices: £83.0m for 4-3-3/4-4-2/4-5-1, £83.5m for 3-5-2/3-4-3, £82.5m for 5-3-2/5-4-1. This is never breached when the checkbox is on — the picker downgrades players as needed to stay within it."><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 £${budget.toFixed(1)}m budget cap</label>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projPitchClubChk" ${useClubLimit ? "checked" : ""} /> 🚫 Max 3 per club</label>
       ${hasOverrides ? `<button type="button" id="pitchResetXiBtn" class="chip-btn small" style="cursor:pointer">↺ Reset XI</button>` : ""}
       ${state.projXiLastRemoved ? `<button type="button" id="pitchUndoRemoveBtn" class="chip-btn small" style="cursor:pointer" title="Restore the last removed player">↩ Undo remove</button>` : ""}
@@ -5907,12 +6012,26 @@ function renderProjectionsPitch(rows) {
       <div style="text-align:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--ink-faint)">Best XI, ${formationKey}${selectedFormation === "AUTO" ? " (auto-selected as highest-scoring formation)" : ""}, over the selected GW range</div>
         <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${totalProj.toFixed(1)} pts</div>
-        ${useBudget ? `<div style="font-size:11px;color:var(--ink-faint)">XI cost: £${spent.toFixed(1)}m / £${budget.toFixed(1)}m (bench-adjusted for ${formationKey})</div>` : ""}
+        ${useBudget ? `<div style="font-size:11px;color:${budgetInfeasible ? "var(--warn,#e0a94f)" : "var(--ink-faint)"}">XI cost: £${spent.toFixed(1)}m / £${budget.toFixed(1)}m${budgetInfeasible ? " ⚠️ could not fit under budget with current filters/exclusions — every remaining swap option is already the cheapest eligible pick" : ""}</div>` : ""}
         ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough eligible players at current filters${useBudget ? "/budget" : ""}${useClubLimit ? "/club limit" : ""} to fill: ${missing.join(", ")} — loosen filters.</div>` : ""}
         <div style="font-size:10px;color:var(--ink-faint);margin-top:4px">⇄ swap or ✕ remove any player, then pick a replacement from the list</div>
       </div>
       <div class="pitch">${pitchRows}</div>
       ${swapOpenSlot ? swapPanelHtml(swapOpenSlot.pos, swapOpenSlot.idx) : ""}
+    </div>
+    <div style="max-width:520px;margin:18px auto 0;border-top:1px solid var(--border);padding-top:14px">
+      <div style="text-align:center;font-size:11px;color:var(--ink-faint);margin-bottom:8px">Bench Boost checker — best possible <strong>15</strong> for GW${gwId ?? "?"} (not just the XI), doesn't touch your Squad Builder draft</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button type="button" id="projBest15FullBtn" class="chip-btn small" style="cursor:pointer">💥 Best 15 (£100m budget)</button>
+        <button type="button" id="projBest15MineBtn" class="chip-btn small" style="cursor:pointer" title="Uses your active Squad Builder draft's total value (squad cost + bank) as the budget cap">💥 Best 15 (my team's budget)</button>
+      </div>
+      ${state.projBest15Mode === "mine" && !(state.drafts.find(d => d.id === state.activeDraftId)?.squad || []).length
+        ? `<div class="empty-state" style="margin-top:8px">No active Squad Builder draft to base a budget on yet — start one on the Squad Builder tab first, or use the £100m version instead.</div>`
+        : state.projBest15Mode ? bestFifteenPreviewHtml(
+            gwId,
+            state.projBest15Mode === "mine" ? myTeamBudgetCapTenths() : BUDGET,
+            state.projBest15Mode === "mine" ? `Best 15 — my team's budget (£${(myTeamBudgetCapTenths() / 10).toFixed(1)}m)` : "Best 15 — £100m budget"
+          ) : ""}
     </div>
   `;
   const budgetChk = document.getElementById("projPitchBudgetChk"), clubChk = document.getElementById("projPitchClubChk");
@@ -5920,6 +6039,9 @@ function renderProjectionsPitch(rows) {
   if (clubChk) clubChk.onchange = () => { state.projPitchClubLimit = clubChk.checked; renderProjectionsTab(); };
   const resetBtn = document.getElementById("pitchResetXiBtn");
   if (resetBtn) resetBtn.onclick = () => { state.projXiExcluded = new Set(); state.projXiLocked = new Set(); state.projXiSwapSlot = null; state.projXiLastRemoved = null; renderProjectionsTab(); };
+  const best15FullBtn = document.getElementById("projBest15FullBtn"), best15MineBtn = document.getElementById("projBest15MineBtn");
+  if (best15FullBtn) best15FullBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "full" ? null : "full"; renderProjectionsTab(); };
+  if (best15MineBtn) best15MineBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "mine" ? null : "mine"; renderProjectionsTab(); };
   body.querySelectorAll(".pitch-slot-swap-btn").forEach(btn => {
     btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; renderProjectionsTab(); };
   });
@@ -6603,7 +6725,7 @@ function renderProjectionsTab() {
   if (sortDir === "asc") rows.reverse();
 
   if (pitchView) {
-    renderProjectionsPitch(rows);
+    renderProjectionsPitch(rows, fromGw);
     return;
   }
   if (pairsView) {
