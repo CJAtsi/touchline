@@ -596,6 +596,8 @@
   .detail-panel > div { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
   .detail-panel .radar-block { min-width: 0; min-height: 0; width: fit-content; max-width: 100%; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 0 auto; }
   .detail-panel .empty-block-compact { padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--ink-faint); font-size: 12px; }
+  .attr-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+  @media (max-width: 480px) { .attr-editor-grid { grid-template-columns: 1fr; } }
   .attr-editor .attr-row { flex-wrap: wrap; min-width: 0; }
   .attr-editor .attr-row > span:first-child { flex: 1 1 90px; min-width: 90px; }
   .detail-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-bottom: 10px; }
@@ -2570,6 +2572,178 @@ function resetPlayerAttribute(playerId, key) {
 }
 function saveAttributeDefs() { persistSet("attributeDefs", JSON.stringify(state.attributeDefs)); }
 function savePlayerAttributes() { persistSet("playerAttributes", JSON.stringify(state.playerAttributes)); }
+
+// ---------- prior-league stats for new/no-FPL-history players ----------
+// FPL's own data has nothing for a player with zero Prem minutes (new
+// signing, loan return, etc) — projStartProb/projMinsFactor correctly
+// avoid pretending they're an established starter, but with no xG/xA
+// data at all they fall straight to a 0 projection, which understates
+// anyone who was actually good in their previous league. This lets you
+// manually enter their last known league output (minutes, goals, assists,
+// apps) and scales it to a Premier League-equivalent per-90 rate using a
+// league-strength dropoff factor, rather than leaving them at a flat 0.
+// Not automated (no free live data source for non-Prem leagues — see
+// project notes), but a genuine, generically-applicable model: any
+// player, not just one specific name, can have their prior-league line
+// entered here and it feeds the normal projection engine from then on.
+//
+// Dropoff factors are approximate "how much of a league's output
+// typically survives the step up to the Premier League", built from the
+// general pattern of transfer performance drop-offs across the "big 5"
+// UEFA-coefficient tiers — treat as a rough prior, not a precise
+// scientific figure, and free to override per-player by editing the
+// entered stats directly.
+const LEAGUE_DROPOFF = {
+  // Big 5 European leagues — closest in standard to the Prem.
+  "La Liga": 0.88, "Bundesliga": 0.85, "Serie A": 0.85, "Ligue 1": 0.80,
+  // Strong second tier of European leagues.
+  "Eredivisie": 0.68, "Primeira Liga": 0.72, "Belgian Pro League": 0.65,
+  "Championship": 0.62, "Scottish Premiership": 0.60,
+  // Weaker/smaller leagues, MLS-tier, other confederations.
+  "MLS": 0.55, "Brazilian Serie A": 0.70, "Argentine Liga Profesional": 0.65,
+  "Other / smaller league": 0.50,
+};
+function loadPriorLeagueStats() { return persistGet("priorLeagueStats"); }
+function savePriorLeagueStats() { persistSet("priorLeagueStats", JSON.stringify(state.priorLeagueStats || {})); }
+function getPriorLeagueStats(playerId) { return (state.priorLeagueStats || {})[playerId] || null; }
+function setPriorLeagueStats(playerId, data) {
+  if (!state.priorLeagueStats) state.priorLeagueStats = {};
+  state.priorLeagueStats[playerId] = data;
+  savePriorLeagueStats();
+}
+function clearPriorLeagueStats(playerId) {
+  if (!state.priorLeagueStats) return;
+  delete state.priorLeagueStats[playerId];
+  savePriorLeagueStats();
+}
+// Converts entered prior-league totals into the same xg90/xa90/pointsPerGame
+// shape the rest of the projection engine already reads, scaled down by the
+// league's dropoff factor. Goals/assists are used directly as a stand-in for
+// xG/xA (real underlying xG from a minor league is rarely available for
+// free) — a reasonable approximation since actual output is what we're
+// trying to translate across leagues anyway.
+function estimatePriorLeagueProjection(playerId) {
+  const raw = getPriorLeagueStats(playerId);
+  if (!raw || !raw.minutes || raw.minutes <= 0) return null;
+  const dropoff = LEAGUE_DROPOFF[raw.league] ?? LEAGUE_DROPOFF["Other / smaller league"];
+  const per90 = (v) => ((v || 0) / raw.minutes) * 90;
+  const xg90 = per90(raw.goals) * dropoff;
+  const xa90 = per90(raw.assists) * dropoff;
+  // Rough points-per-game estimate so the "proven ability" blend in
+  // computeProjectionRow also has something better than 0 to work with —
+  // built the same way FPL scores appearance + goal/assist contribution,
+  // assuming ~75 mins/game (a plausible fresh-signing minutes share) and
+  // using GOAL_PTS for his listed FPL position where available.
+  const assumedMinsPerGame = 75;
+  const player = state.players.find(p => p.id === playerId);
+  const goalPts = (player && GOAL_PTS[player.position]) || 5;
+  const pointsPerGame = 2 + (xg90 * goalPts + xa90 * 3) * (assumedMinsPerGame / 90);
+  return { xg90, xa90, pointsPerGame, dropoff, source: raw };
+}
+function priorLeagueEditorHtml(playerId) {
+  const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "" };
+  const leagueOptions = Object.keys(LEAGUE_DROPOFF).map(l =>
+    `<option value="${l}" ${cur.league === l ? "selected" : ""}>${l} (×${LEAGUE_DROPOFF[l].toFixed(2)})</option>`).join("");
+  return `
+    <div class="prior-league-editor" style="font-size:12px">
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">No Prem minutes yet — enter their last known league output (last season or current, whichever is more recent) and it'll scale to a Prem-equivalent projection instead of defaulting to 0. Applies to any player, not just this one.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">League <select data-pl-field="league">${leagueOptions}</select></label>
+        <label style="display:flex;flex-direction:column;gap:2px">Minutes <input type="number" min="0" step="1" value="${cur.minutes}" data-pl-field="minutes" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px">Apps <input type="number" min="0" step="1" value="${cur.apps}" data-pl-field="apps" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px">Goals <input type="number" min="0" step="1" value="${cur.goals}" data-pl-field="goals" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px">Assists <input type="number" min="0" step="1" value="${cur.assists}" data-pl-field="assists" /></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button type="button" class="dir-btn" data-pl-save="${playerId}">Save &amp; apply</button>
+        ${getPriorLeagueStats(playerId) ? `<button type="button" class="dir-btn" data-pl-clear="${playerId}">Clear override</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+function wirePriorLeagueEditor(container, playerId) {
+  const saveBtn = container.querySelector(`[data-pl-save]`);
+  if (saveBtn) saveBtn.onclick = () => {
+    const get = (f) => container.querySelector(`[data-pl-field="${f}"]`)?.value;
+    const data = {
+      league: get("league") || "Other / smaller league",
+      minutes: Number(get("minutes")) || 0,
+      apps: Number(get("apps")) || 0,
+      goals: Number(get("goals")) || 0,
+      assists: Number(get("assists")) || 0,
+    };
+    setPriorLeagueStats(playerId, data);
+    renderStats();
+  };
+  const clearBtn = container.querySelector(`[data-pl-clear]`);
+  if (clearBtn) clearBtn.onclick = () => { clearPriorLeagueStats(playerId); renderStats(); };
+}
+
+// ---------- manual player club override ----------
+function savePlayerClubOverrides() { persistSet("playerClubOverrides", JSON.stringify(state.playerClubOverrides || {})); }
+function setPlayerClubOverride(playerId, teamId) {
+  if (!state.playerClubOverrides) state.playerClubOverrides = {};
+  state.playerClubOverrides[playerId] = teamId;
+  savePlayerClubOverrides();
+  applyPlayerClubOverrides();
+}
+function clearPlayerClubOverride(playerId) {
+  if (!state.playerClubOverrides) return;
+  delete state.playerClubOverrides[playerId];
+  savePlayerClubOverrides();
+  applyPlayerClubOverrides();
+}
+// Re-applies every stored override onto the already-loaded state.players
+// pool (used after the user changes an override without a full data
+// reload, and once right after the initial bootstrap load/restore).
+function applyPlayerClubOverrides() {
+  const overrides = state.playerClubOverrides || {};
+  for (const p of state.players || []) {
+    const ov = overrides[p.id];
+    if (typeof ov === "number") {
+      p.teamId = ov;
+      p.clubOverridden = true;
+    } else if (p.clubOverridden) {
+      p.teamId = p.originalTeamId != null ? p.originalTeamId : p.teamId;
+      p.clubOverridden = false;
+    }
+  }
+}
+function playerClubOverrideEditorHtml(playerId) {
+  const p = state.players.find(pl => pl.id === playerId);
+  if (!p) return "";
+  const curOverride = overriddenTeamId(playerId);
+  const originalTeam = state.teamsById ? state.teamsById[p.originalTeamId ?? p.teamId] : null;
+  const teamOptions = (state.teams || []).map(t =>
+    `<option value="${t.id}" ${curOverride === t.id ? "selected" : ""}>${t.name}</option>`).join("");
+  return `
+    <div class="club-override-editor" style="font-size:12px">
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">
+        Live FPL data still lists ${p.webName} at ${originalTeam ? originalTeam.name : "his current club"}. If you have information about a move that isn't reflected yet, pin him to the new club here — fixtures, FDR, and simulation will treat him as belonging there, and he's exempted from counting against his ORIGINAL club's max-3-per-club limit (since the underlying data still shows him there). Position and price are unaffected.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select data-club-override-select style="flex:1">
+          <option value="">— no override (use live data) —</option>
+          ${teamOptions}
+        </select>
+        <button type="button" class="dir-btn" data-club-override-save="${playerId}">Apply</button>
+        ${curOverride != null ? `<button type="button" class="dir-btn" data-club-override-clear="${playerId}">Clear</button>` : ""}
+      </div>
+      ${curOverride != null ? `<div style="margin-top:6px;color:var(--gold-bright);font-size:10.5px">● Overridden — treated as ${state.teamsById[curOverride]?.name || "?"}</div>` : ""}
+    </div>
+  `;
+}
+function wirePlayerClubOverrideEditor(container, playerId) {
+  const saveBtn = container.querySelector(`[data-club-override-save]`);
+  if (saveBtn) saveBtn.onclick = () => {
+    const sel = container.querySelector(`[data-club-override-select]`);
+    const val = sel && sel.value ? Number(sel.value) : null;
+    if (val == null) { clearPlayerClubOverride(playerId); } else { setPlayerClubOverride(playerId, val); }
+    renderStats();
+  };
+  const clearBtn = container.querySelector(`[data-club-override-clear]`);
+  if (clearBtn) clearBtn.onclick = () => { clearPlayerClubOverride(playerId); renderStats(); };
+}
 function attributeEditorHtml(playerId) {
   const manual = getPlayerAttributes(playerId);
   const est = getFm12Estimate(playerId);
@@ -2588,7 +2762,7 @@ function attributeEditorHtml(playerId) {
   return `
     <div class="attr-editor">
       <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">1-20 scale, estimated from this player's real FPL stats (xG/xA, threat, creativity, BPS, defensive contribution, minutes reliability) blended by position — not real FM/FIFA scout data (no reliable free/current source exists for that). Drag any slider to override; ● marks a manual override, ↺ resets it back to the estimate.</div>
-      ${rows}
+      <div class="attr-editor-grid">${rows}</div>
     </div>
   `;
 }
@@ -2682,6 +2856,8 @@ let state = {
   // estimate rather than showing blank/10.
   attributeDefs: FM12_ATTR_DEFS,
   playerAttributes: {},
+  priorLeagueStats: {},
+  playerClubOverrides: {},
   // ---- Insights tab state (differentials / price watch / squad news / rivals / projection accuracy) ----
   diffOwnershipCeiling: 10, diffPosFilter: "ALL", diffMinMinutes: 270,
   priceWatchFilter: "ALL", // ALL | RISE | FALL
@@ -3091,10 +3267,28 @@ function attachClubStats(data) {
   }
 }
 
+// Manual club override: for a player you have information on (e.g. a
+// confirmed-but-not-yet-official transfer) that live FPL data hasn't
+// caught up to yet. Generic mechanism, not tied to any one player —
+// state.playerClubOverrides is keyed by player id -> team id, editable
+// from anyone's Player Stats row. Deliberately does NOT change position,
+// price, or any stat — it only changes which club he's treated as
+// belonging to for fixtures/FDR/simulation, and (see the max-3-per-club
+// checks in clubCountsFor/autoPickSquad/planner, all updated to use
+// p.originalTeamId instead of p.teamId for THIS specific check) exempts
+// him from counting against his ORIGINAL club's max-3 limit, since the
+// live data still has him registered there for squad-legality purposes
+// even though you're choosing to treat him as effectively already moved.
+function overriddenTeamId(playerId) {
+  const ov = state.playerClubOverrides && state.playerClubOverrides[playerId];
+  return typeof ov === "number" ? ov : null;
+}
 function transformPlayer(e) {
+  const override = overriddenTeamId(e.id);
   return {
     id: e.id, code: e.code, webName: e.web_name, firstName: e.first_name, secondName: e.second_name,
-    teamId: e.team, position: POS[e.element_type], nowCost: e.now_cost, status: e.status, news: e.news,
+    teamId: override != null ? override : e.team, originalTeamId: e.team, clubOverridden: override != null,
+    position: POS[e.element_type], nowCost: e.now_cost, status: e.status, news: e.news,
     newsAdded: e.news_added || null,
     chanceOfPlaying: e.chance_of_playing_next_round,
     chanceOfPlayingThisRound: e.chance_of_playing_this_round,
@@ -3165,6 +3359,15 @@ async function loadData() {
     state.teams = bootstrap.teams;
     state.events = bootstrap.events;
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
+    // Restored here, BEFORE transformPlayer runs, so the very first pass
+    // over the player pool already reflects any saved club override —
+    // otherwise contribution shares/fixtures/next-GW projections computed
+    // just below would run once on un-overridden data before anything
+    // later in loadData() had a chance to reapply it.
+    try {
+      const raw = await persistGet("playerClubOverrides");
+      if (raw) state.playerClubOverrides = JSON.parse(raw);
+    } catch (e) { /* keep defaults */ }
     state.players = bootstrap.elements.map(transformPlayer);
     if (typeof invalidateCaptaincyScoreCache === "function") invalidateCaptaincyScoreCache();
     precomputeStrengthRanges();
@@ -4404,10 +4607,12 @@ function renderStats() {
               <div class="detail-block-title">Next 5 fixtures (your custom FDR)</div>
               ${fixtureTickerHtml(p.teamId, 5)}
             </div>
+            ${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? `
             <div>
-              <div class="detail-block-title">Points heatmap (by gameweek)</div>
-              <div id="heatmap-stats-${p.id}"></div>
+              <div class="detail-block-title">Prior-league projection (no Prem data yet)</div>
+              <div id="priorleague-stats-${p.id}">${priorLeagueEditorHtml(p.id)}</div>
             </div>
+            ` : ""}
             <div>
               <div class="detail-block-title">Player attributes (1-20, FM-style)</div>
               <div id="attrs-stats-${p.id}">${attributeEditorHtml(p.id)}</div>
@@ -4416,12 +4621,19 @@ function renderStats() {
               <div class="detail-block-title">Attribute profile (computed from real stats vs same-position players, 1-99)</div>
               <div class="radar-block">${radarChartSvg(computeFcAttributes(p), 300)}</div>
             </div>
+            <div>
+              <div class="detail-block-title">Manual club override</div>
+              <div id="cluboverride-stats-${p.id}">${playerClubOverrideEditorHtml(p.id)}</div>
+            </div>
           </div>
         `;
         dtr.appendChild(td);
         body.appendChild(dtr);
-        renderPlayerHeatmapInto(document.getElementById(`heatmap-stats-${p.id}`), p.id);
         wireAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id);
+        const plContainer = document.getElementById(`priorleague-stats-${p.id}`);
+        if (plContainer) wirePriorLeagueEditor(plContainer, p.id);
+        const clubOvContainer = document.getElementById(`cluboverride-stats-${p.id}`);
+        if (clubOvContainer) wirePlayerClubOverrideEditor(clubOvContainer, p.id);
         // Bring the newly-expanded row fully into view — otherwise on
         // shorter viewports the panel can open mostly/entirely below the
         // fold and look "cut off" even though it's just unscrolled-to.
@@ -5224,10 +5436,20 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
   const fixtures = gws.map(g => ({ gw: g, fx: (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g) })).filter(x => x.fx);
   let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0;
   const fixtureLabels = [];
-  const startProb = projStartProb(p, assume90, rotationThreshold);
-  const minsFactor = projMinsFactor(p, assume90, rotationThreshold);
+  // No-Prem-history fallback: a player with 0 minutes/starts normally
+  // floors out at minsFactor=0 (see projMinsFactor) and has no xG/xA data
+  // to drive attackPts, so he'd project flat 0 forever regardless of real
+  // ability — even once he's actually expected to play. If a prior-league
+  // stat line has been entered for him (see estimatePriorLeagueProjection),
+  // use it in place of both the zeroed xg90/xa90/pointsPerGame AND the
+  // hard 0 minutes/start floor, since "no Prem data" isn't the same as
+  // "not going to play" for a fresh signing your club actually bought.
+  const priorLeague = (p.minutes || 0) === 0 && (p.starts || 0) === 0 ? estimatePriorLeagueProjection(p.id) : null;
+  const effP = priorLeague ? { ...p, xg90: priorLeague.xg90, xa90: priorLeague.xa90, pointsPerGame: priorLeague.pointsPerGame } : p;
+  const startProb = priorLeague ? Math.max(projStartProb(p, assume90, rotationThreshold), assume90 ? 1 : 0.6) : projStartProb(p, assume90, rotationThreshold);
+  const minsFactor = priorLeague ? Math.max(projMinsFactor(p, assume90, rotationThreshold), assume90 ? 1 : 0.55) : projMinsFactor(p, assume90, rotationThreshold);
   const provenW = provenAbilityWeight ?? 0.8;
-  const provenAbility = p.pointsPerGame || p.pointsPer90 || 0; // season-long rate, large sample
+  const provenAbility = effP.pointsPerGame || p.pointsPer90 || 0; // season-long rate, large sample
   fixtures.forEach(({ gw, fx }) => {
     const opp = state.teamsById[fx.oppId];
     const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
@@ -5237,7 +5459,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     const fixtureMult = fdrScore !== null ? fdrToMultiplier(fdrScore) : 1;
     const provenProj = assume90 ? Math.max(provenAbility, p.pointsPer90 || 0) * fixtureMult : provenAbility * fixtureMult * startProb;
     const appearancePts = projAppearancePts(startProb, minsFactor);
-    const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
+    const attackPts = underlyingAttackPts(effP, fdrScore, minsFactor, startProb);
     const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
     const defConProb = defConProbability(p, minsFactor, fdrScore);
     const defConPts = defConProb * 2;
@@ -5524,7 +5746,9 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
         if (picked[pos].some(x => x.p.id === r.p.id)) continue;
         const price = (r.p.nowCost || 0) / 10;
         if (useBudget && !allowBudgetBreach && spent + price > BUDGET) continue;
-        if (useClubLimit && !allowClubBreach && (clubCount[r.p.teamId] || 0) >= MAX_PER_CLUB) continue;
+        // Club-overridden players (manual club-override feature) are
+        // exempt from the max-3 check — see overriddenTeamId/transformPlayer.
+        if (useClubLimit && !allowClubBreach && !r.p.clubOverridden && (clubCount[r.p.teamId] || 0) >= MAX_PER_CLUB) continue;
         picked[pos].push(r);
         spent += price;
         clubCount[r.p.teamId] = (clubCount[r.p.teamId] || 0) + 1;
@@ -5929,8 +6153,11 @@ function captaincyMiniBadges(p, gwId, scored) {
   // Fixture swing: this fixture is notably easier than the player's
   // trailing run (reuses the fixture object already computed for the
   // score row where available).
+  // Gated to positions that actually score clean-sheet points (CS_PTS.FWD
+  // is 0 in real FPL rules) — otherwise a forward could show a "Fixture
+  // swing" badge implying clean-sheet upside he can never actually score.
   const fx = scored && scored.fixture;
-  if (fx && fx.opp) {
+  if (fx && fx.opp && (CS_PTS[p.position] || 0) > 0) {
     const est = estimateScoreline(p.teamId, fx.opp.id, fx.isHome);
     const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
     if (csPct !== null && csPct > leagueAvgCsPct() * 1.4) {
@@ -6728,6 +6955,31 @@ function squadCost(playerIds) {
   return playerIds.reduce((sum, id) => sum + (state.players.find(p => p.id === id)?.nowCost || 0), 0);
 }
 
+// Minimum possible spend (in tenths, matching nowCost) to legally fill
+// every squad slot NOT already occupied, at each position's real price
+// floor (POSITION_MIN_PRICE). Used to reserve enough budget for the rest
+// of the squad before letting a candidate be added — without this, the
+// builder let you spend right up to the flat £100m squad total on your
+// early picks with no regard for whether the remaining slots could still
+// be legally filled, silently leaving you stuck (e.g. 12 players for
+// £96m with 3 required slots and only £4m left). One slot for
+// `reserveForPos` is excluded from the count since the candidate being
+// evaluated fills that slot himself.
+function minReserveForRemainingSlots(squadIds, reserveForPos) {
+  const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+  for (const id of squadIds) {
+    const p = state.players.find(pl => pl.id === id);
+    if (p) counts[p.position]++;
+  }
+  let reserve = 0;
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    let stillNeeded = SQUAD_RULES[pos] - counts[pos];
+    if (pos === reserveForPos) stillNeeded -= 1; // the candidate fills one of these himself
+    if (stillNeeded > 0) reserve += stillNeeded * POSITION_MIN_PRICE[pos] * 10; // tenths
+  }
+  return reserve;
+}
+
 function clubCountsFor(playerIds) {
   const counts = {};
   for (const id of playerIds) {
@@ -6821,7 +7073,8 @@ function autoPickSquad(draft, opts) {
         }).length);
         reserve += stillNeeded * cheapestByPos[otherPos];
       }
-      const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (clubCounts[p.teamId] || 0) < 3;
+      // Club-overridden players are exempt from the max-3 check — see overriddenTeamId/transformPlayer.
+      const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3);
       let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
         .sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
       if (!candidates.length) {
@@ -6883,7 +7136,7 @@ function autoPickSquad(draft, opts) {
     upgradeClubCounts[worst.teamId] = Math.max(0, (upgradeClubCounts[worst.teamId] || 1) - 1);
     const upgradeCandidates = state.players.filter(p =>
       p.position === worst.position && p.id !== worst.id && !draft.squad.includes(p.id) &&
-      p.nowCost <= budgetForSwap && (upgradeClubCounts[p.teamId] || 0) < 3
+      p.nowCost <= budgetForSwap && (p.clubOverridden || (upgradeClubCounts[p.teamId] || 0) < 3)
     ).sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
     const best = upgradeCandidates[0];
     if (!best || priorityScore(best, priority, risk) <= worstScore) break; // no improving swap left
@@ -6908,6 +7161,78 @@ function findBenchBoostSquad(draft) {
   draft.squad = [];
   draft.bank = BUDGET;
   autoPickSquad(draft, { priority: "points", risk: "med" });
+}
+
+// GW-specific Bench Boost solver: unlike findBenchBoostSquad (which
+// optimizes for season-long totalPoints via autoPickSquad), this
+// optimizes for a single chosen gameweek's PROJECTED points
+// (computeProjectionRow for exactly that gw), since a Bench Boost is
+// played on one specific week and a squad that's great over a season
+// isn't necessarily the strongest possible 15 for that particular
+// fixture set (e.g. teams with a double gameweek, or a run of very
+// friendly/hostile fixtures that week). Same greedy fill-by-position
+// approach as autoPickSquad — a true 15-slot/4-position knapsack solver
+// would be far heavier for a marginal accuracy gain — but scored on
+// gw-specific projected points instead of season totals, and budget-aware
+// via the same reserve-for-remaining-slots logic used elsewhere.
+// `budgetCap` in tenths (e.g. 1000 = £100.0m); `lockedIds` (optional) are
+// player ids that must remain in the squad (used by the "within my
+// current squad value" variant to keep the actual owned players evaluated
+// as part of the pool rather than starting from nothing).
+function solveBenchBoostForGw(gwId, budgetCap, lockedIds) {
+  const squad = [...(lockedIds || [])];
+  const scoreCache = new Map();
+  const gwScore = (p) => {
+    if (scoreCache.has(p.id)) return scoreCache.get(p.id);
+    const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
+    const s = row.fixtures.length ? row.proj : -1; // no fixture this GW (blank) — never worth picking
+    scoreCache.set(p.id, s);
+    return s;
+  };
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    let need = SQUAD_RULES[pos] - squad.filter(id => state.players.find(p => p.id === id)?.position === pos).length;
+    while (need > 0) {
+      const spent = squadCost(squad);
+      const clubCounts = clubCountsFor(squad);
+      const reserve = minReserveForRemainingSlots(squad, pos);
+      const remaining = budgetCap - spent;
+      const candidates = state.players
+        .filter(p => p.position === pos && !squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3) && p.nowCost <= remaining - reserve)
+        .sort((a, b) => gwScore(b) - gwScore(a));
+      let pick = candidates[0];
+      if (!pick) {
+        // Reserve heuristic left no room at this price floor (can happen
+        // near the end with an unlucky combination) — fall back to the
+        // cheapest legal option for this position so the squad still
+        // completes, same fallback pattern as autoPickSquad.
+        const cheap = state.players
+          .filter(p => p.position === pos && !squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3) && p.nowCost <= remaining)
+          .sort((a, b) => a.nowCost - b.nowCost);
+        pick = cheap[0];
+      }
+      if (!pick) break; // genuinely no legal candidate left at this position
+      squad.push(pick.id);
+      need--;
+    }
+  }
+  return squad;
+}
+// Variant A: fixed £100m budget, ignores your current squad entirely —
+// "if I had a completely free hand, who's the best 15 for this GW".
+function findBenchBoostSquadForGw(draft, gwId) {
+  draft.squad = solveBenchBoostForGw(gwId, BUDGET, []);
+  draft.bank = BUDGET - squadCost(draft.squad);
+}
+// Variant B: constrained to your CURRENT squad's total value (sell value,
+// approximated here by nowCost since sell-price/profit tracking isn't
+// wired up) — "what's the best 15 for this GW achievable via transfers
+// I could actually afford from my current squad", rather than a fantasy
+// unlimited-budget rebuild.
+function findBenchBoostSquadForGwWithinCurrentValue(draft, gwId) {
+  const currentValue = squadCost(draft.squad) + (draft.bank || 0);
+  const budgetCap = currentValue > 0 ? currentValue : BUDGET;
+  draft.squad = solveBenchBoostForGw(gwId, budgetCap, []);
+  draft.bank = budgetCap - squadCost(draft.squad);
 }
 function openAutopickModal(draft) {
   state.autopickOptions = state.autopickOptions || { priority: "points", risk: "med" };
@@ -6943,6 +7268,13 @@ function renderSquadBuilder(draft) {
   const remaining = BUDGET - spent;
   const total = draft.squad.length;
   const readyToConfirm = total === 15 && remaining >= 0;
+  // "Usable now" = remaining budget MINUS what still has to be reserved to
+  // legally fill every other still-needed slot at its price floor — the
+  // real ceiling for your next purchase, not just the flat bank balance.
+  // (reserveForPos passed as null since this isn't about one specific
+  // position — it reserves for every slot still open.)
+  const reserveForRest = minReserveForRemainingSlots(draft.squad, null);
+  const usableNow = remaining - reserveForRest;
 
   body.innerHTML = `
     <div class="builder-layout">
@@ -6964,6 +7296,7 @@ function renderSquadBuilder(draft) {
         <div class="builder-topbar">
           <span class="builder-pill">${total} / 15 players</span>
           <span class="builder-pill ${remaining < 0 ? "over" : ""}">${remaining < 0 ? "⚠️ " : ""}${fmtPrice(remaining)} in the bank</span>
+          ${total < 15 ? `<span class="builder-pill ${usableNow < 0 ? "over" : ""}" title="What you can actually spend on your NEXT pick and still be able to legally fill every other still-needed slot at its price floor">${usableNow < 0 ? "⚠️ " : ""}£${(usableNow / 10).toFixed(1)}m usable now</span>` : ""}
           <select id="builderGwSelect" style="margin-left:8px"></select>
           <div class="view-toggle" style="margin-left:0">
             <button id="builderGwPrev" title="Previous gameweek">←</button>
@@ -6979,6 +7312,8 @@ function renderSquadBuilder(draft) {
         <div class="builder-actions">
           <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
           <button class="dir-btn" id="builderBenchBoostPick" title="Clears the squad and picks the strongest possible 15 under a full £100m budget — for weeks you plan to play Bench Boost, where every one of the 15 scores, not just your XI">💥 Best 15 (Bench Boost)</button>
+          <button class="dir-btn" id="builderBenchBoostGwFull" title="Clears the squad and picks the strongest possible 15 for the gameweek selected above (${fmtPrice(BUDGET)} budget), optimizing that week's projected points specifically — not season-long totals">💥 Best 15 for GW${state.builderGwId ?? ""} (£100m)</button>
+          <button class="dir-btn" id="builderBenchBoostGwCurrent" title="Keeps your current squad's total value as the budget cap and re-optimizes for the gameweek selected above — the best Bench Boost 15 you could actually reach via transfers, not a fantasy full rebuild">💥 Best 15 for GW${state.builderGwId ?? ""} (my budget)</button>
           <button class="btn-secondary" id="builderResetSquad">Reset</button>
           <button class="btn" id="builderConfirm" ${readyToConfirm ? "" : "disabled"} style="margin-left:auto">
             ${total === 15 && remaining < 0 ? "Over budget" : total === 15 ? "Confirm squad →" : `Pick ${15 - total} more`}
@@ -7039,6 +7374,24 @@ function renderSquadBuilder(draft) {
   document.getElementById("builderBenchBoostPick").onclick = () => {
     if (!draft.squad.length || confirm("This clears your current squad and picks the strongest possible 15 under a full £100m budget. Continue?")) {
       findBenchBoostSquad(draft);
+      saveDrafts(); renderPlanner();
+    }
+  };
+  document.getElementById("builderBenchBoostGwFull").onclick = () => {
+    const gwId = state.builderGwId;
+    if (!gwId) return;
+    if (!draft.squad.length || confirm(`This clears your current squad and picks the strongest possible 15 for GW${gwId} specifically, under a full £100m budget. Continue?`)) {
+      findBenchBoostSquadForGw(draft, gwId);
+      saveDrafts(); renderPlanner();
+    }
+  };
+  document.getElementById("builderBenchBoostGwCurrent").onclick = () => {
+    const gwId = state.builderGwId;
+    if (!gwId) return;
+    const currentValue = (squadCost(draft.squad) + (draft.bank || 0)) / 10;
+    if (!draft.squad.length) { alert("No current squad value to work from yet — pick some players first, or use the £100m version instead."); return; }
+    if (confirm(`This clears your current squad and picks the strongest possible 15 for GW${gwId}, capped at your current squad's total value (£${currentValue.toFixed(1)}m). Continue?`)) {
+      findBenchBoostSquadForGwWithinCurrentValue(draft, gwId);
       saveDrafts(); renderPlanner();
     }
   };
@@ -7124,11 +7477,20 @@ function renderBuilderList(draft) {
       const team = state.teamsById[p.teamId];
       const inSquad = draft.squad.includes(p.id);
       const needThisPos = SQUAD_RULES[pos] - draft.squad.filter(id => state.players.find(pl => pl.id === id)?.position === pos).length;
-      const wouldExceedBudget = !inSquad && (squadCost(draft.squad) + p.nowCost > BUDGET);
+      // True affordability isn't just "does this one purchase fit under
+      // £100m" — it's "after buying him, can every other still-needed
+      // slot still be filled at its real price floor". Without reserving
+      // for the rest of the squad you can spend right up to the cap on
+      // early picks and get stuck unable to complete the squad legally.
+      const reserveForRest = minReserveForRemainingSlots(draft.squad, pos);
+      const maxAffordableSpend = BUDGET - reserveForRest;
+      const wouldExceedBudget = !inSquad && (squadCost(draft.squad) + p.nowCost > maxAffordableSpend);
       const wouldExceedPos = !inSquad && needThisPos <= 0;
-      const wouldExceedClub = !inSquad && (clubCounts[p.teamId] || 0) >= 3;
-      const disabled = !inSquad && (wouldExceedPos || wouldExceedClub);
-      const reason = wouldExceedPos ? "position full" : wouldExceedClub ? "max 3/club" : wouldExceedBudget ? "⚠️ over budget" : "";
+      // Club-overridden players (manual club-override feature — see
+      // overriddenTeamId/transformPlayer) are exempt from the max-3 check.
+      const wouldExceedClub = !inSquad && !p.clubOverridden && (clubCounts[p.teamId] || 0) >= 3;
+      const disabled = !inSquad && (wouldExceedPos || wouldExceedClub || wouldExceedBudget);
+      const reason = wouldExceedPos ? "position full" : wouldExceedClub ? "max 3/club" : wouldExceedBudget ? `⚠️ only £${(maxAffordableSpend / 10).toFixed(1)}m usable here — leaves room for the rest of the squad` : p.clubOverridden ? "⚡ club-overridden — exempt from max 3/club" : "";
       html += `
         <div class="builder-row ${inSquad ? "in-squad" : ""}" data-player="${p.id}">
           ${playerAvatarHtml(p, 28)}
@@ -7830,12 +8192,12 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">1. Select player to transfer OUT</div>
     ${plannerPickerFilterBarHtml("out", state.plannerOutFilters, false)}
     <div class="builder-count" id="plannerOutCount"></div>
-    <div class="builder-list" id="plannerOutList" style="max-height:220px"></div>
+    <div class="builder-list" id="plannerOutList" style="max-height:${outPlayer ? 320 : 560}px"></div>
     ${outPlayer ? `
       <div style="font-size:11px;color:var(--ink-faint);margin:14px 0 4px">2. Pick replacement IN (${outPlayer.position}) — search or sort to browse</div>
       ${plannerPickerFilterBarHtml("in", state.plannerInFilters, true)}
       <div class="builder-count" id="plannerInCount"></div>
-      <div class="builder-list" id="plannerInList" style="max-height:260px"></div>
+      <div class="builder-list" id="plannerInList" style="max-height:400px"></div>
     ` : `<div style="font-size:11px;color:var(--ink-faint);margin-top:8px">Pick someone to transfer out first.</div>`}
   `;
   wirePlannerPickerFilterBar("out", state.plannerOutFilters, () => renderPlannerOutList(draft, gwId, entry, horizon));
@@ -8058,10 +8420,20 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
   };
   document.getElementById("gwModalTransfer").onclick = () => {
     closePitchModal();
+    // Jump straight into the transfer-out → in flow with this player
+    // pre-selected as the outgoing player, and the out-list filtered to
+    // his position so the picker isn't cluttered with the rest of the
+    // squad. (Previously looked for a `.swap-out-select` element that no
+    // longer exists in the current builder-row-based transfer UI — this
+    // now drives the same state the out-list rows themselves set.)
+    const outP = state.players.find(pl => pl.id === playerId);
+    state.plannerTransferOutId = playerId;
+    if (outP && state.plannerOutFilters) state.plannerOutFilters.pos = outP.position;
+    if (outP && state.plannerInFilters) state.plannerInFilters.pos = outP.position;
     state.plannerExpandedGw = gwId;
     renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
-    const outSelect = document.getElementById(`gw-body-${gwId}`)?.querySelector(".swap-out-select");
-    if (outSelect) { outSelect.value = String(playerId); outSelect.scrollIntoView({ behavior: "smooth", block: "center" }); outSelect.focus(); }
+    const transferPanel = document.getElementById(`transferControls-${gwId}`);
+    if (transferPanel) transferPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   document.getElementById("gwModalCancel").onclick = closePitchModal;
 }
@@ -8135,6 +8507,13 @@ async function loadFormulasFromStorage() {
     const raw = await persistGet("rankingsPresets");
     if (raw) state.rankingsPresets = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("priorLeagueStats");
+    if (raw) state.priorLeagueStats = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  // playerClubOverrides is restored earlier, before transformPlayer runs
+  // in loadData() — see there — so it's deliberately NOT re-loaded here
+  // (that would just be a redundant, later, no-op re-read of the same key).
   // attributeDefs is no longer loaded from storage — it's now the fixed
   // FM12_ATTR_DEFS list (21 real attributes), not a freeform user-editable
   // list, so restoring an old saved list here would silently reintroduce
@@ -12154,114 +12533,409 @@ function per90Rate(total, minutes) {
   if (total == null || !minutes) return null;
   return (total / minutes) * 90;
 }
+// Home advantage multiplier — same anchor estimateScoreline already uses
+// internally (1.16 home / 0.87 away) for consistency with the rest of the
+// app's scoreline modelling, applied here to attacking output stats too
+// (shots, chances created, crosses, dribbles past) since a team's overall
+// attacking threat genuinely lifts at home / dips away, independent of
+// individual matchup outcomes.
+const SIM_HOME_MULT = 1.16, SIM_AWAY_MULT = 0.87;
+// Count-type stats: additive totals over 90 minutes, built from a real
+// per-90 rate scaled by the individual matchup win probability AND, for
+// attacking output specifically, a team-level FDR/xG-vs-xGA baseline (see
+// teamAttackBaseline below) so a player's output also reflects the
+// opponent's real defensive quality and the fixture's FDR gap — not just
+// his own season-long per-90 rate in isolation.
 const SIM_MATCH_OUTPUT_STATS = [
   {
-    key: "shots", label: "Shots", real: true,
+    key: "shots", label: "Shots", real: true, kind: "count",
     per90: (p) => per90Rate(p.dsShots, p.minutes),
     fallback: (p) => (p.xg90 || 0) * 4.5, // rough shots-per-xG ratio when Understat data isn't matched
+    fdrScaled: true,
   },
   {
-    key: "chancesCreated", label: "Chances created", real: true,
+    key: "chancesCreated", label: "Chances created", real: true, kind: "count",
     per90: (p) => per90Rate(p.dsKeyPasses, p.minutes),
     fallback: (p) => (p.xa90 || 0) * 3,
+    fdrScaled: true,
   },
   {
-    key: "tacklesWon", label: "Tackles won", real: true,
+    key: "tacklesWonPct", label: "Tackle success", real: true, kind: "pct",
+    // No real "tackle success %" field exists (only a raw tackles/90
+    // count) — approximated as this player's tackle rate relative to the
+    // total defensive+attacking duel volume implied by both his own and
+    // his direct opponent's per-90 involvement, which behaves like a
+    // real contested-duel win rate: high tackle rate + a weaker/less
+    // press-resistant opponent pushes the % up, a stronger dribbler
+    // opponent pulls it down.
     per90: (p) => per90Rate(p.dsTackles, p.minutes),
     fallback: (p) => (p.defensiveContributionPer90 || 0) * 0.35,
   },
   {
-    key: "aerialsWon", label: "Aerials won", real: true,
-    per90: (p) => per90Rate(p.dsAerialsWon, p.minutes),
-    fallback: (p) => 1.2,
+    key: "aerialsWonPct", label: "Aerial win %", real: true, kind: "pct",
+    // Real field — Understat/FBref-derived aerial win percentage, not
+    // modelled at all when present.
+    per90: (p) => (p.dsAerialWinPct != null ? p.dsAerialWinPct : null),
+    fallback: (p) => 50, // no data at all — assume a coin-flip baseline
+    isDirectPct: true, // per90()/fallback() here already return a 0-100 %, not a rate to convert
   },
   {
-    key: "crosses", label: "Crosses (modelled)", real: false,
+    key: "crosses", label: "Crosses (modelled)", real: false, kind: "count",
     // No real crossing data source exists (Understat/FBref's free tiers
     // don't carry it), so this is estimated from passing + technique — no
     // dedicated "crossing" FM attribute is modelled in this app.
     per90: () => null,
     fallback: (p) => ((getFmAttributeValue(p.id, "passing") || 10) + (getFmAttributeValue(p.id, "technique") || 10)) / 2 / 20 * 4.5,
+    fdrScaled: true,
   },
   {
-    key: "dribblesPast", label: "Dribbles past a defender (modelled)", real: false,
+    key: "dribblesPast", label: "Dribbles past a defender (modelled)", real: false, kind: "count",
     per90: () => null,
     fallback: (p) => (getFmAttributeValue(p.id, "dribbling") || 10) / 20 * 3.5,
+    fdrScaled: true,
   },
 ];
-function simMatchOutputForPlayer(p, stat, winProb) {
+// Team-level attacking baseline multiplier for THIS fixture, blending the
+// FDR gap (customFdr -> fdrToMultiplier, the same conversion used
+// everywhere else in the app) with the actual predicted xG-vs-xGA gap from
+// estimateScoreline (so a team creating a lot of real underlying chances
+// against a leaky defence gets more shots/chances than the FDR number
+// alone would suggest, and vice-versa for a low-xG side facing a mean
+// defence). Home/away is layered on separately in simMatchOutputForPlayer
+// since estimateScoreline already folds home advantage into its own xG,
+// which would otherwise double-count it here.
+function teamAttackBaseline(teamId, oppId, isHome) {
+  const fdrScore = customFdr(teamId, oppId, isHome);
+  const fdrMult = fdrScore !== null ? fdrToMultiplier(fdrScore) : 1;
+  const est = estimateScoreline(teamId, oppId, isHome);
+  if (!est || !est.teamXg || !est.oppXg) return fdrMult;
+  // League-average xG per team per game is roughly 1.35-1.45 — used as
+  // the reference point so a team projected well above it (strong attack
+  // vs weak defence) scales output up, and vice versa.
+  const LEAGUE_AVG_XG = 1.4;
+  const xgMult = Math.max(0.5, Math.min(2, est.teamXg / LEAGUE_AVG_XG));
+  // Blend FDR-derived and xG-derived multipliers evenly — FDR captures
+  // the broader/longer-run strength picture, the live xG estimate
+  // captures this specific fixture's scoreline model (form, H2H, odds
+  // where available) more precisely.
+  return (fdrMult + xgMult) / 2;
+}
+function simMatchOutputForPlayer(p, stat, winProb, teamBaseline, isHome) {
+  if (stat.isDirectPct) {
+    // Real/aerial-style direct percentage stat — the win probability
+    // shifts it around its own real baseline rather than being applied to
+    // a rate-to-count conversion.
+    const real = stat.per90(p);
+    const base = real != null ? real : stat.fallback(p);
+    const mult = 1 + (winProb - 0.5) * 0.6;
+    return { value: Math.max(0, Math.min(100, base * mult)), isReal: real != null };
+  }
   const real = stat.real ? stat.per90(p) : null;
   const base = real != null ? real : stat.fallback(p);
   // Win probability re-centred so 50% (no duel data / evenly matched)
   // leaves the base rate unchanged, and each 10 points away from 50%
   // nudges output ~8% up or down — enough to see the duel matter without
   // letting one matchup swing a whole match total unrealistically.
-  const mult = 1 + (winProb - 0.5) * 0.8;
-  return { value: Math.max(0, base * mult), isReal: real != null };
+  const duelMult = 1 + (winProb - 0.5) * 0.8;
+  const fdrMult = stat.fdrScaled && teamBaseline != null ? teamBaseline : 1;
+  const homeMult = stat.fdrScaled ? (isHome ? SIM_HOME_MULT : SIM_AWAY_MULT) : 1;
+  return { value: Math.max(0, base * duelMult * fdrMult * homeMult), isReal: real != null };
+}
+// A tackle "success %" needs a percentage-shaped number, not the raw
+// per-90 count simMatchOutputForPlayer produces for count-type stats —
+// this converts the tacklesWonPct row's per-90 rate into a genuine 0-100%
+// by comparing it against the direct opponent's own involvement rate
+// (more of the total contested volume won by the higher-rate side), then
+// applies the same win-probability shift so a favourable duel still nudges
+// the number further.
+function tackleSuccessPct(pFor, pAgainst, winProb) {
+  const stat = SIM_MATCH_OUTPUT_STATS.find(s => s.key === "tacklesWonPct");
+  const rateFor = stat.real ? (stat.per90(pFor) ?? stat.fallback(pFor)) : stat.fallback(pFor);
+  const rateAgainst = stat.real ? (stat.per90(pAgainst) ?? stat.fallback(pAgainst)) : stat.fallback(pAgainst);
+  const total = rateFor + rateAgainst;
+  const basePct = total > 0 ? (rateFor / total) * 100 : 50;
+  const mult = 1 + (winProb - 0.5) * 0.6;
+  return Math.max(5, Math.min(95, basePct * mult));
+}
+// ---------- Role inference (wide vs central, attacking vs defensive) ----------
+// FPL/the FPL API only carries 4 coarse positions (GK/DEF/MID/FWD) — there's
+// no real winger/fullback/CB/DM split anywhere in the data. Rather than
+// pairing "same position vs same position" (a CB could end up marked
+// against a winger playing FWD, which isn't how football actually works),
+// this infers a coarse WIDE vs CENTRAL role from real underlying signals
+// already in the data: a heavier crossing/assist-leaning output (relative
+// to goal threat) reads as wide; a heavier goal-threat-leaning output reads
+// as central/striker-ish; defenders split the same way using
+// creativity/threat ratio as a proxy for attacking fullback vs orthodox CB.
+// This is a genuine best-effort read of real stats, not a coin flip — but
+// it's still an inference, not confirmed real position data, so treat the
+// resulting matchups as a sensible default, not gospel.
+function inferredRole(p) {
+  const threat = p.threat || 0, creativity = p.creativity || 0;
+  const wideLeaning = creativity > threat * 1.15; // creates more than he threatens himself
+  if (p.position === "DEF") return wideLeaning ? "WB" : "CB"; // attacking full-back/wing-back vs orthodox centre-back
+  if (p.position === "MID") return wideLeaning ? "WIDE" : "CENTRAL";
+  if (p.position === "FWD") return wideLeaning ? "WIDE" : "CENTRAL"; // wide forward vs central striker
+  return p.position; // GK
 }
 // Auto-generates a sensible default set of player-vs-player matchups for a
 // team pairing when nothing has been manually pinned on the Tactical board
 // yet — picking two teams should show SOMETHING immediately rather than
 // sending the user off to a separate tab to set up matchups by hand first.
-// Ranks each team's players within a position by season total points and
-// pairs them positionally (best GK vs best GK, then DEF-DEF/MID-MID/FWD-FWD
-// in descending points order) — a reasonable like-for-like matchup guess,
-// capped at a realistic XI-sized 11 pairings. This never writes to
-// state.h2hMatchups (so it doesn't clutter the Tactical board's saved
-// matchups) — it's purely a display-time fallback for this view.
+// Two layers, both included (a real match has more than one simultaneous
+// "duel" per player — e.g. a full-back deals with the winger in open play
+// AND contests aerials at a corner against a striker):
+//
+// 1. PRIMARY role matchups — like-for-like by inferred role (wide vs wide,
+//    central vs central, WB vs the opposite flank, CB vs CB) rather than
+//    blindly same-position — a winger nominally listed as MID now faces
+//    the opposing full-back/wide defender, not another central midfielder.
+//    Falls back to broad attackers-vs-defenders pairing when a team simply
+//    doesn't have a same-role player available (e.g. no out-and-out wide
+//    outlet), so a mismatch in squad shape never leaves a matchup unfilled.
+// 2. SET-PIECE matchups — every DEF/attacking outlet on both sides gets
+//    ADDITIONALLY paired for aerial duels against the opponent's best
+//    aerial threats (their forwards/set-piece targets), on top of their
+//    primary matchup — because at a corner or free-kick a defender marks
+//    whichever attacker is closest, not necessarily "his" open-play
+//    opposite number. Capped at a small number so this doesn't explode
+//    into an unreadable wall of cards.
 function autoGenerateMatchups(teamAId, teamBId) {
-  const byPos = (teamId) => {
-    const grouped = { GK: [], DEF: [], MID: [], FWD: [] };
-    for (const p of state.players.filter(pl => pl.teamId === teamId)) {
-      if (grouped[p.position]) grouped[p.position].push(p);
+  const squadOf = (teamId) => state.players.filter(pl => pl.teamId === teamId);
+  const byRole = (teamId) => {
+    const grouped = { GK: [], CB: [], WB: [], CENTRAL: [], WIDE: [] };
+    for (const p of squadOf(teamId)) {
+      const role = inferredRole(p);
+      if (grouped[role]) grouped[role].push(p);
     }
-    for (const pos of ["GK", "DEF", "MID", "FWD"]) grouped[pos].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+    for (const role of Object.keys(grouped)) grouped[role].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
     return grouped;
   };
-  const aByPos = byPos(teamAId), bByPos = byPos(teamBId);
-  const counts = { GK: 1, DEF: 4, MID: 4, FWD: 2 }; // a plausible 4-4-2-shaped XI worth of pairings
+  const aByRole = byRole(teamAId), bByRole = byRole(teamBId);
+  const used = { A: new Set(), B: new Set() };
   const pairs = [];
-  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
-    const n = Math.min(counts[pos], aByPos[pos].length, bByPos[pos].length);
+  const take = (list, usedSet, n) => {
+    const out = [];
+    for (const p of list) { if (out.length >= n) break; if (!usedSet.has(p.id)) out.push(p); }
+    return out;
+  };
+  // 1. Primary role-matched pairings — GK, CB-CB, WB-WB (opposite flank
+  // dynamic — a home side's right WB faces the away side's left-flank
+  // WB in reality, but with no left/right split in the data this pairs
+  // by rank within role, which is the best available proxy), CENTRAL-
+  // CENTRAL, WIDE-WIDE. Counts roughly shape a 4-3-3/4-4-2-ish XI.
+  const roleCounts = { GK: 1, CB: 2, WB: 2, CENTRAL: 3, WIDE: 2 };
+  for (const role of ["GK", "CB", "WB", "CENTRAL", "WIDE"]) {
+    const aList = take(aByRole[role], used.A, roleCounts[role]);
+    const bList = take(bByRole[role], used.B, roleCounts[role]);
+    const n = Math.min(aList.length, bList.length, roleCounts[role]);
     for (let i = 0; i < n; i++) {
-      pairs.push({ id: "auto" + pos + i, playerAId: aByPos[pos][i].id, playerBId: bByPos[pos][i].id, label: "", winner: null, edge: null, isAuto: true });
+      pairs.push({ id: "auto" + role + i, playerAId: aList[i].id, playerBId: bList[i].id, label: role === "GK" ? "" : role, winner: null, edge: null, isAuto: true });
+      used.A.add(aList[i].id); used.B.add(bList[i].id);
     }
+    // Role imbalance fallback: if one side has no one left in this exact
+    // role bucket (e.g. a team with no genuine wide outlet), broaden to
+    // attackers-vs-defenders instead of just dropping the pairing —
+    // whichever attacking players are still unused on the short side face
+    // whichever defensive players are still unused on the other.
+    const shortfall = Math.min(aList.length, bList.length, roleCounts[role]) < roleCounts[role]
+      ? roleCounts[role] - Math.min(aList.length, bList.length) : 0;
+    if (shortfall > 0 && role !== "GK") {
+      const isAttackRole = role === "CENTRAL" || role === "WIDE";
+      const attackPoolTeam = isAttackRole ? teamAId : teamBId;
+      const defPoolTeam = isAttackRole ? teamBId : teamAId;
+      const attackUsed = isAttackRole ? used.A : used.B;
+      const defUsed = isAttackRole ? used.B : used.A;
+      const attackers = squadOf(attackPoolTeam).filter(p => (p.position === "MID" || p.position === "FWD") && !attackUsed.has(p.id)).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      const defenders = squadOf(defPoolTeam).filter(p => p.position === "DEF" && !defUsed.has(p.id)).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      const n2 = Math.min(shortfall, attackers.length, defenders.length);
+      for (let i = 0; i < n2; i++) {
+        const [pa, pb] = isAttackRole ? [attackers[i], defenders[i]] : [defenders[i], attackers[i]];
+        pairs.push({ id: "autoFallback" + role + i, playerAId: pa.id, playerBId: pb.id, label: "Att v Def", winner: null, edge: null, isAuto: true });
+        attackUsed.add(isAttackRole ? attackers[i].id : defenders[i].id);
+        defUsed.add(isAttackRole ? defenders[i].id : attackers[i].id);
+      }
+    }
+  }
+  // 2. Set-piece aerial matchups — every defender gets an ADDITIONAL
+  // pairing against the opponent's most aerially-threatening outfield
+  // players (by real dsAerialsWon data where available, else totalPoints
+  // as a proxy), layered on top of the open-play primary matchups above.
+  // Capped at 3 per side to keep the matchup list readable.
+  const aerialThreats = (teamId) => squadOf(teamId)
+    .filter(p => p.position !== "GK")
+    .sort((a, b) => (b.dsAerialsWon ?? -1) - (a.dsAerialsWon ?? -1) || (b.totalPoints || 0) - (a.totalPoints || 0))
+    .slice(0, 3);
+  const aDefenders = squadOf(teamAId).filter(p => p.position === "DEF").sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 3);
+  const bDefenders = squadOf(teamBId).filter(p => p.position === "DEF").sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 3);
+  const bThreats = aerialThreats(teamBId), aThreats = aerialThreats(teamAId);
+  for (let i = 0; i < Math.min(aDefenders.length, bThreats.length); i++) {
+    pairs.push({ id: "auto_sp_A" + i, playerAId: aDefenders[i].id, playerBId: bThreats[i].id, label: "Set-piece", winner: null, edge: null, isAuto: true, setPiece: true });
+  }
+  for (let i = 0; i < Math.min(bDefenders.length, aThreats.length); i++) {
+    pairs.push({ id: "auto_sp_B" + i, playerAId: aThreats[i].id, playerBId: bDefenders[i].id, label: "Set-piece", winner: null, edge: null, isAuto: true, setPiece: true });
   }
   return pairs;
 }
-function renderSimMatchBody() {
-  const bodyEl = document.getElementById("simMatchBody");
-  if (!bodyEl) return;
-  const teamAId = Number(document.getElementById("simMatchTeamA")?.value);
-  const teamBId = Number(document.getElementById("simMatchTeamB")?.value);
+// Real scheduled fixture lookup between the two picked teams (if one
+// exists in the current fixture list) so home/away reflects the actual
+// upcoming match rather than always assuming Team A is home. Falls back
+// to "A is home" (matching the "Team A vs Team B" reading order in the
+// UI) when these two sides aren't actually fixtured against each other —
+// this view lets you pick ANY two teams to compare, not just real
+// upcoming fixtures.
+function findFixtureBetween(teamAId, teamBId) {
+  const fx = (state.allFixtures || []).find(f =>
+    (f.team_h === teamAId && f.team_a === teamBId) || (f.team_h === teamBId && f.team_a === teamAId));
+  if (!fx) return null;
+  return { isAHome: fx.team_h === teamAId, event: fx.event };
+}
+// ---------- 90-minute phase engine ----------
+// Rather than a single static per-90-rate calculation, this splits the
+// match into 90 discrete one-minute "phases" (an FM/FC-style simplified
+// match engine: many small discrete moments resolved independently rather
+// than one aggregate formula) and, each minute, decides which team is in
+// the ascendancy (weighted by each side's real attacking baseline for
+// this fixture — teamAttackBaseline, which already folds in FDR + xG/xGA
+// + home advantage) and rolls forward that team's matchup pairings to
+// accumulate fractional stat output for that minute. Summing 90 of these
+// minute-by-minute draws produces the same season-long expected totals on
+// average as a static per-90 rate would, but (a) gives a genuine
+// possession-swing shape across the match rather than a flat scale, and
+// (b) is the natural hook for animating the bars as the "match" plays out
+// minute by minute rather than jumping straight to a final number.
+const SIM_MATCH_MINUTES = 90;
+function buildSimMatchState(teamAId, teamBId) {
   const teamA = state.teamsById[teamAId], teamB = state.teamsById[teamBId];
-  if (!teamA || !teamB) { bodyEl.innerHTML = `<div class="empty-state">Pick both teams above.</div>`; return; }
+  if (!teamA || !teamB) return null;
+  const fixture = findFixtureBetween(teamAId, teamBId);
+  const isAHome = fixture ? fixture.isAHome : true;
   const key = h2hMatchupKey(teamAId, teamBId);
   const pinnedMatchups = state.h2hMatchups[key] || [];
   const usingAutoMatchups = pinnedMatchups.length === 0;
   const matchups = usingAutoMatchups ? autoGenerateMatchups(teamAId, teamBId) : pinnedMatchups;
-  if (!matchups.length) {
-    bodyEl.innerHTML = `<div class="empty-state">Not enough player data for ${teamA.short_name} vs ${teamB.short_name} to build matchups yet.</div>`;
-    return;
-  }
   const rows = matchups.map(m => {
     const pa = state.players.find(p => p.id === m.playerAId);
     const pb = state.players.find(p => p.id === m.playerBId);
     if (!pa || !pb) return null;
     const edge = m.edge || matchupAttributeEdge(pa, pb);
     const probA = edge ? edge.pctA / 100 : 0.5;
-    const probB = 1 - probA;
-    return { m, pa, pb, probA, probB };
+    return { m, pa, pb, probA, probB: 1 - probA };
   }).filter(Boolean);
-
+  if (!rows.length) return { teamA, teamB, isAHome, usingAutoMatchups, matchups, key, rows: [] };
+  const baselineA = teamAttackBaseline(teamAId, teamBId, isAHome);
+  const baselineB = teamAttackBaseline(teamBId, teamAId, !isAHome);
+  // Per-minute ascendancy weight — which side is "on the ball" driving
+  // play that minute, proportional to relative attacking baseline (a
+  // stronger side at home to a weak defence dominates more minutes).
+  const totalBaseline = baselineA + baselineB || 2;
+  const minuteShareA = baselineA / totalBaseline;
+  return { teamA, teamB, teamAId, teamBId, isAHome, usingAutoMatchups, matchups, key, rows, baselineA, baselineB, minuteShareA };
+}
+// Runs the full 90 minutes and returns cumulative totals PLUS a per-minute
+// running snapshot array (so the UI can animate bars growing minute by
+// minute instead of only showing the final total).
+function simulate90MinuteMatch(simState) {
   const totalsA = {}, totalsB = {};
   for (const stat of SIM_MATCH_OUTPUT_STATS) { totalsA[stat.key] = 0; totalsB[stat.key] = 0; }
-  for (const r of rows) {
-    for (const stat of SIM_MATCH_OUTPUT_STATS) {
-      totalsA[stat.key] += simMatchOutputForPlayer(r.pa, stat, r.probA).value;
-      totalsB[stat.key] += simMatchOutputForPlayer(r.pb, stat, r.probB).value;
+  const snapshots = [];
+  if (!simState.rows.length) return { totalsA, totalsB, snapshots };
+  // Precompute each row's full-match output once (deterministic given the
+  // matchup win probabilities), then distribute it across the 90 minutes
+  // by the run's minute-by-minute ascendancy — this keeps the season-long
+  // expected value identical to a static calculation while still giving a
+  // genuine minute-by-minute accumulation to animate.
+  //
+  // IMPORTANT: a player can appear in more than one matchup row now (his
+  // open-play role matchup PLUS an additional set-piece aerial matchup —
+  // see autoGenerateMatchups). Count-type attacking stats (shots, chances
+  // created, crosses, dribbles past) must only be counted ONCE per player
+  // — from his primary (non-set-piece) matchup win probability — or a
+  // player in two rows would have his shots/chances double-counted into
+  // an inflated team total. Only genuinely duel-shaped stats (aerial win%,
+  // tackle success%) are meant to reflect every matchup he's part of,
+  // since those really do represent separate physical contests.
+  const seenForCount = { A: new Set(), B: new Set() };
+  const fullMatchA = {}, fullMatchB = {};
+  for (const stat of SIM_MATCH_OUTPUT_STATS) {
+    fullMatchA[stat.key] = 0; fullMatchB[stat.key] = 0;
+    if (stat.isDirectPct) continue; // aggregated separately below, across every matchup a player is in
+    seenForCount.A.clear(); seenForCount.B.clear();
+    for (const r of simState.rows) {
+      if (!seenForCount.A.has(r.pa.id)) {
+        fullMatchA[stat.key] += simMatchOutputForPlayer(r.pa, stat, r.probA, simState.baselineA, simState.isAHome).value;
+        seenForCount.A.add(r.pa.id);
+      }
+      if (!seenForCount.B.has(r.pb.id)) {
+        fullMatchB[stat.key] += simMatchOutputForPlayer(r.pb, stat, r.probB, simState.baselineB, !simState.isAHome).value;
+        seenForCount.B.add(r.pb.id);
+      }
     }
   }
+  // Deterministic pseudo-random in [0,1) per minute (no Math.random() —
+  // keeps a given fixture's simulation reproducible run to run) via a
+  // simple sine-based hash, combined with a slow sine wave so momentum
+  // swings last several minutes at a time rather than flipping every
+  // single minute like pure noise would.
+  const pseudoRandom01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  for (let minute = 1; minute <= SIM_MATCH_MINUTES; minute++) {
+    // Which side is in the ascendancy this minute — biased by
+    // minuteShareA (each side's real attacking baseline for this
+    // fixture) plus a slow momentum wave, so the accumulation has a
+    // realistic ebb-and-flow shape rather than a perfectly flat split.
+    const momentum = Math.sin(minute * 0.21) * 0.15;
+    const aInAscendancy = pseudoRandom01(minute) < simState.minuteShareA + momentum;
+    for (const stat of SIM_MATCH_OUTPUT_STATS) {
+      if (stat.isDirectPct) continue; // percentages are computed at the end from final totals, not accumulated
+      // Count-type stats accrue roughly proportionally to minutes played,
+      // with a bump for the side currently in the ascendancy — same
+      // total by full time either way, but the run shows genuine swing.
+      totalsA[stat.key] += (fullMatchA[stat.key] / SIM_MATCH_MINUTES) * (aInAscendancy ? 1.6 : 0.6);
+      totalsB[stat.key] += (fullMatchB[stat.key] / SIM_MATCH_MINUTES) * (aInAscendancy ? 0.6 : 1.6);
+    }
+    if (minute % 5 === 0 || minute === SIM_MATCH_MINUTES) {
+      snapshots.push({ minute, totalsA: { ...totalsA }, totalsB: { ...totalsB } });
+    }
+  }
+  // Direct-percentage stats (aerial win%) computed once from full totals —
+  // accumulating a percentage minute-by-minute doesn't mean anything, they
+  // reflect the whole match's contested duels.
+  for (const stat of SIM_MATCH_OUTPUT_STATS) {
+    if (!stat.isDirectPct) continue;
+    let sumA = 0, sumB = 0, n = 0;
+    for (const r of simState.rows) {
+      sumA += simMatchOutputForPlayer(r.pa, stat, r.probA).value;
+      sumB += simMatchOutputForPlayer(r.pb, stat, r.probB).value;
+      n++;
+    }
+    totalsA[stat.key] = n ? sumA / n : 50;
+    totalsB[stat.key] = n ? sumB / n : 50;
+  }
+  // Tackle success % uses the dedicated head-to-head calc (compares each
+  // side of every DEF-involved matchup directly) rather than the generic
+  // count-based totalling above.
+  let tackleSumA = 0, tackleSumB = 0, tackleN = 0;
+  for (const r of simState.rows) {
+    tackleSumA += tackleSuccessPct(r.pa, r.pb, r.probA);
+    tackleSumB += tackleSuccessPct(r.pb, r.pa, r.probB);
+    tackleN++;
+  }
+  if (tackleN) { totalsA.tacklesWonPct = tackleSumA / tackleN; totalsB.tacklesWonPct = tackleSumB / tackleN; }
+  return { totalsA, totalsB, snapshots };
+}
+function renderSimMatchBody() {
+  const bodyEl = document.getElementById("simMatchBody");
+  if (!bodyEl) return;
+  const teamAId = Number(document.getElementById("simMatchTeamA")?.value);
+  const teamBId = Number(document.getElementById("simMatchTeamB")?.value);
+  const simState = buildSimMatchState(teamAId, teamBId);
+  if (!simState) { bodyEl.innerHTML = `<div class="empty-state">Pick both teams above.</div>`; return; }
+  const { teamA, teamB, isAHome, usingAutoMatchups, matchups, key, rows } = simState;
+  if (!rows.length) {
+    bodyEl.innerHTML = `<div class="empty-state">Not enough player data for ${teamA.short_name} vs ${teamB.short_name} to build matchups yet.</div>`;
+    return;
+  }
+  const { totalsA, totalsB, snapshots } = simulate90MinuteMatch(simState);
 
   const matchupRowsHtml = rows.map(r => {
     const pctA = Math.round(r.probA * 100), pctB = 100 - pctA;
@@ -12273,43 +12947,65 @@ function renderSimMatchBody() {
             <div style="width:${pctA}%;background:linear-gradient(90deg,var(--emerald),var(--gold-bright))"></div>
             <div style="width:${pctB}%;background:var(--panel-2)"></div>
           </div>
-          <div style="font-size:10px;color:var(--ink-faint);text-align:center">${r.m.label ? r.m.label + " · " : ""}${pctA}% / ${pctB}%</div>
+          <div style="font-size:10px;color:var(--ink-faint);text-align:center">${r.m.label ? r.m.label + " · " : ""}${r.m.setPiece ? "⚽ set-piece · " : ""}${pctA}% / ${pctB}%</div>
         </div>
         <div class="matchup-side">${playerAvatarHtml(r.pb, 24)}<span>${r.pb.webName}</span></div>
       </div>
     `;
   }).join("");
 
+  // Bars start at 0 width and are set to their final width via a CSS
+  // transition right after the element is in the DOM (see the
+  // requestAnimationFrame call below) — this is what makes the bars
+  // visually animate into place in accordance with the freshly-computed
+  // data, instead of snapping straight to the final value.
   const statRowsHtml = SIM_MATCH_OUTPUT_STATS.map(stat => {
     const a = totalsA[stat.key], b = totalsB[stat.key];
-    const max = Math.max(a, b, 0.01);
+    const isPct = stat.kind === "pct";
+    const max = isPct ? 100 : Math.max(a, b, 0.01);
+    const fmt = (v) => isPct ? v.toFixed(0) + "%" : v.toFixed(1);
     return `
       <div style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
-          <span class="mono" style="font-weight:700">${a.toFixed(1)}</span>
+          <span class="mono" style="font-weight:700">${fmt(a)}</span>
           <span style="color:var(--ink-faint)">${stat.label}${!stat.real ? " ⚠" : ""}</span>
-          <span class="mono" style="font-weight:700">${b.toFixed(1)}</span>
+          <span class="mono" style="font-weight:700">${fmt(b)}</span>
         </div>
         <div style="display:flex;height:10px;border-radius:4px;overflow:hidden;background:var(--panel-3);gap:2px">
-          <div style="flex:0 0 50%;display:flex;justify-content:flex-end"><div style="width:${(a / max) * 100}%;background:var(--gold-bright);border-radius:4px 0 0 4px"></div></div>
-          <div style="flex:0 0 50%"><div style="width:${(b / max) * 100}%;background:var(--emerald);border-radius:0 4px 4px 0"></div></div>
+          <div style="flex:0 0 50%;display:flex;justify-content:flex-end">
+            <div class="sim-bar-fill" data-bar-a="${stat.key}" data-target="${isPct ? a : (a / max) * 100}" style="width:0%;background:var(--gold-bright);border-radius:4px 0 0 4px;transition:width 0.9s cubic-bezier(0.22,0.68,0,1.02)"></div>
+          </div>
+          <div style="flex:0 0 50%">
+            <div class="sim-bar-fill" data-bar-b="${stat.key}" data-target="${isPct ? b : (b / max) * 100}" style="width:0%;background:var(--emerald);border-radius:0 4px 4px 0;transition:width 0.9s cubic-bezier(0.22,0.68,0,1.02)"></div>
+          </div>
         </div>
       </div>
     `;
   }).join("");
 
+  const homeTag = (isHomeSide) => isHomeSide ? '<span title="Home advantage applied" style="opacity:0.7">(H)</span>' : '<span title="Away" style="opacity:0.7">(A)</span>';
   bodyEl.innerHTML = `
     <div class="card" style="margin-bottom:16px">
-      <div class="detail-block-title">Projected match output — ${teamA.short_name} vs ${teamB.short_name}</div>
-      <p class="field-desc" style="margin:0 0 10px">Rolled up from ${rows.length} matchup(s) below. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers, unlike the other rows which use real season shot/chance/tackle/aerial data scaled to a per-90 rate.</p>
+      <div class="detail-block-title">Projected match output — ${teamA.short_name} ${homeTag(isAHome)} vs ${teamB.short_name} ${homeTag(!isAHome)}</div>
+      <p class="field-desc" style="margin:0 0 10px">Simulated over a full ${SIM_MATCH_MINUTES} minutes from ${rows.length} matchup(s) below, scaled by fixture FDR, each side's predicted xG/xGA, and home advantage. Tackle success and aerial win % are shown as real head-to-head percentages, not raw counts. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers.</p>
       ${statRowsHtml}
     </div>
     <div class="detail-block-title">Matchups feeding this simulation</div>
     ${usingAutoMatchups
-      ? `<p class="field-desc" style="margin:0 0 10px">Auto-generated by pairing each team's top scorer at each position (best GK vs best GK, then DEF/MID/FWD in points order) — no matchups have been manually pinned for this pairing yet. <button type="button" id="simSendToTacboardBtn" class="chip-btn small" style="cursor:pointer">Send these to the Tactical board to customise →</button></p>`
+      ? `<p class="field-desc" style="margin:0 0 10px">Auto-generated from inferred roles (wide vs central, full-back vs centre-back) plus dedicated set-piece aerial pairings — no matchups have been manually pinned for this pairing yet. <button type="button" id="simSendToTacboardBtn" class="chip-btn small" style="cursor:pointer">Send these to the Tactical board to customise →</button></p>`
       : `<p class="field-desc" style="margin:0 0 10px">Pulled from your saved matchups on the Tactical board — edit them there, this view just reads them.</p>`}
     <div class="matchup-grid">${matchupRowsHtml}</div>
   `;
+  // Kick the bar-fill transition off on the next frame so the browser
+  // registers the starting 0% width first, then animates to the target —
+  // setting the target width in the same frame as insertion would just
+  // snap straight there with no visible transition.
+  requestAnimationFrame(() => {
+    bodyEl.querySelectorAll(".sim-bar-fill").forEach(el => {
+      const target = Number(el.dataset.target) || 0;
+      requestAnimationFrame(() => { el.style.width = Math.max(0, Math.min(100, target)) + "%"; });
+    });
+  });
   const sendBtn = document.getElementById("simSendToTacboardBtn");
   if (sendBtn) {
     sendBtn.onclick = () => {
