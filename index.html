@@ -572,10 +572,13 @@
   }
 
   /* detail drawer */
-  .detail-panel { padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); grid-auto-rows: min-content; gap: 24px; align-items: start; max-height: calc(100vh - 140px); overflow-y: auto; }
+  .detail-panel { padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); grid-auto-rows: min-content; gap: 24px; align-items: start; max-height: calc(100vh - 140px); max-width: 100%; overflow-y: auto; overflow-x: hidden; box-sizing: border-box; }
   @media (max-width: 900px) { .detail-panel { grid-template-columns: 1fr; } }
+  .detail-panel > div { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
   .detail-panel .radar-block { min-width: 0; min-height: 0; width: fit-content; max-width: 100%; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 0 auto; }
   .detail-panel .empty-block-compact { padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--ink-faint); font-size: 12px; }
+  .attr-editor .attr-row { flex-wrap: wrap; min-width: 0; }
+  .attr-editor .attr-row > span:first-child { flex: 1 1 90px; min-width: 90px; }
   .detail-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-bottom: 10px; }
   .stat-mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
   .stat-mini .stat-mini-label { font-size: 10.5px; color: var(--ink-faint); }
@@ -733,6 +736,8 @@
   .builder-row:last-child { border-bottom: none; }
   .builder-row.in-squad { background: var(--gold-soft); }
   .builder-row.in-squad:hover { background: var(--gold-soft); filter: brightness(1.1); }
+  .builder-row.over-budget { background: rgba(255, 84, 104, 0.08); }
+  .builder-row.over-budget:hover { background: rgba(255, 84, 104, 0.14); }
   .builder-row .b-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .builder-row .b-sub { font-size: 11px; color: var(--ink-faint); font-weight: 400; }
   .builder-row .b-price { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--ink-dim); width: 44px; text-align: right; }
@@ -783,6 +788,8 @@
     transition: transform 0.12s ease; position: relative;
   }
   .pitch-slot:hover { transform: translateY(-2px); }
+  .pitch-slot.dragging { opacity: 0.4; }
+  .pitch-slot.drag-over { outline: 2px dashed var(--gold-bright); outline-offset: 3px; border-radius: 10px; transform: translateY(-2px) scale(1.04); }
   /* Avatar/kit size is a % of the pitch's own width (container query units),
      not a fixed px from JS — so it keeps the same on-pitch proportion at
      any pitch size instead of the kit shrinking/growing out of step. */
@@ -918,6 +925,7 @@
   <div class="tb-group-label">Tools</div>
   <button data-tab="h2h"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8.5" cy="12" r="5"/><circle cx="15.5" cy="12" r="5"/></svg></span><span class="tb-label">Head-to-head</span></button>
   <button data-tab="tacboard"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5v17M12 9.5a3 3 0 010 5"/></svg></span><span class="tb-label">Tactical board</span></button>
+  <button data-tab="simulation"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></span><span class="tb-label">Simulation</span></button>
   <button data-tab="table"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8.5 9.5v10"/></svg></span><span class="tb-label">Teams</span></button>
 </nav>
 
@@ -1082,6 +1090,7 @@
         <button type="button" data-cap-source="myteam">My team's squad only</button>
         <button type="button" data-cap-source="all">Any player (top candidates league-wide)</button>
       </div>
+      <div id="capBaseViewPickerWrap" style="min-width:220px" title="Pin any player as a base/reference row — including goalkeepers and low-minutes players the two views above filter out — so you can compare them against whoever else you're browsing."></div>
     </div>
     <div id="capBody"></div>
     <div style="margin-top:20px">
@@ -1388,18 +1397,33 @@
   <section id="tab-simulation" style="display:none">
     <h1 class="page-title">Simulation</h1>
     <p class="page-sub">Pick any two players and see a head-to-head duel breakdown — FM-style attributes plus real FPL underlying stats, with duel outcomes shown as probabilities (not hard "who wins" verdicts): a stronger/faster player is more likely to win a given duel, never guaranteed.</p>
-    <div class="toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:16px">
-      <div style="flex:1;min-width:220px">
-        <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player A</div>
-        <div id="simPlayerAPickerWrap"></div>
-      </div>
-      <div style="align-self:center;color:var(--ink-faint);font-weight:700">VS</div>
-      <div style="flex:1;min-width:220px">
-        <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player B</div>
-        <div id="simPlayerBPickerWrap"></div>
-      </div>
+    <div class="theme-seg" id="simModeSeg" style="margin-bottom:14px">
+      <button data-sim-mode="duel" class="active">1v1 duel</button>
+      <button data-sim-mode="match">Match simulation (Tactical board)</button>
     </div>
-    <div id="simulationBody"></div>
+    <div id="simDuelSection">
+      <div class="toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:16px">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player A</div>
+          <div id="simPlayerAPickerWrap"></div>
+        </div>
+        <div style="align-self:center;color:var(--ink-faint);font-weight:700">VS</div>
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player B</div>
+          <div id="simPlayerBPickerWrap"></div>
+        </div>
+      </div>
+      <div id="simulationBody"></div>
+    </div>
+    <div id="simMatchSection" style="display:none">
+      <p class="field-desc" style="margin:0 0 12px">Runs off the matchups you've set up on the <strong>Tactical board</strong> tab for a team pairing — every player-vs-player matchup pinned there is simulated together and rolled up into projected match output (shots, chances created, tackles won, aerials), instead of one isolated 1v1 duel at a time. Set up matchups on the Tactical board first if you don't see any below.</p>
+      <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+        <select id="simMatchTeamA"></select>
+        <span style="color:var(--ink-dim)">vs</span>
+        <select id="simMatchTeamB"></select>
+      </div>
+      <div id="simMatchBody"></div>
+    </div>
   </section>
 
   <section id="tab-rankings" style="display:none">
@@ -2584,6 +2608,10 @@ let state = {
   plannerOutFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
   plannerInFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
   simPlayerAId: null, simPlayerBId: null,
+  // Budget cap + max-3-per-club default to ON in the Best XI pitch picker
+  // — a "best XI" that's actually affordable/legal by default is more
+  // useful than one that silently assumes an unlimited bank.
+  projPitchBudget: true, projPitchClubLimit: true,
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
@@ -2745,8 +2773,13 @@ async function computeScopedStats() {
   const maps = await Promise.all(eventsToFetch.map(fetchGwLive));
   const FIELDS = ["minutes", "goals_scored", "assists", "clean_sheets", "goals_conceded", "saves", "bonus", "bps",
     "influence", "creativity", "threat", "expected_goals", "expected_assists", "expected_goal_involvements",
-    "expected_goals_conceded", "defensive_contribution", "total_points"];
+    "expected_goals_conceded", "defensive_contribution", "total_points", "starts"];
   const agg = {};
+  // Tracks whether the live payload actually carried a `starts` field at
+  // all (older seasons' event-live responses don't have it) — separate
+  // from the summed value being 0, which just means an accurate zero
+  // appearances in the scoped window.
+  let sawStartsField = false;
   eventsToFetch.forEach((gw, i) => {
     const liveMap = maps[i];
     for (const p of state.players) {
@@ -2758,10 +2791,12 @@ async function computeScopedStats() {
       }
       const stats = liveMap[p.id];
       if (!stats) continue;
+      if (stats.starts != null) sawStartsField = true;
       const bucket = agg[p.id] || (agg[p.id] = Object.fromEntries(FIELDS.map(k => [k, 0])));
       for (const k of FIELDS) bucket[k] += Number(stats[k] || 0);
     }
   });
+  agg.__hasStartsData = sawStartsField;
   return agg;
 }
 
@@ -2785,12 +2820,15 @@ function scopedPlayer(p) {
     ppm: s && p.nowCost > 0 ? s.total_points / (p.nowCost / 10) : 0,
     ppm90: s && p.nowCost > 0 ? per90Floored(s.total_points) / (p.nowCost / 10) : 0,
     // Points per million per appearance, scoped to the selected GW/venue
-    // window. The scoped aggregate here doesn't carry a real "starts"
-    // count (only summed live-event fields), so appearances are estimated
-    // as minutes / 90 — the same minutes-based per-90 normalization
-    // already used for every other *Per90 stat above. This is an estimate,
-    // not a real appearance count.
-    ppmPerApp: s && p.nowCost > 0 && mins > 0 ? (s.total_points / (p.nowCost / 10)) / Math.max(mins / 90, 1 / 90) : 0,
+    // window. Uses the real summed `starts` count from each event-live
+    // payload (FPL's own appearance flag), same as the season-long
+    // ppmPerApp below — not a minutes/90 estimate. If this season/data
+    // source doesn't carry a `starts` field at all, ppmPerApp is left
+    // null (rendered as "—") rather than silently falling back to an
+    // estimate that looks like real per-appearance data.
+    ppmPerApp: (state.scopedStats && state.scopedStats.__hasStartsData && s && p.nowCost > 0 && s.starts > 0)
+      ? (s.total_points / (p.nowCost / 10)) / s.starts
+      : null,
     xg90: per90(s ? s.expected_goals : 0), xa90: per90(s ? s.expected_assists : 0),
     xgi90: per90(s ? s.expected_goal_involvements : 0), xgc90: per90(s ? s.expected_goals_conceded : 0),
     saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
@@ -5390,13 +5428,29 @@ function renderProjViewModeRow() {
 // per-club cap, moving to the next-best candidate in that position
 // instead. Good enough for "give me a realistic best XI under these
 // constraints" without the complexity of true multi-position optimization.
+// Real FPL squad shape is always fixed at 2 GK / 5 DEF / 5 MID / 3 FWD —
+// only which 11 of those 15 *start* changes with formation. So the
+// mandatory bench (15 minus the XI) always has 1 spare GK, but the mix of
+// spare outfield players shifts with formation: a back-3 (fewer DEF in the
+// XI) pushes more players onto the bench at DEF's cheaper price floor
+// (£4.0m) instead of MID/FWD's higher floor (£4.5m), leaving more of the
+// £100m for the actual XI. This computes that real minimum-bench-cost
+// floor per formation instead of a single hardcoded £83.5m for every
+// formation, so a back-3 correctly gets a higher XI budget than a back-5.
+const POSITION_MIN_PRICE = { GK: 4.0, DEF: 4.0, MID: 4.5, FWD: 4.5 };
+function xiBudgetForFormation(need) {
+  const benchGK = 1; // always exactly 1 spare GK (squad always carries 2)
+  const benchDEF = Math.max(0, 5 - (need.DEF || 0));
+  const benchMID = Math.max(0, 5 - (need.MID || 0));
+  const benchFWD = Math.max(0, 3 - (need.FWD || 0));
+  const minBenchCost = benchGK * POSITION_MIN_PRICE.GK + benchDEF * POSITION_MIN_PRICE.DEF +
+    benchMID * POSITION_MIN_PRICE.MID + benchFWD * POSITION_MIN_PRICE.FWD;
+  return 100 - minBenchCost;
+}
 function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows) {
-  // £83.5m rather than the full £100m squad budget: a real squad also
-  // needs a 4-man bench, which realistically eats ~£16.5m even at
-  // near-minimum prices, so capping the XI itself at £83.5m keeps this
-  // "best XI" picker honest about what's actually affordable once a
-  // bench is accounted for.
-  const BUDGET = 83.5, MAX_PER_CLUB = 3;
+  // Formation-aware XI budget (see xiBudgetForFormation above) rather than
+  // one flat number for every formation.
+  const BUDGET = xiBudgetForFormation(need), MAX_PER_CLUB = 3;
   const excluded = excludedIds || new Set();
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const r of rows) { if (excluded.has(r.p.id)) continue; byPos[r.p.position].push(r); }
@@ -5447,7 +5501,7 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   fillPass(true, false, false);  // relax budget cap
   fillPass(true, true, false);   // relax club limit too
   fillPass(true, true, true);    // last resort: ignore current filter/exclusion pool entirely
-  return { picked, spent };
+  return { picked, spent, budget: BUDGET };
 }
 function renderProjectionsPitch(rows) {
   const body = document.getElementById("projectionsBody");
@@ -5474,7 +5528,7 @@ function renderProjectionsPitch(rows) {
     const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
     const totalProj = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
     const missing = ["GK", "DEF", "MID", "FWD"].filter(pos => result.picked[pos].length < need[pos]);
-    return { formationKey, need, picked: result.picked, spent: result.spent, allPicked, captain, totalProj, missing };
+    return { formationKey, need, picked: result.picked, spent: result.spent, budget: result.budget, allPicked, captain, totalProj, missing };
   }
   let best;
   if (selectedFormation === "AUTO") {
@@ -5485,7 +5539,7 @@ function renderProjectionsPitch(rows) {
   } else {
     best = buildForFormation(FORMATIONS_H2H[selectedFormation] ? selectedFormation : "3-4-3");
   }
-  const { formationKey, need, picked, spent, allPicked, captain, totalProj, missing } = best;
+  const { formationKey, need, picked, spent, budget, allPicked, captain, totalProj, missing } = best;
   const swapOpenSlot = state.projXiSwapSlot || null; // { pos, index }
   function fixLabel(r) {
     // Only ever the NEXT fixture here, not the whole selected GW range —
@@ -5554,7 +5608,7 @@ function renderProjectionsPitch(rows) {
   const hasOverrides = excludedIds.size > 0 || lockedIds.size > 0;
   body.innerHTML = `
     <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center">
-      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="£83.5m rather than the full £100m squad budget, to leave realistic room for a 4-man bench"><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 £83.5m budget cap (bench-adjusted)</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="Less than the full £100m squad budget, to leave realistic room for a 4-man bench at minimum prices. This varies by formation — a back-3 leaves a higher XI budget than a back-5, since bench defenders are cheaper (£4.0m floor) than bench mids/forwards (£4.5m floor)."><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 £${budget.toFixed(1)}m budget cap (bench-adjusted)</label>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projPitchClubChk" ${useClubLimit ? "checked" : ""} /> 🚫 Max 3 per club</label>
       ${hasOverrides ? `<button type="button" id="pitchResetXiBtn" class="chip-btn small" style="cursor:pointer">↺ Reset XI</button>` : ""}
       ${state.projXiLastRemoved ? `<button type="button" id="pitchUndoRemoveBtn" class="chip-btn small" style="cursor:pointer" title="Restore the last removed player">↩ Undo remove</button>` : ""}
@@ -5563,7 +5617,7 @@ function renderProjectionsPitch(rows) {
       <div style="text-align:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--ink-faint)">Best XI, ${formationKey}${selectedFormation === "AUTO" ? " (auto-selected as highest-scoring formation)" : ""}, over the selected GW range</div>
         <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${totalProj.toFixed(1)} pts</div>
-        ${useBudget ? `<div style="font-size:11px;color:var(--ink-faint)">XI cost: £${spent.toFixed(1)}m / £83.5m (bench-adjusted)</div>` : ""}
+        ${useBudget ? `<div style="font-size:11px;color:var(--ink-faint)">XI cost: £${spent.toFixed(1)}m / £${budget.toFixed(1)}m (bench-adjusted for ${formationKey})</div>` : ""}
         ${missing.length ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">Not enough eligible players at current filters${useBudget ? "/budget" : ""}${useClubLimit ? "/club limit" : ""} to fill: ${missing.join(", ")} — loosen filters.</div>` : ""}
         <div style="font-size:10px;color:var(--ink-faint);margin-top:4px">⇄ swap or ✕ remove any player, then pick a replacement from the list</div>
       </div>
@@ -5878,6 +5932,20 @@ function renderCaptaincyTab() {
     state.capGwId = upcoming[0];
     gwSelect.value = state.capGwId;
     gwSelect.onchange = () => { state.capGwId = Number(gwSelect.value); renderCaptaincyTab(); };
+  }
+  // Base view: search for literally any player — including goalkeepers
+  // and low-minutes players, which both the "My team" and "Any player"
+  // views exclude (GKs are skipped entirely for captaincy, and "Any
+  // player" only shows the top 25 by score) — and pin them as a
+  // standing reference row via the existing pin mechanism, which already
+  // looks players up directly by id rather than through the filtered pool.
+  const baseViewWrap = document.getElementById("capBaseViewPickerWrap");
+  if (baseViewWrap) {
+    baseViewWrap.innerHTML = searchablePlayerPickerHtml("capBaseViewPicker", state.players, null, "Base view: pin any player…");
+    wireSearchablePlayerPicker("capBaseViewPicker", state.players, (p) => {
+      if (!isCaptainPinned(p.id)) toggleCaptainPin(p.id);
+      renderCaptaincyTab();
+    });
   }
   // Button toggle instead of a native <select> for the source picker.
   const sourceToggle = document.getElementById("capSourceToggle");
@@ -6358,7 +6426,7 @@ function setupProjectionsControls() {
 
 // Chooses a valid starting XI (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD) maximizing
 // projected points, then applies captain/chip effects.
-function computeGwResult(squadIds, gwId, chip, captainId, manualStarterIds, viceCaptainId) {
+function computeGwResult(squadIds, gwId, chip, captainId, manualStarterIds, viceCaptainId, benchOrder) {
   const withProj = squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
     .map(p => ({ p, proj: projectPoints(p, gwId) }));
   let starting, bench;
@@ -6392,6 +6460,21 @@ function computeGwResult(squadIds, gwId, chip, captainId, manualStarterIds, vice
     bench = withProj.filter(x => !startingIds.has(x.p.id));
   }
 
+  // Bench display/sub-priority order: a manually saved order (from
+  // dragging or the "Move up/down" bench actions) wins; otherwise fall
+  // back to the natural GK-first-then-projected-points order used before
+  // per-gameweek bench ordering existed.
+  if (benchOrder && benchOrder.length) {
+    const orderIndex = new Map(benchOrder.map((id, i) => [id, i]));
+    bench = [...bench].sort((a, b) => {
+      const ia = orderIndex.has(a.p.id) ? orderIndex.get(a.p.id) : 999;
+      const ib = orderIndex.has(b.p.id) ? orderIndex.get(b.p.id) : 999;
+      return ia - ib;
+    });
+  } else {
+    bench = [...bench].sort((a, b) => (a.p.position === "GK" ? -1 : b.p.position === "GK" ? 1 : b.proj - a.proj));
+  }
+
   let total = sumProj(starting);
   let captainEntry = starting.find(x => x.p.id === captainId);
   // If the chosen captain isn't in the starting XI (e.g. a transfer/sub
@@ -6416,21 +6499,35 @@ function getHorizonGws(count) {
   return upcoming.slice(0, count || 6).map(e => e.id);
 }
 
+// Tracks a real running bank alongside the squad across the horizon: each
+// planned transfer spends (in player's cost - out player's cost) against
+// whatever's left, same as real FPL. Previously `draft.bank` was set once
+// at draft creation/import and never touched again, so the "In the bank"
+// figure shown in the Planner was static and disconnected from any
+// transfers actually planned — it could read as "violated" or just wrong
+// regardless of what was picked. Free Hit is a one-week-only swap so it
+// doesn't touch the persistent bank (matches real FPL: your squad/bank
+// reverts after an FH week).
 function getSquadTimeline(draft, horizonGwIds) {
   let persistent = [...draft.squad];
+  let persistentBank = draft.bank || 0;
   const timeline = [];
   for (const gwId of horizonGwIds) {
     const log = draft.transfersLog[gwId] || {};
     const chip = log.chip || null;
     const outIds = log.out || [], inIds = log.in || [];
-    let squadThisWeek;
+    const transferCost = squadCost(inIds) - squadCost(outIds);
+    let squadThisWeek, bankThisWeek;
     if (chip === "FH") {
       squadThisWeek = applyTransfers(persistent, outIds, inIds);
+      bankThisWeek = persistentBank - transferCost;
     } else {
       persistent = applyTransfers(persistent, outIds, inIds);
+      persistentBank -= transferCost;
       squadThisWeek = persistent;
+      bankThisWeek = persistentBank;
     }
-    timeline.push({ gwId, squad: squadThisWeek, chip, captainId: log.captainId, transfersCount: outIds.length });
+    timeline.push({ gwId, squad: squadThisWeek, chip, captainId: log.captainId, transfersCount: outIds.length, bank: bankThisWeek });
   }
   return timeline;
 }
@@ -6755,6 +6852,21 @@ function autoPickSquad(draft, opts) {
   draft.manualStarterIds = null;
 }
 
+// "Best 15" finder for Bench Boost weeks: every one of the 15 counts that
+// week, not just the starting XI, so this optimizes total squad points
+// under the full £100m budget rather than treating the bench as an
+// afterthought (unlike the normal Auto Pick flow, which is meant to top up
+// an existing squad and preserves whatever's already picked). Reuses the
+// same greedy-fill-then-upgrade machinery as autoPickSquad, just starting
+// from a fully empty squad with the "points" priority — a real budget-
+// constrained knapsack across 15 slots and 4 positions jointly would need
+// a much heavier solver; this greedy approach reliably lands on a strong,
+// legal 15 without that complexity.
+function findBenchBoostSquad(draft) {
+  draft.squad = [];
+  draft.bank = BUDGET;
+  autoPickSquad(draft, { priority: "points", risk: "med" });
+}
 function openAutopickModal(draft) {
   state.autopickOptions = state.autopickOptions || { priority: "points", risk: "med" };
   const modal = document.getElementById("autopickModal");
@@ -6824,6 +6936,7 @@ function renderSquadBuilder(draft) {
         <p class="foot-note" style="margin-top:10px">Step through gameweeks with the dropdown above to see each one's fixture and lineup. Click a starting player on the pitch to make them captain for that gameweek. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
         <div class="builder-actions">
           <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
+          <button class="dir-btn" id="builderBenchBoostPick" title="Clears the squad and picks the strongest possible 15 under a full £100m budget — for weeks you plan to play Bench Boost, where every one of the 15 scores, not just your XI">💥 Best 15 (Bench Boost)</button>
           <button class="btn-secondary" id="builderResetSquad">Reset</button>
           <button class="btn" id="builderConfirm" ${readyToConfirm ? "" : "disabled"} style="margin-left:auto">
             ${total === 15 && remaining < 0 ? "Over budget" : total === 15 ? "Confirm squad →" : `Pick ${15 - total} more`}
@@ -6880,6 +6993,12 @@ function renderSquadBuilder(draft) {
 
   document.getElementById("builderAutoPick").onclick = () => {
     openAutopickModal(draft);
+  };
+  document.getElementById("builderBenchBoostPick").onclick = () => {
+    if (!draft.squad.length || confirm("This clears your current squad and picks the strongest possible 15 under a full £100m budget. Continue?")) {
+      findBenchBoostSquad(draft);
+      saveDrafts(); renderPlanner();
+    }
   };
   document.getElementById("builderResetSquad").onclick = () => {
     if (!draft.squad.length || confirm("Clear all picked players?")) {
@@ -7461,13 +7580,14 @@ function wirePlannerPickerFilterBar(prefix, filters, onChange) {
     onChange();
   };
 }
-function plannerPickerRowHtml(p, extra) {
+function plannerPickerRowHtml(p, extra, overBudgetBy) {
   const team = state.teamsById[p.teamId];
+  const over = overBudgetBy != null && overBudgetBy > 0;
   return `
-    <div class="builder-row" data-player="${p.id}">
+    <div class="builder-row${over ? " over-budget" : ""}" data-player="${p.id}" ${over ? `title="⚠️ ${fmtPrice(overBudgetBy)} over what's currently in the bank for this gameweek"` : ""}>
       ${playerAvatarHtml(p, 28)}
-      <span class="b-name">${p.webName} <span class="b-sub">${team ? team.short_name : ""}</span></span>
-      <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+      <span class="b-name">${p.webName} <span class="b-sub">${team ? team.short_name : ""}${over ? ` · <span style="color:var(--rose,#e05d5d)">⚠️ over budget</span>` : ""}</span></span>
+      <span class="b-price mono" style="${over ? "color:var(--rose,#e05d5d)" : ""}">${fmtPrice(p.nowCost)}</span>
       <span class="b-pts mono">${extra != null ? extra : (p.totalPoints ?? 0)}</span>
       <button class="builder-add-btn" data-action="add" data-player="${p.id}">+</button>
     </div>
@@ -7520,8 +7640,16 @@ function renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon) {
     })
     .slice(0, 60);
   countEl.textContent = `${pool.length} eligible replacements shown`;
+  // Resulting bank if this swap were made, so an unaffordable pick is
+  // flagged right in the list instead of only surfacing as a vague
+  // "budget violated" state after the fact with no indication of which
+  // transfer caused it.
+  const bankBeforeThisSwap = (entry.bank || 0) + outPlayer.nowCost;
   listEl.innerHTML = pool.length
-    ? pool.map(({ p, proj }) => plannerPickerRowHtml(p, proj.toFixed(1))).join("")
+    ? pool.map(({ p, proj }) => {
+        const resultingBank = bankBeforeThisSwap - p.nowCost;
+        return plannerPickerRowHtml(p, proj.toFixed(1), resultingBank < 0 ? -resultingBank : null);
+      }).join("")
     : `<div class="empty-state">No eligible replacements match those filters.</div>`;
   listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
     btn.onclick = () => {
@@ -7546,10 +7674,11 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [], chip: null, captainId: draft.builderCaptainId || null, viceCaptainId: draft.builderViceCaptainId || null, manualStarterIds: null });
   if (log.viceCaptainId === undefined) log.viceCaptainId = null;
   if (log.manualStarterIds === undefined) log.manualStarterIds = null;
+  if (log.benchOrder === undefined) log.benchOrder = null;
   ensureCaptainsPreset(entry.squad, gwId,
     () => ({ captainId: log.captainId, viceCaptainId: log.viceCaptainId }),
     (cap, vice) => { log.captainId = cap; log.viceCaptainId = vice; });
-  const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId, log.manualStarterIds, log.viceCaptainId);
+  const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId, log.manualStarterIds, log.viceCaptainId, log.benchOrder);
 
   const chipsAvailable = ["WC", "FH", "BB", "TC"];
   const chipRow = chipsAvailable.map(c => {
@@ -7567,6 +7696,9 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:18px;align-items:start">
       <div>
         <div class="detail-block-title">Transfer out → in</div>
+        <div style="font-size:11.5px;color:${entry.bank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:8px">
+          In the bank this gameweek: <span class="mono" style="font-weight:700">${fmtPrice(entry.bank)}</span>${entry.bank < 0 ? " ⚠️ over budget — remove a transfer or pick a cheaper replacement" : ""}
+        </div>
         <div id="transferControls-${gwId}"></div>
       </div>
       <div>
@@ -7618,7 +7750,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
       fdrBadge = `<div style="font-size:8.5px;color:rgba(255,255,255,0.6)">No fixture</div>`;
     }
     return `
-      <div class="pitch-slot" data-player="${x.p.id}">
+      <div class="pitch-slot" data-player="${x.p.id}" draggable="true" title="Drag onto another player to swap them">
         ${isCaptainSlot ? `<span class="cap-mark">${log.chip === "TC" ? "3×" : "C"}</span>` : isViceSlot ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
         ${playerAvatarHtml(x.p, 40)}
         <div class="name-tag">${x.p.webName}</div>
@@ -7639,6 +7771,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   pitchWrap.querySelectorAll(".pitch-slot").forEach(slot => {
     slot.onclick = () => openGwPlayerActionModal(draft, gwId, horizon, Number(slot.dataset.player), result);
   });
+  wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result);
   const allInSquad = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean);
 
   // Transfer controls — redesigned to match the Player Stats browser's
@@ -7707,6 +7840,85 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   }
 }
 
+// Swaps exactly two specific players for this gameweek — the shared
+// primitive behind both drag-and-drop on the pitch and the "choose who to
+// swap with" picker in the player action modal. Three cases:
+//  - both starters: just a formation-preserving position swap (only
+//    meaningful when they're different positions — otherwise it's a no-op
+//    since both stay starting either way), so no legality check needed.
+//  - one starter + one bench: an actual substitution — must keep the XI
+//    legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD), same rule real FPL enforces.
+//  - both bench: pure bench reordering (sub-priority order), always legal.
+// Returns true on success, false if the swap would produce an illegal XI
+// (caller shows an explanatory message).
+function swapTwoPlayersInGw(draft, gwId, log, result, idA, idB) {
+  if (idA === idB) return true;
+  const aIsStarter = result.starting.some(x => x.p.id === idA);
+  const bIsStarter = result.starting.some(x => x.p.id === idB);
+  const currentStarters = (log.manualStarterIds && log.manualStarterIds.length === 11) ? log.manualStarterIds : result.starting.map(x => x.p.id);
+  const currentBench = result.bench.map(x => x.p.id);
+  if (aIsStarter === bIsStarter) {
+    if (!aIsStarter) {
+      // Both on the bench: reorder only, no XI change.
+      const order = (log.benchOrder && log.benchOrder.length ? [...log.benchOrder] : [...currentBench]);
+      // Make sure every current bench player is represented (a stale saved
+      // order might be missing someone new, e.g. after a transfer).
+      for (const id of currentBench) if (!order.includes(id)) order.push(id);
+      const ia = order.indexOf(idA), ib = order.indexOf(idB);
+      if (ia === -1 || ib === -1) return false;
+      [order[ia], order[ib]] = [order[ib], order[ia]];
+      log.benchOrder = order;
+      return true;
+    }
+    // Both starters: cosmetic position swap only (formation is derived
+    // from who's starting, not slot position), so nothing to persist.
+    return true;
+  }
+  // One starter, one bench: a real substitution.
+  const candidate = currentStarters.map(id => id === idA ? idB : id === idB ? idA : id);
+  if (!isLegalXi(candidate)) return false;
+  log.manualStarterIds = candidate;
+  const benchPlayerId = aIsStarter ? idB : idA;
+  const starterPlayerId = aIsStarter ? idA : idB;
+  if (log.captainId === starterPlayerId) log.captainId = null;
+  if (log.viceCaptainId === starterPlayerId) log.viceCaptainId = null;
+  // The player just subbed OUT moves onto the bench — put them at the
+  // front of bench order (real FPL convention: most recently subbed off
+  // is the top bench slot) rather than leaving stale ordering behind.
+  const order = (log.benchOrder && log.benchOrder.length ? log.benchOrder.filter(id => id !== benchPlayerId && id !== starterPlayerId) : currentBench.filter(id => id !== benchPlayerId));
+  order.unshift(starterPlayerId);
+  log.benchOrder = order;
+  return true;
+}
+// Enables drag-and-drop swapping on the pitch: drag any player slot onto
+// another to swap them (sub between XI/bench, or reorder within the
+// bench). Native HTML5 DnD — no library needed for this simple a case.
+function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result) {
+  let dragId = null;
+  pitchWrap.querySelectorAll(".pitch-slot").forEach(slot => {
+    slot.ondragstart = (e) => {
+      dragId = Number(slot.dataset.player);
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", String(dragId)); } catch (err) {}
+      slot.classList.add("dragging");
+    };
+    slot.ondragend = () => { slot.classList.remove("dragging"); dragId = null; };
+    slot.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; slot.classList.add("drag-over"); };
+    slot.ondragleave = () => { slot.classList.remove("drag-over"); };
+    slot.ondrop = (e) => {
+      e.preventDefault();
+      slot.classList.remove("drag-over");
+      const targetId = Number(slot.dataset.player);
+      const sourceId = dragId != null ? dragId : Number(e.dataTransfer.getData("text/plain"));
+      if (!sourceId || !targetId || sourceId === targetId) return;
+      const ok = swapTwoPlayersInGw(draft, gwId, log, result, sourceId, targetId);
+      if (!ok) { alert("Can't make that swap — it would break the lineup rules (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
+      saveDrafts();
+      state.plannerExpandedGw = gwId;
+      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    };
+  });
+}
 // Per-gameweek player action popup — replaces the old "click = instant
 // captain" behaviour. Shows Captain / Vice-Captain / Sub (move between
 // starting XI and bench) / Transfer out, and does nothing until one of
@@ -7733,9 +7945,13 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
       <div style="display:flex;flex-direction:column;gap:8px">
         ${isStarter ? `<button class="chip-btn" id="gwModalCaptain">👑 ${log.captainId === playerId ? "Remove as captain" : "Make captain"}</button>` : ""}
         ${isStarter ? `<button class="chip-btn" id="gwModalVice">🅥 ${log.viceCaptainId === playerId ? "Remove as vice-captain" : "Make vice-captain"}</button>` : ""}
-        <button class="chip-btn" id="gwModalSub">🔁 ${isStarter ? "Sub to bench" : "Sub into starting XI"}</button>
+        <button class="chip-btn" id="gwModalSub">🔁 ${isStarter ? "Sub — choose who comes on" : "Sub — choose who to swap with"}</button>
         <button class="chip-btn" id="gwModalTransfer">↔️ Set up a transfer out</button>
         <button class="chip-btn" id="gwModalCancel">Cancel</button>
+      </div>
+      <div id="gwModalSwapPicker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+        <div style="font-size:11px;color:var(--ink-faint);margin-bottom:6px">Pick who to swap with — you can also just drag players on the pitch instead.</div>
+        <div id="gwModalSwapList" style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto"></div>
       </div>
     </div>
   `;
@@ -7760,35 +7976,43 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
     if (log.viceCaptainId && log.captainId === log.viceCaptainId) log.captainId = null;
     rerender();
   };
+  // Rather than auto-picking a swap partner, list every legal candidate
+  // (starters get bench options + other starters for a formation swap;
+  // bench players get starting-XI options + other bench players for pure
+  // reordering) and let the user click exactly who they want — same
+  // underlying swap primitive as drag-and-drop on the pitch.
   document.getElementById("gwModalSub").onclick = () => {
+    const picker = document.getElementById("gwModalSwapPicker");
+    const listEl = document.getElementById("gwModalSwapList");
     const currentStarters = (log.manualStarterIds && log.manualStarterIds.length === 11) ? log.manualStarterIds : result.starting.map(x => x.p.id);
-    if (isStarter) {
-      // Sub to bench: swap with whichever bench player of a compatible
-      // position keeps the XI legal, preferring the bench's best projected
-      // player at any position first.
-      const benchIds = result.bench.map(x => x.p.id).sort((a, b) => {
-        const pa = result.bench.find(x => x.p.id === a).proj, pb = result.bench.find(x => x.p.id === b).proj;
-        return pb - pa;
-      });
-      let done = false;
-      for (const inId of benchIds) {
-        const candidate = currentStarters.filter(id => id !== playerId).concat([inId]);
-        if (isLegalXi(candidate)) { log.manualStarterIds = candidate; if (log.captainId === playerId) log.captainId = null; if (log.viceCaptainId === playerId) log.viceCaptainId = null; done = true; break; }
+    const others = isStarter
+      ? [...result.bench, ...result.starting.filter(x => x.p.id !== playerId)]
+      : [...result.starting, ...result.bench.filter(x => x.p.id !== playerId)];
+    const rows = others.map(x => {
+      const otherIsStarter = result.starting.some(s => s.p.id === x.p.id);
+      let legal = true;
+      if (isStarter !== otherIsStarter) {
+        const candidate = currentStarters.map(id => id === playerId ? x.p.id : id === x.p.id ? playerId : id);
+        legal = isLegalXi(candidate);
       }
-      if (!done) { alert("Can't bench them — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
-    } else {
-      const starterIds = result.starting.map(x => x.p.id).sort((a, b) => {
-        const pa = result.starting.find(x => x.p.id === a).proj, pb = result.starting.find(x => x.p.id === b).proj;
-        return pa - pb; // weakest starter first, most likely swap candidate
-      });
-      let done = false;
-      for (const outId of starterIds) {
-        const candidate = currentStarters.filter(id => id !== outId).concat([playerId]);
-        if (isLegalXi(candidate)) { log.manualStarterIds = candidate; done = true; break; }
-      }
-      if (!done) { alert("Can't start them — no swap keeps the lineup legal (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
-    }
-    rerender();
+      const otherTeam = state.teamsById[x.p.teamId];
+      return `
+        <button type="button" class="chip-btn" data-swap-target="${x.p.id}" ${legal ? "" : "disabled"} style="text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px;opacity:${legal ? 1 : 0.4}">
+          <span>${x.p.webName} <span style="color:var(--ink-faint);font-size:10.5px">${otherTeam ? otherTeam.short_name : ""} · ${x.p.position}${otherIsStarter ? "" : " · bench"}</span></span>
+          <span class="mono" style="font-size:11.5px">${x.proj.toFixed(1)} pts</span>
+        </button>
+      `;
+    }).join("");
+    listEl.innerHTML = rows || `<div style="font-size:12px;color:var(--ink-faint)">No one else to swap with.</div>`;
+    picker.style.display = "block";
+    listEl.querySelectorAll("[data-swap-target]").forEach(btn => {
+      btn.onclick = () => {
+        const targetId = Number(btn.dataset.swapTarget);
+        const ok = swapTwoPlayersInGw(draft, gwId, log, result, playerId, targetId);
+        if (!ok) { alert("Can't make that swap — it would break the lineup rules (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
+        rerender();
+      };
+    });
   };
   document.getElementById("gwModalTransfer").onclick = () => {
     closePitchModal();
@@ -11862,7 +12086,184 @@ function renderSimulationDuelPanel() {
     ` : `<div class="empty-state" style="margin-top:16px">Pick both players above to see duel probabilities.</div>`}
   `;
 }
+// ---------- Simulation: match mode (tandem with Tactical board) ----------
+// Rather than one isolated 1v1 duel, this reads whatever player-vs-player
+// matchups have been pinned on the Tactical board for a given team pairing
+// (state.h2hMatchups, keyed by h2hMatchupKey — the exact same store the
+// Tactical board itself reads/writes) and simulates all of them together,
+// rolling the per-duel win probabilities up into projected match-level
+// output stats per team. This is what makes it "in tandem with the
+// tactical board" — the board is the source of which players are actually
+// matched up against each other; Simulation just resolves those matchups
+// into numbers instead of only showing a static A-vs-B% pill.
+//
+// Output stats are built from each player's real season-total underlying
+// numbers (shots/chances created from Understat, tackles/blocks/
+// clearances/aerials from FBref — same fields the Player stats "Deeper
+// stats" theme already surfaces) converted to a per-90 rate and then
+// weighted by that player's matchup win probability, so a favourable duel
+// bumps their expected output for this simulated match and an unfavourable
+// one suppresses it. There's no real "crosses" or "dribbles completed"
+// data source available (FBref/Understat's free data doesn't carry it),
+// so those two are clearly labelled as attribute-modelled estimates
+// (dribbling/crossing-adjacent FM attributes scaled to a plausible per-90
+// range) rather than presented as if they were real stats like the rest.
+function per90Rate(total, minutes) {
+  if (total == null || !minutes) return null;
+  return (total / minutes) * 90;
+}
+const SIM_MATCH_OUTPUT_STATS = [
+  {
+    key: "shots", label: "Shots", real: true,
+    per90: (p) => per90Rate(p.dsShots, p.minutes),
+    fallback: (p) => (p.xg90 || 0) * 4.5, // rough shots-per-xG ratio when Understat data isn't matched
+  },
+  {
+    key: "chancesCreated", label: "Chances created", real: true,
+    per90: (p) => per90Rate(p.dsKeyPasses, p.minutes),
+    fallback: (p) => (p.xa90 || 0) * 3,
+  },
+  {
+    key: "tacklesWon", label: "Tackles won", real: true,
+    per90: (p) => per90Rate(p.dsTackles, p.minutes),
+    fallback: (p) => (p.defensiveContributionPer90 || 0) * 0.35,
+  },
+  {
+    key: "aerialsWon", label: "Aerials won", real: true,
+    per90: (p) => per90Rate(p.dsAerialsWon, p.minutes),
+    fallback: (p) => 1.2,
+  },
+  {
+    key: "crosses", label: "Crosses (modelled)", real: false,
+    // No real crossing data source exists (Understat/FBref's free tiers
+    // don't carry it), so this is estimated from passing + technique — no
+    // dedicated "crossing" FM attribute is modelled in this app.
+    per90: () => null,
+    fallback: (p) => ((getFmAttributeValue(p.id, "passing") || 10) + (getFmAttributeValue(p.id, "technique") || 10)) / 2 / 20 * 4.5,
+  },
+  {
+    key: "dribblesPast", label: "Dribbles past a defender (modelled)", real: false,
+    per90: () => null,
+    fallback: (p) => (getFmAttributeValue(p.id, "dribbling") || 10) / 20 * 3.5,
+  },
+];
+function simMatchOutputForPlayer(p, stat, winProb) {
+  const real = stat.real ? stat.per90(p) : null;
+  const base = real != null ? real : stat.fallback(p);
+  // Win probability re-centred so 50% (no duel data / evenly matched)
+  // leaves the base rate unchanged, and each 10 points away from 50%
+  // nudges output ~8% up or down — enough to see the duel matter without
+  // letting one matchup swing a whole match total unrealistically.
+  const mult = 1 + (winProb - 0.5) * 0.8;
+  return { value: Math.max(0, base * mult), isReal: real != null };
+}
+function renderSimMatchBody() {
+  const bodyEl = document.getElementById("simMatchBody");
+  if (!bodyEl) return;
+  const teamAId = Number(document.getElementById("simMatchTeamA")?.value);
+  const teamBId = Number(document.getElementById("simMatchTeamB")?.value);
+  const teamA = state.teamsById[teamAId], teamB = state.teamsById[teamBId];
+  if (!teamA || !teamB) { bodyEl.innerHTML = `<div class="empty-state">Pick both teams above.</div>`; return; }
+  const key = h2hMatchupKey(teamAId, teamBId);
+  const matchups = state.h2hMatchups[key] || [];
+  if (!matchups.length) {
+    bodyEl.innerHTML = `<div class="empty-state">No matchups pinned yet for ${teamA.short_name} vs ${teamB.short_name}. Go to the Tactical board tab, pick this team pairing, and add player matchups there — they'll show up here automatically.</div>`;
+    return;
+  }
+  const rows = matchups.map(m => {
+    const pa = state.players.find(p => p.id === m.playerAId);
+    const pb = state.players.find(p => p.id === m.playerBId);
+    if (!pa || !pb) return null;
+    const edge = m.edge || matchupAttributeEdge(pa, pb);
+    const probA = edge ? edge.pctA / 100 : 0.5;
+    const probB = 1 - probA;
+    return { m, pa, pb, probA, probB };
+  }).filter(Boolean);
+
+  const totalsA = {}, totalsB = {};
+  for (const stat of SIM_MATCH_OUTPUT_STATS) { totalsA[stat.key] = 0; totalsB[stat.key] = 0; }
+  for (const r of rows) {
+    for (const stat of SIM_MATCH_OUTPUT_STATS) {
+      totalsA[stat.key] += simMatchOutputForPlayer(r.pa, stat, r.probA).value;
+      totalsB[stat.key] += simMatchOutputForPlayer(r.pb, stat, r.probB).value;
+    }
+  }
+
+  const matchupRowsHtml = rows.map(r => {
+    const pctA = Math.round(r.probA * 100), pctB = 100 - pctA;
+    return `
+      <div class="matchup-card">
+        <div class="matchup-side">${playerAvatarHtml(r.pa, 24)}<span>${r.pa.webName}</span></div>
+        <div class="matchup-mid">
+          <div style="display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--panel-3);margin:2px 0">
+            <div style="width:${pctA}%;background:linear-gradient(90deg,var(--emerald),var(--gold-bright))"></div>
+            <div style="width:${pctB}%;background:var(--panel-2)"></div>
+          </div>
+          <div style="font-size:10px;color:var(--ink-faint);text-align:center">${r.m.label ? r.m.label + " · " : ""}${pctA}% / ${pctB}%</div>
+        </div>
+        <div class="matchup-side">${playerAvatarHtml(r.pb, 24)}<span>${r.pb.webName}</span></div>
+      </div>
+    `;
+  }).join("");
+
+  const statRowsHtml = SIM_MATCH_OUTPUT_STATS.map(stat => {
+    const a = totalsA[stat.key], b = totalsB[stat.key];
+    const max = Math.max(a, b, 0.01);
+    return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px">
+          <span class="mono" style="font-weight:700">${a.toFixed(1)}</span>
+          <span style="color:var(--ink-faint)">${stat.label}${!stat.real ? " ⚠" : ""}</span>
+          <span class="mono" style="font-weight:700">${b.toFixed(1)}</span>
+        </div>
+        <div style="display:flex;height:10px;border-radius:4px;overflow:hidden;background:var(--panel-3);gap:2px">
+          <div style="flex:0 0 50%;display:flex;justify-content:flex-end"><div style="width:${(a / max) * 100}%;background:var(--gold-bright);border-radius:4px 0 0 4px"></div></div>
+          <div style="flex:0 0 50%"><div style="width:${(b / max) * 100}%;background:var(--emerald);border-radius:0 4px 4px 0"></div></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  bodyEl.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Projected match output — ${teamA.short_name} vs ${teamB.short_name}</div>
+      <p class="field-desc" style="margin:0 0 10px">Rolled up from all ${rows.length} pinned matchup(s) below. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers, unlike the other rows which use real season shot/chance/tackle/aerial data scaled to a per-90 rate.</p>
+      ${statRowsHtml}
+    </div>
+    <div class="detail-block-title">Matchups feeding this simulation</div>
+    <p class="field-desc" style="margin:0 0 10px">Edit these on the Tactical board tab — this view just reads them.</p>
+    <div class="matchup-grid">${matchupRowsHtml}</div>
+  `;
+}
+function setupSimMatchControls() {
+  const selA = document.getElementById("simMatchTeamA"), selB = document.getElementById("simMatchTeamB");
+  if (!selA || !selB || selA.options.length) return;
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  for (const sel of [selA, selB]) sel.innerHTML = sorted.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
+  selA.value = state.tacboard.teamA || sorted[0]?.id;
+  selB.value = state.tacboard.teamB || sorted[1]?.id;
+  selA.onchange = renderSimMatchBody;
+  selB.onchange = renderSimMatchBody;
+}
 function renderSimulationTab() {
+  const modeSeg = document.getElementById("simModeSeg");
+  if (modeSeg && !modeSeg.dataset.wired) {
+    modeSeg.dataset.wired = "1";
+    modeSeg.querySelectorAll("[data-sim-mode]").forEach(btn => {
+      btn.onclick = () => {
+        state.simMode = btn.dataset.simMode;
+        modeSeg.querySelectorAll("[data-sim-mode]").forEach(b => b.classList.toggle("active", b === btn));
+        document.getElementById("simDuelSection").style.display = state.simMode === "match" ? "none" : "block";
+        document.getElementById("simMatchSection").style.display = state.simMode === "match" ? "block" : "none";
+        if (state.simMode === "match") { setupSimMatchControls(); renderSimMatchBody(); }
+      };
+    });
+  }
+  if (state.simMode === "match") {
+    setupSimMatchControls();
+    renderSimMatchBody();
+    return;
+  }
   const aRoot = document.getElementById("simPlayerAPickerWrap");
   const bRoot = document.getElementById("simPlayerBPickerWrap");
   if (!aRoot || !bRoot || !state.players.length) return;
