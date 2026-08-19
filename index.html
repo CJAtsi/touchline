@@ -1074,74 +1074,6 @@
     <h1 class="page-title">Planner</h1>
     <p class="page-sub">Build draft squads (or plan from your real team), then simulate gameweek by gameweek with transfers and chips — projected points use FPL's own next-gameweek model plus a fixture-difficulty forecast beyond that.</p>
 
-    <div class="card" style="margin-bottom:20px" id="squadHealthCard">
-      <div class="detail-block-title">Squad health digest — this week's check-in</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        A rule-based summary pulling together Squad News (injuries/doubts), the price-change signal, and upcoming fixture swings for your active squad only — see the reasoning notes on each line for the exact rule applied. <strong>Heuristic, not a guarantee</strong> — always sanity-check against the actual news story before acting.
-      </p>
-      <div id="squadHealthBody"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px" id="transferPlannerCard">
-      <div class="detail-block-title">Multi-gameweek transfer planner</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Looks ahead across a horizon of gameweeks and greedily recommends, one gameweek at a time, the single best transfer (or "hold") that maximises projected points minus any hit cost — see <code>planTransfers()</code> in code for the exact greedy heuristic. A fully optimal multi-week search is combinatorially huge (NP-hard-adjacent), so this is a practical approximation, not a guaranteed-optimal plan.
-      </p>
-      <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Free transfers banked
-          <input type="number" id="freeTransfersInput" min="0" max="5" step="1" style="width:56px" />
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Horizon
-          <select id="transferPlanHorizonSelect">
-            <option value="3">3 GWs</option>
-            <option value="5">5 GWs</option>
-            <option value="8">8 GWs</option>
-          </select>
-        </label>
-        <button class="dir-btn" id="runTransferPlanBtn">Run planner</button>
-      </div>
-      <div id="transferPlanBody"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:20px;border:1px dashed var(--gold-bright,#ffcf4d)" id="sandboxCard">
-      <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">
-        What if — sandbox / preview only
-        <span style="font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:rgba(255,207,77,0.15);color:var(--gold-bright,#ffcf4d);text-transform:none;letter-spacing:0">NOT APPLIED — preview only</span>
-      </div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Try a hypothetical transfer or chip play and see the projected point impact over the horizon before committing anything. Works on a cloned copy of your active squad — reuses the exact same scoring as the transfer planner (<code>squadHorizonProj</code>) and chip advisor (<code>benchBoostScoreForSquad</code>/<code>tripleCaptainCandidates</code>), so the numbers are directly comparable, but nothing here touches your real squad or drafts until you separately apply a transfer elsewhere.
-      </p>
-      <div class="detail-block-title" style="margin-top:10px;font-size:11.5px">Simulate a transfer</div>
-      <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;align-items:flex-end;gap:14px">
-        <div>
-          <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:4px">Remove from squad</div>
-          <select id="sandboxOutSelect" style="min-width:200px"></select>
-        </div>
-        <div>
-          <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:4px">Replace with</div>
-          <div id="sandboxInPicker"></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Horizon
-          <select id="sandboxHorizonSelect">
-            <option value="3">3 GWs</option>
-            <option value="5" selected>5 GWs</option>
-            <option value="8">8 GWs</option>
-          </select>
-        </label>
-        <button class="dir-btn" id="sandboxClearBtn" type="button">Clear</button>
-      </div>
-      <div id="sandboxTransferBody"></div>
-      <div class="detail-block-title" style="margin-top:18px;font-size:11.5px">Simulate a chip now vs waiting</div>
-      <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap">
-        <select id="sandboxChipSelect">
-          <option value="">— select a chip —</option>
-          <option value="bboost">Bench Boost</option>
-          <option value="3xc">Triple Captain</option>
-        </select>
-      </div>
-      <div id="sandboxChipBody"></div>
-    </div>
-
     <div class="toolbar" style="margin-bottom:20px">
       <select id="draftSelect"></select>
       <button class="dir-btn" id="newDraftBtn">+ New draft</button>
@@ -1330,24 +1262,11 @@
     </div>
 
     <div class="card" style="margin-top:20px">
-      <div class="detail-block-title">Set-piece takers — manual tagging</div>
-      ${setPieceTaggerHtml()}
-    </div>
-
-    <div class="card" style="margin-top:20px">
       <div class="detail-block-title">Squad news — injuries, doubts, suspensions</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
         Every player who isn't 100% fully fit, straight from the FPL API's own <code>status</code>/<code>news</code>/<code>chance_of_playing</code> fields — real live data, not an estimate. Shortlisted players are pinned to the top, then sorted by chance of playing (lowest/most concerning first).
       </p>
       <div class="table-wrap"><table id="squadNewsGrid"></table></div>
-    </div>
-
-    <div class="card" style="margin-top:20px">
-      <div class="detail-block-title">Overall rank &amp; percentile</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Your current <code>summary_overall_rank</code> and <code>summary_overall_points</code>, straight from the FPL API's own <code>/entry/{id}/</code> endpoint — real data, not an estimate. Percentile is approximate (rank ÷ total registered managers from bootstrap-static's <code>total_players</code> field, when that field is present) — shown only when that figure is actually available, not guessed. Trend arrow compares against the last time you checked, stored locally.
-      </p>
-      <div id="rankTrackerBody"></div>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1960,8 +1879,8 @@ function computeFcAttributes(p) {
   ];
 }
 
-// ---------- FM-style 12-attribute estimator (1-20 scale, real data driven) ----------
-// Generates a starting value for each of the app's 12 FM-style attributes
+// ---------- FM-style 21-attribute estimator (1-20 scale, real data driven) ----------
+// Generates a starting value for each of the app's 21 FM-style attributes
 // from real FPL data + position, instead of the flat "10 for everyone"
 // placeholder the old freeform editor defaulted to. Not real FM/FIFA scout
 // data (no reliable free/current source exists for that — checked sofifa's
@@ -1985,6 +1904,21 @@ const FM12_ATTR_DEFS = [
   { key: "iq", label: "IQ" },
   { key: "anticipation", label: "Anticipation / reading game" },
   { key: "workRate", label: "Work rate" },
+  // Extended set (9 more) — added so a full FM26 Player Export CSV import
+  // (which typically carries 21 attribute columns) isn't truncated down to
+  // the original 12. Estimate fallbacks for these live alongside the
+  // original 12 in computeFmAttributes12Estimate below; the function name
+  // is kept as-is (also used as a de facto "attributes estimate" entry
+  // point elsewhere) even though it now returns 21 keys.
+  { key: "heading", label: "Heading" },
+  { key: "composure", label: "Composure" },
+  { key: "vision", label: "Vision" },
+  { key: "positioning", label: "Positioning" },
+  { key: "agility", label: "Agility" },
+  { key: "corners", label: "Corners" },
+  { key: "longShots", label: "Long shots" },
+  { key: "passing", label: "Passing" },
+  { key: "penaltyTaking", label: "Penalty taking" },
 ];
 // Percentile (1-99, via percentileRank) -> FM 1-20 scale, with a floor of 4
 // and ceiling of 19 so nobody sits at the true extremes purely from a
@@ -2058,9 +1992,47 @@ function computeFmAttributes12Estimate(p) {
   const workRateComposite = (pl) => per90(pl, "defensiveContributionPer90") + (pl.minsPerStart ? Math.min(1, pl.minsPerStart / 90) * 20 : 0);
   const workRatePct = percentileRank(workRateComposite(p), pool.map(workRateComposite));
   const workRate = pctTo20(workRatePct);
+  // ---- Extended 9 (weaker-grounded estimates — FPL has no direct proxy for
+  // most of these, so they lean on the closest correlated real stat plus a
+  // position base, same spirit as jumpingReach/strength above. Real FM26
+  // CSV data (via importFmAttributesCsv) always overrides these once
+  // imported, so these estimates only matter until then. ----
+  // Heading: aerial/set-piece goal threat proxy — reuse bps/aerial base,
+  // same inputs as jumpingReach but leans a little more attacking for FWD.
+  const heading = Math.max(4, Math.min(19, Math.round(posAerialBase + (bpsPct - 50) / 25) + (p.position === "FWD" ? 1 : 0)));
+  // Composure: finishing conversion under pressure — reuse finishPct
+  // (goals vs xG overperformance), blended with ICT influence.
+  const composure = pctTo20(Math.round((finishPct + influencePct) / 2));
+  // Vision: creative output, same inputs as technique/firstTouch but
+  // weighted toward raw creativity rather than xA (final ball selection
+  // over execution).
+  const vision = pctTo20(Math.round((creativityPct * 0.65 + xa90Pct * 0.35)));
+  // Positioning: reuse offTheBall's inputs but for defenders/GKs lean on
+  // defensive contribution instead of attacking threat (getting into the
+  // right defensive spots vs. right attacking spots).
+  const positioning = (p.position === "DEF" || p.position === "GK")
+    ? pctTo20(Math.round((defConPct * 0.6 + bpsPct * 0.4)))
+    : offTheBall;
+  // Agility: same driver as acceleration (closest available proxy) — kept
+  // as a distinct key since real FM data will differentiate them.
+  const agility = acceleration;
+  // Corners/Penalty taking: FPL has no set-piece taker signal at all, so
+  // these fall back to a flat position-neutral default (10) rather than a
+  // fabricated correlation — clearly a "needs real data" attribute.
+  const corners = 10;
+  const penaltyTaking = 10;
+  // Long shots: shooting proxy (threatPct/finishPct) without the assist
+  // weighting technique/dribbling get, since long-range shot quality is
+  // closer to raw shooting than to creativity.
+  const longShots = shooting;
+  // Passing: creativity + team xGI share (progressing play team-mates
+  // convert), close cousin of vision/offTheBall but its own key for when
+  // real data differentiates them.
+  const passing = pctTo20(Math.round((creativityPct * 0.5 + xgiSharePct * 0.5)));
   return {
     acceleration, pace, jumpingReach: jumpingReach, technique, shooting, dribbling,
     strength, firstTouch: firstTouch, offTheBall: offTheBall, iq, anticipation, workRate,
+    heading, composure, vision, positioning, agility, corners, longShots, passing, penaltyTaking,
   };
 }
 // Cache estimates per player id for the session — recomputing the full
@@ -2109,6 +2081,22 @@ const FM26_CSV_COLUMN_MAP = {
   iq: ["Decisions", "Vision"],
   anticipation: ["Anticipation"],
   workRate: ["Work Rate", "Stamina"],
+  // Extended 9 — added to import the full FM26 Player Export column set
+  // (21 attributes) instead of truncating to the original 12. "Vision" is
+  // intentionally also mapped to iq above (Decisions/Vision both feed IQ)
+  // as well as its own dedicated column here — real FM exports carry
+  // Decisions and Vision as two separate columns, so iq now prefers
+  // Decisions first (still matches "Vision" if Decisions is absent) and
+  // this vision key always captures the dedicated Vision column.
+  heading: ["Heading"],
+  composure: ["Composure"],
+  vision: ["Vision"],
+  positioning: ["Positioning"],
+  agility: ["Agility"],
+  corners: ["Corners"],
+  longShots: ["Long Shots"],
+  passing: ["Passing"],
+  penaltyTaking: ["Penalty Taking"],
 };
 function stripDiacritics(s) { return (s || "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 function parseCsvLine(line) {
@@ -2134,9 +2122,12 @@ function importFmAttributesCsv(csvText) {
   const lines = csvText.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return { matched: 0, unmatched: 0, error: "CSV appears empty." };
   const header = parseCsvLine(lines[0]).map(h => h.trim());
-  const nameIdx = header.findIndex(h => /^name$/i.test(h));
+  // FM26 Player Export (the plugin this importer targets) titles its name
+  // column "Player", not "Name" — accept both so a straight export from
+  // that tool isn't rejected outright.
+  const nameIdx = header.findIndex(h => /^(name|player)$/i.test(h));
   const clubIdx = header.findIndex(h => /^club$/i.test(h));
-  if (nameIdx === -1) return { matched: 0, unmatched: 0, error: 'No "Name" column found in CSV header.' };
+  if (nameIdx === -1) return { matched: 0, unmatched: 0, error: 'No "Name"/"Player" column found in CSV header.' };
   const colIdxFor = (candidates) => {
     for (const c of candidates) {
       const idx = header.findIndex(h => h.toLowerCase() === c.toLowerCase());
@@ -2548,7 +2539,6 @@ let state = {
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
-  freeTransfers: 1, transferPlan: null, transferPlanHorizon: 5,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
   fdrMode: "fdr", fdrSort: "easiest",
@@ -2587,8 +2577,9 @@ let state = {
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
   showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowStatsTable: false, scoutTheme: "base", scoutFixtureHorizon: 4,
   statsHeatmap: false, teamsHeatmap: false,
-  // FM-style 1-20 attributes. attributeDefs is now the fixed 12-attribute
-  // list (FM12_ATTR_DEFS, defined earlier) rather than a freeform
+  // FM-style 1-20 attributes. attributeDefs is now the fixed 21-attribute
+  // list (FM12_ATTR_DEFS, defined earlier — name kept for history, now holds
+  // 21 keys) rather than a freeform
   // user-editable list — every player gets a real starting value per
   // attribute from computeFmAttributes12Estimate (data-driven, not a flat
   // 10 default), always overridable per player via the slider/number
@@ -2603,13 +2594,6 @@ let state = {
   priceWatchFilter: "ALL", // ALL | RISE | FALL
   rivalTeamId: null, rivalData: null, rivalLoading: false, rivalError: null,
   projAccuracyLog: null, // loaded from persistent storage — see loadProjAccuracyLog()
-  // ---- Set-piece taker tagging (user-maintained — see setPieceRoles comment) ----
-  setPieceRoles: {}, // playerId -> { pen: 1|2|3|null, corner: bool, fk: bool }
-  // ---- Sandbox / "what if" simulator (Planner tab — never touches state.drafts) ----
-  sandboxOutId: null, sandboxInId: null, sandboxChip: null,
-  // ---- Overall rank tracker (My team tab) ----
-  rankHistory: {}, // teamId -> { rank, points, lastCheckedGw, prevRank }
-  totalPlayers: null, rankTrackerData: null, rankTrackerLoading: false, rankTrackerError: null,
 };
 
 // ---------- data fetching ----------
@@ -3067,7 +3051,6 @@ async function loadData() {
     state.teams = bootstrap.teams;
     state.events = bootstrap.events;
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
-    state.totalPlayers = bootstrap.total_players ?? null; // registered-manager count, used for the approximate rank percentile
     state.players = bootstrap.elements.map(transformPlayer);
     precomputeStrengthRanges();
     computeTeamContributionShares();
@@ -4286,7 +4269,7 @@ function renderStats() {
           <div class="detail-panel">
             <div>
               <div class="detail-block-title">Underlying &amp; per-90</div>
-              <div style="font-weight:700;margin-bottom:8px">${p.webName}${captaincyBadgeHtml(p, currentEventId())}${setPieceBadgesHtml(p.id)}</div>
+              <div style="font-weight:700;margin-bottom:8px">${p.webName}${captaincyBadgeHtml(p, currentEventId())}</div>
               <div class="stat-mini-grid">
                 <div class="stat-mini"><div class="stat-mini-label">xG (season)</div><div class="stat-mini-value">${p.expectedGoals.toFixed(2)}</div></div>
                 <div class="stat-mini"><div class="stat-mini-label">xA (season)</div><div class="stat-mini-value">${p.expectedAssists.toFixed(2)}</div></div>
@@ -4300,15 +4283,6 @@ function renderStats() {
                 <div class="stat-mini"><div class="stat-mini-label">DefCon /90</div><div class="stat-mini-value">${p.defensiveContributionPer90.toFixed(2)}</div></div>
                 <div class="stat-mini"><div class="stat-mini-label">Dreamteam</div><div class="stat-mini-value">${p.dreamteamCount}${p.inDreamteam ? " ★" : ""}</div></div>
                 <div class="stat-mini"><div class="stat-mini-label">Price Δ (GW)</div><div class="stat-mini-value" style="color:${p.costChangeEvent >= 0 ? "var(--emerald)" : "var(--red)"}">${p.costChangeEvent >= 0 ? "+" : ""}${(p.costChangeEvent / 10).toFixed(1)}</div></div>
-                ${(() => {
-                  const nextGw = getHorizonGws(1)[0];
-                  if (!nextGw) return "";
-                  const v = computeProjVariance(p, p.epNext, 1);
-                  return `<div class="stat-mini" title="Heuristic range from minutes reliability + threat/creativity volatility — not a statistical confidence interval.">
-                    <div class="stat-mini-label">Next GW ceiling/floor ⓘ</div>
-                    <div class="stat-mini-value">${p.epNext.toFixed(1)} <small style="font-weight:400;color:var(--ink-faint)">(${v.floor.toFixed(1)}–${v.ceiling.toFixed(1)})</small></div>
-                  </div>`;
-                })()}
               </div>
             </div>
             <div>
@@ -5163,56 +5137,6 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     bonusExp: bonusSum,
     avgFdr: fixtures.length ? fdrSum / cnt : null,
     ppm: priceM > 0 ? projTotal / priceM : 0, // points per million: projected pts over the range / price
-    variance: computeProjVariance(p, projTotal, fixtures.length),
-  };
-}
-// ---- Ceiling / floor (expected-points variance) ----
-// APPROACH (documented here since it's the crux of this feature): the FPL
-// public API does not expose per-player per-GW point *history* in a single
-// call (bootstrap-static only gives season totals) — building a true
-// standard deviation of past GW scores would mean fetching every finished
-// gameweek's /event/{gw}/live/ for every player, which is exactly what
-// loadPlayerHeatmap() already does lazily per-player on demand (too slow to
-// do proactively for the whole player pool on every projections render).
-// So rather than a real per-GW std-dev, this uses a cheap, explainable
-// PROXY for volatility built entirely from season-aggregate fields that are
-// already loaded for every player:
-//   - Minutes reliability: mins/start close to 90 = more predictable floor
-//     (rarely subbed/rotated); well below 90 = wider swings between a full
-//     90 and a 20-minute cameo. Expressed as a 0-1 "reliability" score.
-//   - Explosiveness: threat + creativity are FPL's own "how often this
-//     player is involved in high-value attacking actions" indices — a
-//     player with high threat/creativity relative to their own points
-//     total scores more haphazardly (booms off one shot/assist, busts when
-//     the final ball doesn't come off) than one whose points come from
-//     steadier sources (appearance pts, clean sheets, defensive actions).
-// floorMult / ceilMult are then simple, capped multipliers on the point
-// projection — NOT a statistically rigorous confidence interval, just a
-// transparent "how spiky is this player's history" indicator. Documented
-// in the UI as a heuristic range, not a guarantee.
-function computeProjVariance(p, projTotal, gwCount) {
-  if (!gwCount || projTotal <= 0) return { floor: 0, ceiling: 0, floorMult: 1, ceilMult: 1 };
-  const perGame = projTotal / gwCount;
-  // Reliability 0 (very rotation-prone) .. 1 (always plays full 90 when picked)
-  const reliability = Math.max(0, Math.min(1, (p.minsPerStart || 0) / 90));
-  // Explosiveness: threat+creativity per point of season total — normalised
-  // against a generous reference so most players land in a sane 0-1 band;
-  // clamps at 1 for extreme outliers instead of blowing the range out.
-  const perPointVolatility = p.totalPoints > 0 ? (p.threat + p.creativity) / (p.totalPoints * 6) : 0.5;
-  const explosiveness = Math.max(0, Math.min(1, perPointVolatility));
-  // Floor: shrinks further below the projection for low-reliability,
-  // high-explosiveness players (nailed-on defender floor ~0.8x; rotation-risk
-  // explosive forward floor as low as ~0.35x).
-  const floorMult = Math.max(0.3, 0.85 - (1 - reliability) * 0.3 - explosiveness * 0.2);
-  // Ceiling: stretches further above the projection for the same profile —
-  // explosive + nailed-on player has both a high floor AND a high ceiling
-  // (route to points is reliable AND has upside); explosive + rotation-risk
-  // gets the widest range of all (classic "boom or bust" bench option).
-  const ceilMult = Math.min(2.2, 1.15 + explosiveness * 0.55 + (1 - reliability) * 0.25);
-  return {
-    floor: perGame * floorMult * gwCount,
-    ceiling: perGame * ceilMult * gwCount,
-    floorMult, ceilMult, reliability, explosiveness,
   };
 }
 const PROJ_OPTIONAL_COLS = [
@@ -6151,9 +6075,9 @@ function renderProjectionsTab() {
             ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
             : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}${setPieceBadgesHtml(p.id)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
-            ${cell("proj", r.proj, `${r.proj.toFixed(1)}${r.variance ? `<br><small style="font-weight:400;color:var(--ink-faint)" title="Heuristic ceiling/floor range from minutes reliability + threat/creativity volatility — not a statistical confidence interval. See computeProjVariance() for the exact formula.">(${r.variance.floor.toFixed(1)}–${r.variance.ceiling.toFixed(1)})</small>` : ""}`)}
+            ${cell("proj", r.proj, r.proj.toFixed(1))}
             ${cell("ppm", r.ppm, r.ppm.toFixed(1))}
             ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
             ${cols.minsPerStart ? cell("minsPerStart", r.minsPerStart || 0, r.minsPerStart ? Math.round(r.minsPerStart) : "—") : ""}
@@ -6268,325 +6192,6 @@ function applyTransfers(squadIds, outIds, inIds) {
   return squadIds.filter(id => !outIds.includes(id)).concat(inIds);
 }
 
-// ---- Multi-gameweek transfer planner ----
-// APPROACH (documented here deliberately, since this is the crux of the
-// feature): finding the truly optimal sequence of transfers over a multi-
-// week horizon, subject to budget/free-transfer/squad-composition rules, is
-// a combinatorial search problem — at every gameweek there are up to ~15
-// possible single transfers (one out x one of ~600 possible in), and the
-// choice at gameweek N changes what's optimal at gameweek N+1 (budget left,
-// free transfers banked, etc). Branching that out fully over a 5+ GW
-// horizon is exponential and not worth the runtime cost for a browser app.
-// Instead this uses a standard greedy heuristic: at each gameweek in the
-// horizon, evaluate every legal single transfer (out one squad player, in
-// one player not already owned, same position, budget-legal, club-limit
-// legal) scored by (opponent's remaining-horizon projected points gained)
-// minus (a -4 hit if it exceeds the free transfers available that week),
-// keep it only if that net score beats "hold" (0), apply the single best
-// one (or hold), then move on. This is myopic (it can't see two GWs ahead
-// to set up a specific future swap) but is the well-established practical
-// compromise for this class of problem and is far more useful than
-// evaluating transfers one at a time with no lookahead at all, which is
-// all the official FPL site offers.
-function clubCountsMap(playerIds) {
-  const counts = {};
-  for (const id of playerIds) {
-    const p = state.players.find(pl => pl.id === id);
-    if (p) counts[p.teamId] = (counts[p.teamId] || 0) + 1;
-  }
-  return counts;
-}
-// Projected points for a whole squad (15 players, not just best-XI) summed
-// over [fromGw, toGw] — used to score "how good is this squad over the
-// rest of the horizon", consistent with computeProjectionRow's own scoring.
-function squadHorizonProj(squadIds, fromGw, toGw) {
-  let total = 0;
-  for (const id of squadIds) {
-    const p = state.players.find(pl => pl.id === id);
-    if (!p) continue;
-    total += computeProjectionRow(p, fromGw, toGw, false, 70, state.projProvenWeight).proj;
-  }
-  return total;
-}
-// Finds the single best legal transfer (or null for "hold") for a squad
-// heading into gwId, scored by projected points gained over the REMAINING
-// horizon (gwId..toGw) — this is what makes the greedy step "look ahead"
-// within that one decision, even though it can't plan multiple GWs deep.
-function bestSingleTransfer(squadIds, gwId, toGw) {
-  const squadPlayers = squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean);
-  const spent = squadCost(squadIds);
-  const budgetLeft = BUDGET - spent;
-  const clubCounts = clubCountsMap(squadIds);
-  let best = null; // { outId, inId, gain }
-  for (const outP of squadPlayers) {
-    const outHorizonProj = computeProjectionRow(outP, gwId, toGw, false, 70, state.projProvenWeight).proj;
-    const budgetAfterSell = budgetLeft + (outP.nowCost || 0);
-    const clubCountsAfterSell = { ...clubCounts, [outP.teamId]: (clubCounts[outP.teamId] || 1) - 1 };
-    const candidates = state.players.filter(p =>
-      p.position === outP.position &&
-      p.id !== outP.id &&
-      !squadIds.includes(p.id) &&
-      p.status === "a" && // don't recommend buying an injured/suspended player
-      (p.nowCost || 0) <= budgetAfterSell &&
-      (clubCountsAfterSell[p.teamId] || 0) < 3
-    );
-    for (const inP of candidates) {
-      const inHorizonProj = computeProjectionRow(inP, gwId, toGw, false, 70, state.projProvenWeight).proj;
-      const gain = inHorizonProj - outHorizonProj;
-      if (gain > 0 && (!best || gain > best.gain)) best = { outId: outP.id, inId: inP.id, outP, inP, gain };
-    }
-  }
-  return best;
-}
-// The core greedy planner. Walks `horizonGwIds` in order, at each gw either
-// holds or applies the single best transfer found by bestSingleTransfer,
-// tracking free-transfer balance (banks up to 5, per current FPL rules) and
-// charging a -4 hit whenever a transfer is made beyond the free allowance.
-// Returns { steps: [...], totalGain, totalHits, startingFreeTransfers }.
-function planTransfers(squadIds, horizonGwIds, startingFreeTransfers) {
-  let squad = [...squadIds];
-  let freeTransfers = Math.max(0, Math.min(5, startingFreeTransfers ?? 1));
-  const toGw = horizonGwIds[horizonGwIds.length - 1];
-  const steps = [];
-  let totalGain = 0, totalHits = 0;
-  for (const gwId of horizonGwIds) {
-    const suggestion = bestSingleTransfer(squad, gwId, toGw);
-    const usesHit = suggestion && freeTransfers < 1;
-    const hitCost = usesHit ? 4 : 0;
-    const netGain = suggestion ? suggestion.gain - hitCost : 0;
-    if (suggestion && netGain > 0) {
-      squad = applyTransfers(squad, [suggestion.outId], [suggestion.inId]);
-      totalGain += netGain;
-      if (usesHit) totalHits += 1;
-      freeTransfers = Math.max(0, freeTransfers - 1);
-      steps.push({ gwId, action: "transfer", outP: suggestion.outP, inP: suggestion.inP, rawGain: suggestion.gain, hitCost, netGain, freeTransfersAfter: freeTransfers });
-    } else {
-      steps.push({ gwId, action: "hold", rawGain: 0, hitCost: 0, netGain: 0, freeTransfersAfter: freeTransfers });
-    }
-    // Bank a free transfer for next week (max 5), per current FPL rules.
-    freeTransfers = Math.min(5, freeTransfers + 1);
-  }
-  return { steps, totalGain, totalHits, startingFreeTransfers: startingFreeTransfers ?? 1 };
-}
-function runTransferPlan() {
-  const draft = getDraft(state.activeDraftId);
-  const squadIds = draft && draft.squad && draft.squad.length === 15 ? draft.squad
-    : (state.myTeamSquadIds && state.myTeamSquadIds.length === 15 ? state.myTeamSquadIds : null);
-  if (!squadIds) { state.transferPlan = null; renderTransferPlanPanel(); return; }
-  const horizonGws = getHorizonGws(state.transferPlanHorizon || 5);
-  if (!horizonGws.length) { state.transferPlan = null; renderTransferPlanPanel(); return; }
-  state.transferPlan = planTransfers(squadIds, horizonGws, state.freeTransfers);
-  state.transferPlanSquadIds = squadIds;
-  renderTransferPlanPanel();
-}
-function renderTransferPlanPanel() {
-  const body = document.getElementById("transferPlanBody");
-  if (!body) return;
-  const squad = getActiveSquadPlayers();
-  if (!squad) {
-    body.innerHTML = `<div class="empty-state">No active squad found. Build a squad (15/15, confirmed) in the Planner tab below, or load your real team on the My team tab, then click "Run planner."</div>`;
-    return;
-  }
-  const plan = state.transferPlan;
-  if (!plan) {
-    body.innerHTML = `<div class="empty-state">Click "Run planner" to generate a transfer plan for your active squad over the selected horizon.</div>`;
-    return;
-  }
-  let running = 0;
-  const rows = plan.steps.map(s => {
-    running += s.netGain;
-    const gwLabel = fmtGwName(s.gwId);
-    if (s.action === "hold") {
-      return `<tr>
-        <td class="label-col">${gwLabel}</td>
-        <td class="label-col" colspan="2" style="color:var(--ink-dim)">Hold — no transfer clears the -4pt hit / no clear gain found</td>
-        <td class="mono">0.0</td>
-        <td class="mono">${s.freeTransfersAfter}</td>
-        <td class="mono" style="font-weight:700">${running.toFixed(1)}</td>
-        <td></td>
-      </tr>`;
-    }
-    const hitLabel = s.hitCost > 0 ? `<span style="color:var(--red,#ff5468);font-weight:700">-4 hit</span>` : `<span style="color:var(--emerald)">free</span>`;
-    return `<tr>
-      <td class="label-col">${gwLabel}</td>
-      <td class="label-col name-cell">OUT: ${s.outP.webName}</td>
-      <td class="label-col name-cell">IN: ${s.inP.webName}</td>
-      <td class="mono" style="color:${s.netGain >= 0 ? 'var(--emerald)' : 'var(--red,#ff5468)'}">${s.netGain >= 0 ? "+" : ""}${s.netGain.toFixed(1)}</td>
-      <td class="mono">${s.freeTransfersAfter}</td>
-      <td class="mono" style="font-weight:700">${running.toFixed(1)}</td>
-      <td>${hitLabel} <button class="dir-btn" data-apply-transfer="${s.gwId}" style="padding:2px 8px;font-size:11px">Apply</button></td>
-    </tr>`;
-  }).join("");
-  body.innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th class="label-col">GW</th><th class="label-col">Out</th><th class="label-col">In</th><th>Net gain</th><th>FT after</th><th>Running total</th><th></th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
-    <p class="foot-note" style="margin-top:10px">Projected total gain over the horizon: <strong style="color:${plan.totalGain >= 0 ? 'var(--emerald)' : 'var(--red,#ff5468)'}">${plan.totalGain >= 0 ? "+" : ""}${plan.totalGain.toFixed(1)} pts</strong>${plan.totalHits ? ` (includes ${plan.totalHits} hit${plan.totalHits > 1 ? "s" : ""} at -4 each, already netted in)` : " (all within free transfers — no hits taken)"}. "Apply" applies that single week's transfer to your active draft's squad immediately (via the same applyTransfers used by the GW simulator) — it does not touch future weeks' recommendations, which assume the plan is followed in order.</p>
-  `;
-  body.querySelectorAll("[data-apply-transfer]").forEach(btn => {
-    btn.onclick = () => {
-      const gwId = Number(btn.dataset.applyTransfer);
-      const step = plan.steps.find(s => s.gwId === gwId && s.action === "transfer");
-      if (!step) return;
-      const draft = getDraft(state.activeDraftId);
-      if (!draft) return;
-      const log = draft.transfersLog[gwId] || (draft.transfersLog[gwId] = { out: [], in: [] });
-      log.out = [...(log.out || []), step.outP.id];
-      log.in = [...(log.in || []), step.inP.id];
-      draft.squad = applyTransfers(draft.squad, [step.outP.id], [step.inP.id]);
-      saveDrafts();
-      state.transferPlan = null; // squad changed — plan is stale, force a re-run
-      renderTransferPlanPanel();
-      renderPlanner();
-      renderSquadHealthDigest();
-    };
-  });
-}
-function setupTransferPlannerControls() {
-  const ftInput = document.getElementById("freeTransfersInput");
-  const horizonSelect = document.getElementById("transferPlanHorizonSelect");
-  const runBtn = document.getElementById("runTransferPlanBtn");
-  if (!ftInput || ftInput.dataset.wired) return;
-  ftInput.dataset.wired = "1";
-  ftInput.value = state.freeTransfers;
-  ftInput.onchange = () => {
-    state.freeTransfers = Math.max(0, Math.min(5, Number(ftInput.value) || 0));
-    ftInput.value = state.freeTransfers;
-    saveFreeTransfers();
-  };
-  horizonSelect.value = state.transferPlanHorizon;
-  horizonSelect.onchange = () => { state.transferPlanHorizon = Number(horizonSelect.value) || 5; };
-  runBtn.onclick = runTransferPlan;
-  renderTransferPlanPanel();
-}
-
-// ---------- Planner: "what if" sandbox ----------
-// Preview-only simulator: never mutates state.drafts. Reuses
-// squadHorizonProj (same squad-total scoring as the transfer planner) and
-// benchBoostScoreForSquad/tripleCaptainCandidates (same scoring as the chip
-// advisor) — no scoring logic is duplicated here, this is purely UI plus
-// clone-and-compare glue around those existing functions.
-function sandboxActiveSquadIds() {
-  const draft = getDraft(state.activeDraftId);
-  if (draft && draft.squad && draft.squad.length === 15) return draft.squad;
-  if (state.myTeamSquadIds && state.myTeamSquadIds.length === 15) return state.myTeamSquadIds;
-  return null;
-}
-function renderSandboxTransferBody() {
-  const body = document.getElementById("sandboxTransferBody");
-  if (!body) return;
-  const squadIds = sandboxActiveSquadIds();
-  if (!squadIds) { body.innerHTML = `<div class="empty-state">No active squad found — build/confirm a squad below, or load your real team on the My team tab.</div>`; return; }
-  const horizonGws = getHorizonGws(state.sandboxHorizon || 5);
-  if (!horizonGws.length) { body.innerHTML = `<div class="empty-state">No upcoming gameweek data yet.</div>`; return; }
-  const toGw = horizonGws[horizonGws.length - 1], fromGw = horizonGws[0];
-  const beforeTotal = squadHorizonProj(squadIds, fromGw, toGw);
-  if (!state.sandboxOutId || !state.sandboxInId) {
-    body.innerHTML = `<div class="empty-state">Pick a player to remove and a replacement above to see the projected impact.<br><span style="font-size:11px">Current squad's projected total over the next ${horizonGws.length} GWs: <strong>${beforeTotal.toFixed(1)} pts</strong>.</span></div>`;
-    return;
-  }
-  const outP = state.players.find(p => p.id === state.sandboxOutId);
-  const inP = state.players.find(p => p.id === state.sandboxInId);
-  if (!outP || !inP) { body.innerHTML = `<div class="empty-state">Selection no longer valid — pick again.</div>`; return; }
-  // Clone-and-compare: applyTransfers on a COPY of the squad id array —
-  // state.drafts itself is never touched.
-  const afterIds = applyTransfers([...squadIds], [outP.id], [inP.id]);
-  const afterTotal = squadHorizonProj(afterIds, fromGw, toGw);
-  const delta = afterTotal - beforeTotal;
-  const spent = squadCost(squadIds), budgetLeft = BUDGET - spent;
-  const affordable = (inP.nowCost || 0) <= budgetLeft + (outP.nowCost || 0);
-  body.innerHTML = `
-    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
-      <div class="stat-block"><div class="stat-label">Before (${horizonGws.length} GWs)</div><div class="stat-value mono">${beforeTotal.toFixed(1)}</div></div>
-      <div class="stat-block"><div class="stat-label">After (${horizonGws.length} GWs)</div><div class="stat-value mono">${afterTotal.toFixed(1)}</div></div>
-      <div class="stat-block"><div class="stat-label">Projected impact</div><div class="stat-value mono" style="color:${delta >= 0 ? "var(--emerald)" : "var(--red,#ff5468)"}">${delta >= 0 ? "+" : ""}${delta.toFixed(1)}</div></div>
-    </div>
-    <p class="foot-note" style="margin-top:10px">OUT: ${outP.webName} (£${(outP.nowCost / 10).toFixed(1)}) → IN: ${inP.webName} (£${(inP.nowCost / 10).toFixed(1)})${!affordable ? ` — <span style="color:var(--red,#ff5468)">over budget by £${(((inP.nowCost || 0) - (budgetLeft + (outP.nowCost || 0))) / 10).toFixed(1)}m</span>, projection shown regardless` : ""}. This is a preview only — nothing has been applied to your real squad. To actually make this transfer, use the multi-gameweek planner above or the Planner squad builder below.</p>
-  `;
-}
-function renderSandboxChipBody() {
-  const body = document.getElementById("sandboxChipBody");
-  if (!body) return;
-  const squadIds = sandboxActiveSquadIds();
-  if (!squadIds) { body.innerHTML = `<div class="empty-state">No active squad found — build/confirm a squad below, or load your real team on the My team tab.</div>`; return; }
-  const chip = state.sandboxChip;
-  if (!chip) { body.innerHTML = `<div class="empty-state">Select a chip above to preview its projected value this gameweek vs waiting.</div>`; return; }
-  const curGw = currentEventId();
-  const horizonGws = getHorizonGws(6);
-  if (!curGw || !horizonGws.length) { body.innerHTML = `<div class="empty-state">No current gameweek data yet.</div>`; return; }
-  if (chip === "bboost") {
-    const now = benchBoostScoreForSquad(squadIds, curGw);
-    const future = horizonGws.filter(g => g !== curGw).map(g => benchBoostScoreForSquad(squadIds, g)).filter(Boolean)
-      .sort((a, b) => (b.doubles - a.doubles) || (b.projTotal - a.projTotal))[0];
-    const nowLabel = state.events.find(e => e.id === curGw)?.name || `GW${curGw}`;
-    const bestLabel = future ? (state.events.find(e => e.id === future.gwId)?.name || `GW${future.gwId}`) : null;
-    body.innerHTML = `
-      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
-        <div class="stat-block"><div class="stat-label">Play now (${nowLabel})</div><div class="stat-value mono">${now ? now.projTotal.toFixed(1) : "—"}</div></div>
-        <div class="stat-block"><div class="stat-label">Best upcoming window${bestLabel ? " (" + bestLabel + ")" : ""}</div><div class="stat-value mono">${future ? future.projTotal.toFixed(1) : "—"}</div></div>
-        <div class="stat-block"><div class="stat-label">Value of waiting</div><div class="stat-value mono" style="color:${future && now && future.projTotal > now.projTotal ? "var(--emerald)" : "var(--ink-dim)"}">${future && now ? (future.projTotal - now.projTotal >= 0 ? "+" : "") + (future.projTotal - now.projTotal).toFixed(1) : "—"}</div></div>
-      </div>
-      <p class="foot-note" style="margin-top:10px">Same scoring as the Chip Advisor's Bench Boost panel (<code>benchBoostScoreForSquad</code>) — projected full-squad points including bench, this gw vs the best upcoming window in the next 6 GWs. Preview only.</p>
-    `;
-  } else if (chip === "3xc") {
-    const nowCandidates = tripleCaptainCandidates([curGw], squadIds);
-    const futureCandidates = tripleCaptainCandidates(horizonGws.filter(g => g !== curGw), squadIds);
-    const now = nowCandidates[0];
-    const best = futureCandidates[0];
-    const nowLabel = state.events.find(e => e.id === curGw)?.name || `GW${curGw}`;
-    const bestLabel = best ? (state.events.find(e => e.id === best.gwId)?.name || `GW${best.gwId}`) : null;
-    body.innerHTML = `
-      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
-        <div class="stat-block"><div class="stat-label">Play now (${nowLabel})</div><div class="stat-value mono">${now ? now.best.p.webName + " — " + now.best.captaincyScore.toFixed(1) : "—"}</div></div>
-        <div class="stat-block"><div class="stat-label">Best upcoming window${bestLabel ? " (" + bestLabel + ")" : ""}</div><div class="stat-value mono">${best ? best.best.p.webName + " — " + best.best.captaincyScore.toFixed(1) : "—"}</div></div>
-        <div class="stat-block"><div class="stat-label">Value of waiting</div><div class="stat-value mono" style="color:${best && now && best.best.captaincyScore > now.best.captaincyScore ? "var(--emerald)" : "var(--ink-dim)"}">${best && now ? (best.best.captaincyScore - now.best.captaincyScore >= 0 ? "+" : "") + (best.best.captaincyScore - now.best.captaincyScore).toFixed(1) : "—"}</div></div>
-      </div>
-      <p class="foot-note" style="margin-top:10px">Same scoring as the Chip Advisor's Triple Captain panel (<code>tripleCaptainCandidates</code>/<code>captaincyScoreForGw</code>) — best captaincy score this gw vs the best upcoming window in the next 6 GWs. Preview only.</p>
-    `;
-  }
-}
-function renderSandboxPanel() {
-  const outSelect = document.getElementById("sandboxOutSelect");
-  if (!outSelect) return;
-  const squadIds = sandboxActiveSquadIds();
-  const squadPlayers = squadIds ? squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean) : [];
-  outSelect.innerHTML = `<option value="">— select —</option>` + squadPlayers.map(p => `<option value="${p.id}" ${state.sandboxOutId === p.id ? "selected" : ""}>${p.webName} (${p.position}, £${(p.nowCost / 10).toFixed(1)})</option>`).join("");
-  const outP = state.sandboxOutId ? state.players.find(p => p.id === state.sandboxOutId) : null;
-  const inP = state.sandboxInId ? state.players.find(p => p.id === state.sandboxInId) : null;
-  // Replacement pool: same position as the OUT player, not already in the squad.
-  const pool = outP ? state.players.filter(p => p.position === outP.position && !squadIds.includes(p.id)) : [];
-  document.getElementById("sandboxInPicker").innerHTML = searchablePlayerPickerHtml("sandboxInPickerBox", pool, inP, outP ? `Search ${outP.position}…` : "Pick a player to remove first");
-  if (outP) {
-    wireSearchablePlayerPicker("sandboxInPickerBox", pool, (p) => { state.sandboxInId = p.id; renderSandboxTransferBody(); });
-  }
-  renderSandboxTransferBody();
-  renderSandboxChipBody();
-}
-function setupSandboxControls() {
-  const outSelect = document.getElementById("sandboxOutSelect");
-  if (!outSelect || outSelect.dataset.wired) { renderSandboxPanel(); return; }
-  outSelect.dataset.wired = "1";
-  outSelect.onchange = () => {
-    state.sandboxOutId = Number(outSelect.value) || null;
-    state.sandboxInId = null; // replacement pool depends on the OUT player's position
-    renderSandboxPanel();
-  };
-  document.getElementById("sandboxHorizonSelect").onchange = (e) => {
-    state.sandboxHorizon = Number(e.target.value) || 5;
-    renderSandboxTransferBody();
-  };
-  document.getElementById("sandboxClearBtn").onclick = () => {
-    state.sandboxOutId = null; state.sandboxInId = null;
-    renderSandboxPanel();
-  };
-  document.getElementById("sandboxChipSelect").onchange = (e) => {
-    state.sandboxChip = e.target.value || null;
-    renderSandboxChipBody();
-  };
-  renderSandboxPanel();
-}
-
 function getHorizonGws(count) {
   const upcoming = state.events.filter(e => !e.finished).sort((a, b) => a.id - b.id);
   return upcoming.slice(0, count || 6).map(e => e.id);
@@ -6618,9 +6223,6 @@ function fmtGwName(gwId) {
 }
 
 function renderPlanner() {
-  renderSquadHealthDigest();
-  setupTransferPlannerControls();
-  setupSandboxControls();
   const sel = document.getElementById("draftSelect");
   sel.innerHTML = "";
   if (state.drafts.length === 0) {
@@ -7954,7 +7556,7 @@ async function loadFormulasFromStorage() {
     if (raw) state.rankingsPresets = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   // attributeDefs is no longer loaded from storage — it's now the fixed
-  // FM12_ATTR_DEFS list (12 real attributes), not a freeform user-editable
+  // FM12_ATTR_DEFS list (21 real attributes), not a freeform user-editable
   // list, so restoring an old saved list here would silently reintroduce
   // the old 6-attribute "custom scratchpad" set for anyone who used that
   // feature before this rebuild. playerAttributes (the per-player VALUES,
@@ -7971,130 +7573,6 @@ async function loadFormulasFromStorage() {
       if (idInput) idInput.value = raw;
     }
   } catch (e) { /* keep defaults */ }
-  try {
-    const raw = await persistGet("freeTransfers");
-    if (raw) state.freeTransfers = Math.max(0, Math.min(5, Number(raw) || 1));
-  } catch (e) { /* keep defaults */ }
-  try {
-    const raw = await persistGet("setPieceRoles");
-    if (raw) state.setPieceRoles = JSON.parse(raw);
-  } catch (e) { /* keep defaults */ }
-  try {
-    const raw = await persistGet("rankHistory");
-    if (raw) state.rankHistory = JSON.parse(raw);
-  } catch (e) { /* keep defaults */ }
-}
-function saveFreeTransfers() { persistSet("freeTransfers", String(state.freeTransfers)); }
-function saveSetPieceRoles() { persistSet("setPieceRoles", JSON.stringify(state.setPieceRoles)); }
-function saveRankHistory() { persistSet("rankHistory", JSON.stringify(state.rankHistory)); }
-// Manual set-piece taker tagging — the FPL public API has no reliable
-// penalty/corner/free-kick order field (penaltiesOrder/directFreekicksOrder/
-// cornersOrder exist on the raw element payload but are frequently null or
-// stale, and FPL doesn't guarantee they're kept current), so rather than
-// invent fake precision from an unreliable field, this is a fully
-// user-maintained tagging system — same pattern as the FM-attribute manual
-// overrides (setPlayerAttribute/attributeEditorHtml above): the user tells
-// the app who they believe is on penalties/corners/free-kicks for their
-// club, it's stored locally, and it's clearly labelled as user-maintained
-// (not a live feed) everywhere it's shown.
-function getSetPieceRole(playerId) {
-  return state.setPieceRoles[playerId] || { pen: null, corner: false, fk: false };
-}
-function setSetPieceRole(playerId, patch) {
-  const cur = getSetPieceRole(playerId);
-  const next = { ...cur, ...patch };
-  // Clearing pen order removes the key entirely rather than storing null,
-  // keeping the persisted blob small or clearing empty player entries.
-  if (!next.pen && !next.corner && !next.fk) delete state.setPieceRoles[playerId];
-  else state.setPieceRoles[playerId] = next;
-  saveSetPieceRoles();
-}
-// Enforces "only one P1/P2/P3 per club" — assigning a pen order to a player
-// clears that same order from any other player on the same club, since two
-// players can't both be a club's designated 1st-choice taker at once.
-function setPenaltyOrder(playerId, order) {
-  const p = state.players.find(pl => pl.id === playerId);
-  if (!p) return;
-  if (order) {
-    for (const other of state.players) {
-      if (other.id === playerId || other.teamId !== p.teamId) continue;
-      const role = getSetPieceRole(other.id);
-      if (role.pen === order) setSetPieceRole(other.id, { pen: null });
-    }
-  }
-  setSetPieceRole(playerId, { pen: order || null });
-}
-// Small badge(s) shown next to a player wherever set-piece tags are
-// surfaced (Projections table, Player stats detail panel) — "P1"/"P2"/"P3"
-// for penalty order, "C" for corners, "FK" for free-kicks. Deliberately
-// terse (these sit inline next to a name) with a title tooltip spelling out
-// that it's user-tagged, not live data.
-function setPieceBadgesHtml(playerId) {
-  const role = getSetPieceRole(playerId);
-  if (!role.pen && !role.corner && !role.fk) return "";
-  const badge = (text, title, bg) => `<span title="${title} — user-tagged, not from a live FPL feed" style="display:inline-block;font-size:8.5px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:3px;background:${bg};color:#0b1310;vertical-align:middle">${text}</span>`;
-  return (role.pen ? badge("P" + role.pen, `Penalty taker (${role.pen === 1 ? "1st" : role.pen === 2 ? "2nd" : "3rd"} choice)`, "var(--gold-bright,#ffcf4d)") : "")
-    + (role.corner ? badge("C", "Corner taker", "var(--emerald,#00ff87)") : "")
-    + (role.fk ? badge("FK", "Free-kick taker", "#3ba7ff") : "");
-}
-// Set-piece manual-tagging panel HTML (mirrors the FM attribute CSV import
-// UX pattern — an explicit, clearly-labelled manual-entry control, not
-// something masquerading as live data). Lists all outfield players for a
-// selected club, each with a penalty-order select + corner/FK checkboxes.
-function setPieceTaggerHtml() {
-  const teamOptions = state.teams.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
-  return `
-    <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-      The FPL API doesn't reliably expose penalty/corner/free-kick order — there's no dependable live feed for this. Tag it yourself here from what you actually see week to week (team news, match footage); it's stored locally in your browser and shown as a small badge (P1/P2/P3, C, FK) next to the player elsewhere in the app. <strong>User-maintained data, not pulled from a live feed.</strong>
-    </p>
-    <div class="toolbar" style="margin-bottom:12px">
-      <select id="setPieceTeamSelect">${teamOptions}</select>
-    </div>
-    <div id="setPieceTaggerBody"></div>
-  `;
-}
-function renderSetPieceTaggerBody() {
-  const body = document.getElementById("setPieceTaggerBody");
-  const sel = document.getElementById("setPieceTeamSelect");
-  if (!body || !sel) return;
-  const teamId = Number(sel.value) || state.teams[0]?.id;
-  const squad = state.players.filter(p => p.teamId === teamId && p.position !== "GK").sort((a, b) => b.totalPoints - a.totalPoints);
-  body.innerHTML = `
-    <div class="table-wrap"><table>
-      <thead><tr><th class="label-col">Player</th><th>Pos</th><th>Penalty order</th><th>Corners</th><th>Free-kicks</th></tr></thead>
-      <tbody>${squad.map(p => {
-        const role = getSetPieceRole(p.id);
-        return `<tr>
-          <td class="label-col name-cell">${p.webName}</td>
-          <td>${p.position}</td>
-          <td><select data-sp-pen="${p.id}">
-            <option value="">—</option>
-            <option value="1" ${role.pen === 1 ? "selected" : ""}>1st choice</option>
-            <option value="2" ${role.pen === 2 ? "selected" : ""}>2nd choice</option>
-            <option value="3" ${role.pen === 3 ? "selected" : ""}>3rd choice</option>
-          </select></td>
-          <td style="text-align:center"><input type="checkbox" data-sp-corner="${p.id}" ${role.corner ? "checked" : ""} /></td>
-          <td style="text-align:center"><input type="checkbox" data-sp-fk="${p.id}" ${role.fk ? "checked" : ""} /></td>
-        </tr>`;
-      }).join("") || `<tr><td colspan="5" class="empty-state">No outfield players found for this club.</td></tr>`}</tbody>
-    </table></div>
-  `;
-  body.querySelectorAll("[data-sp-pen]").forEach(el => {
-    el.onchange = () => { setPenaltyOrder(Number(el.dataset.spPen), Number(el.value) || null); renderSetPieceTaggerBody(); };
-  });
-  body.querySelectorAll("[data-sp-corner]").forEach(el => {
-    el.onchange = () => { setSetPieceRole(Number(el.dataset.spCorner), { corner: el.checked }); };
-  });
-  body.querySelectorAll("[data-sp-fk]").forEach(el => {
-    el.onchange = () => { setSetPieceRole(Number(el.dataset.spFk), { fk: el.checked }); };
-  });
-}
-function setupSetPieceTaggerControls() {
-  const sel = document.getElementById("setPieceTeamSelect");
-  if (!sel || sel.dataset.wired) { renderSetPieceTaggerBody(); return; }
-  sel.dataset.wired = "1";
-  sel.onchange = renderSetPieceTaggerBody;
-  renderSetPieceTaggerBody();
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
@@ -10203,160 +9681,6 @@ function renderSquadNewsPanel() {
   `;
 }
 
-// ---- Squad health digest ----
-// Ties together three panels that already exist elsewhere in the app —
-// computeSquadNews() (injuries/doubts), priceChangeSignal() (transfer-
-// momentum price watch), computeFixtureSwings() (rolling FDR swings) — and
-// applies simple, fully rule-based reasoning (no ML, no external model) to
-// turn them into plain-language recommendations for the ACTIVE squad only
-// (state.drafts / state.activeDraftId, falling back to state.myTeamSquadIds
-// for the "myteam" draft). Rules used, spelled out here since they're
-// otherwise buried in the code:
-//   - News rule: a player flagged in computeSquadNews() is a SELL candidate
-//     if their status is "i"/"s"/"u" (injured/suspended/unavailable) OR
-//     ("d" doubtful with chance <= 50%) AND their next-fixture projection
-//     (computeProjectionRow over the next 1 GW) is below the squad's own
-//     median projection for their position — i.e. the fixture isn't good
-//     enough to be worth gambling on fitness. Otherwise (a fit-run coming,
-//     or only a mild knock >50% chance) it's a HOLD with a "monitor" note.
-//   - Price rule: a player is a SELL-BEFORE-IT-DROPS candidate if
-//     priceChangeSignal() reads FALL AND their next-GW projected points are
-//     below the squad's own median for their position (an "unremarkable"
-//     returner isn't worth defending a falling price for).
-//   - Fixture-swing rule: a player is a CAPTAIN/KEEP candidate if their
-//     club appears in the easySwingers list of the next computeFixtureSwings
-//     entry that includes the upcoming gameweek.
-// These thresholds are deliberately simple and documented here rather than
-// tuned/hidden — the whole point is a transparent, inspectable rule set.
-function getActiveSquadPlayers() {
-  const draft = getDraft(state.activeDraftId);
-  let ids = null;
-  if (draft && draft.squad && draft.squad.length) ids = draft.squad;
-  else if (state.myTeamSquadIds && state.myTeamSquadIds.length) ids = state.myTeamSquadIds;
-  if (!ids) return null;
-  return ids.map(id => state.players.find(p => p.id === id)).filter(Boolean);
-}
-function computeSquadHealthDigest() {
-  const squad = getActiveSquadPlayers();
-  if (!squad || !squad.length) return null;
-  const curId = currentEventId();
-  const nextGw = getHorizonGws(1)[0] || curId;
-  const squadIds = new Set(squad.map(p => p.id));
-
-  // Median next-GW projection per position, within the squad, as the
-  // "unremarkable" baseline used by both the news and price rules above.
-  const projByPos = { GK: [], DEF: [], MID: [], FWD: [] };
-  const projById = {};
-  for (const p of squad) {
-    const row = computeProjectionRow(p, nextGw, nextGw, false, 70, state.projProvenWeight);
-    projById[p.id] = row.proj;
-    projByPos[p.position].push(row.proj);
-  }
-  const median = arr => {
-    if (!arr.length) return 0;
-    const s = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  };
-  const medianByPos = { GK: median(projByPos.GK), DEF: median(projByPos.DEF), MID: median(projByPos.MID), FWD: median(projByPos.FWD) };
-
-  // News-flagged squad players (reuses computeSquadNews(), filtered to the squad).
-  const newsRows = computeSquadNews().filter(r => squadIds.has(r.p.id));
-  const newsItems = newsRows.map(({ p, chance }) => {
-    const proj = projById[p.id] ?? 0;
-    const belowMedian = proj < medianByPos[p.position];
-    const severe = p.status === "i" || p.status === "s" || p.status === "u";
-    const mildDoubt = p.status === "d" && chance !== null && chance > 50;
-    const sell = (severe || (p.status === "d" && (chance === null || chance <= 50))) && belowMedian;
-    const action = sell ? "SELL" : (mildDoubt ? "HOLD" : "MONITOR");
-    return { p, chance, action, proj, reason: sell
-      ? `${STATUS_LABELS[p.status] || p.status} and next-fixture projection (${proj.toFixed(1)}) is below your squad's ${p.position} median (${medianByPos[p.position].toFixed(1)}) — the upside doesn't cover the fitness risk.`
-      : mildDoubt
-        ? `Only a mild knock (${chance}% chance of playing) — worth monitoring team news before kickoff rather than selling now.`
-        : `Flagged in Squad News but projection still holds up — keep an eye on the next update.` };
-  });
-
-  // Price-watch: FALL signal + below-median projection for their position.
-  const priceItems = squad
-    .map(p => ({ p, signal: priceChangeSignal(p) }))
-    .filter(x => x.signal.direction === "FALL")
-    .map(({ p, signal }) => {
-      const proj = projById[p.id] ?? 0;
-      const unremarkable = proj < medianByPos[p.position];
-      return { p, signal, proj, sellBeforeDrop: unremarkable,
-        reason: unremarkable
-          ? `Transfer momentum points to a price fall (${signal.momentumPct.toFixed(2)}%) and next-fixture projection (${proj.toFixed(1)}) is below your squad's ${p.position} median — a bank-the-value case to sell before it drops.`
-          : `Price signal points down, but projection is still solid — the points case for holding likely outweighs a small value hit.` };
-    })
-    .filter(x => x.sellBeforeDrop);
-
-  // Fixture swings: squad players whose club is in the easySwingers list
-  // for the swing window covering the next gameweek.
-  const allGws = state.events.map(e => e.id).sort((a, b) => a - b);
-  const swingWindow = state.fdrSwingWindow || 4;
-  const swingThreshold = state.fdrSwingThreshold ?? 0.6;
-  const swings = allGws.length ? computeFixtureSwings(nextGw, Math.min(allGws[allGws.length - 1], nextGw + 2), swingWindow, swingThreshold) : [];
-  const easyTeamIds = new Set();
-  for (const s of swings) for (const sw of s.easySwingers) easyTeamIds.add(sw.team.id);
-  const swingItems = squad.filter(p => easyTeamIds.has(p.teamId)).map(p => ({
-    p, reason: `${state.teamsById[p.teamId] ? state.teamsById[p.teamId].name : "Their club"}'s fixtures are swinging easier over the next ${swingWindow} GWs — a good captaincy/keep candidate right now.`,
-  }));
-
-  // Headline action: prioritise a SELL news item paired with the best
-  // available replacement idea (same position, not already owned, best
-  // next-GW projection) if one exists; otherwise a sell-before-drop price
-  // item; otherwise "no urgent action".
-  let headline = null;
-  const sellNewsItem = newsItems.find(x => x.action === "SELL");
-  if (sellNewsItem) {
-    const replacement = state.players
-      .filter(p => p.position === sellNewsItem.p.position && !squadIds.has(p.id) && p.status === "a")
-      .map(p => ({ p, proj: computeProjectionRow(p, nextGw, nextGw, false, 70, state.projProvenWeight).proj }))
-      .sort((a, b) => b.proj - a.proj)[0];
-    headline = replacement
-      ? `Consider: sell ${sellNewsItem.p.webName} (${(STATUS_LABELS[sellNewsItem.p.status] || "").toLowerCase()}, weak fixture) → buy ${replacement.p.webName} (fit, £${(replacement.p.nowCost / 10).toFixed(1)}, ${replacement.proj.toFixed(1)} proj.)`
-      : `Consider selling ${sellNewsItem.p.webName} (${(STATUS_LABELS[sellNewsItem.p.status] || "").toLowerCase()}, weak upcoming fixture).`;
-  } else if (priceItems.length) {
-    headline = `Consider selling ${priceItems[0].p.webName} before its price drops — momentum points down and the projection doesn't justify the risk.`;
-  } else {
-    headline = "No urgent action — squad looks healthy this week.";
-  }
-
-  return { newsItems, priceItems, swingItems, headline, nextGw };
-}
-function renderSquadHealthDigest() {
-  const body = document.getElementById("squadHealthBody");
-  if (!body) return;
-  if (!state.players.length) return;
-  const digest = computeSquadHealthDigest();
-  if (!digest) {
-    body.innerHTML = `<div class="empty-state">No active squad found. Build/confirm a squad in the Planner tab below, or load your real team on the My team tab, to see your squad health digest here.</div>`;
-    return;
-  }
-  const { newsItems, priceItems, swingItems, headline } = digest;
-  const line = (label, color, p, reason) => `
-    <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="flex:0 0 auto;font-weight:700;font-size:11px;padding:2px 8px;border-radius:999px;background:${color}22;color:${color}">${label}</span>
-      <div style="font-size:12.5px;color:var(--ink-dim)"><strong style="color:var(--ink)">${p.webName}</strong> — ${reason}</div>
-    </div>`;
-  const newsSection = newsItems.length
-    ? `<div class="detail-block-title" style="margin-top:14px;font-size:12.5px">Squad News flags (${newsItems.length})</div>${newsItems.map(x => line(x.action, x.action === "SELL" ? "var(--red,#ff5468)" : "var(--gold-bright)", x.p, x.reason)).join("")}`
-    : "";
-  const priceSection = priceItems.length
-    ? `<div class="detail-block-title" style="margin-top:14px;font-size:12.5px">Price watch — sell before it drops (${priceItems.length})</div>${priceItems.map(x => line("SELL-BEFORE-DROP", "var(--red,#ff5468)", x.p, x.reason)).join("")}`
-    : "";
-  const swingSection = swingItems.length
-    ? `<div class="detail-block-title" style="margin-top:14px;font-size:12.5px">Fixture swing — captain/keep candidates (${swingItems.length})</div>${swingItems.map(x => line("KEEP/CAPTAIN", "var(--emerald)", x.p, x.reason)).join("")}`
-    : "";
-  body.innerHTML = `
-    <div style="padding:12px 14px;border-radius:10px;background:rgba(255,182,72,0.08);border:1px solid rgba(255,182,72,0.3);font-weight:600;font-size:13.5px;margin-bottom:6px">
-      ${headline}
-    </div>
-    ${newsSection}${priceSection}${swingSection}
-    ${(!newsItems.length && !priceItems.length && !swingItems.length) ? `<p class="foot-note" style="margin-top:10px">Nothing stands out in News, Price watch, or Fixture swings for your current squad.</p>` : ""}
-  `;
-}
-
 // ---- 5. Mini-league / rival tracking ----
 // Reuses fplGet (same proxied FPL_BASE + path pattern as every other
 // endpoint in the app — /entry/{id}/... is already used by loadMyTeam via
@@ -10398,78 +9722,6 @@ function renderRivalsPanel() {
     <div class="detail-block-title" style="margin-top:16px">Your differentials against them (${mineOnly.length})</div>
     <div class="table-wrap"><table><thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>Pos</th><th>£</th><th>Own%</th><th>Next GW proj.</th></tr></thead><tbody>${rowsFor(mineOnly, p => p) || `<tr><td colspan="6" class="empty-state">None — they own every player in your squad.</td></tr>`}</tbody></table></div>
   `;
-}
-// ---- Overall rank / percentile tracker ----
-// Reuses the exact same fplGet(`/entry/${id}/`) call loadRivalTeam already
-// uses for a rival's entry — same endpoint, just pointed at state.myTeamId.
-// total_players on the bootstrap-static payload (already loaded into
-// state.totalPlayers by loadData) is FPL's own count of registered
-// managers; when present, percentile = rank / total_players * 100. When
-// it's missing (FPL doesn't guarantee the field), the percentile is simply
-// not shown rather than guessed.
-async function loadRankTracker() {
-  if (!state.myTeamId) return null;
-  const entry = await fplGet(`/entry/${state.myTeamId}/`);
-  const rank = entry.summary_overall_rank ?? null;
-  const points = entry.summary_overall_points ?? null;
-  const prev = state.rankHistory[state.myTeamId] || null;
-  const percentile = (rank && state.totalPlayers) ? (rank / state.totalPlayers) * 100 : null;
-  const result = { rank, points, percentile, prevRank: prev ? prev.rank : null, entryName: entry.name };
-  // Only overwrite the stored "previous" once we have a real new rank to
-  // compare — this also means the very first check has no trend to show.
-  if (rank !== null) {
-    state.rankHistory[state.myTeamId] = { rank, points, checkedAt: Date.now() };
-    saveRankHistory();
-  }
-  return result;
-}
-function renderRankTrackerBody() {
-  const body = document.getElementById("rankTrackerBody");
-  if (!body) return;
-  if (!state.myTeamId) {
-    body.innerHTML = `<div class="empty-state">Load your team on the My team tab first (needed to know which manager's rank to track).</div>`;
-    return;
-  }
-  if (state.rankTrackerLoading) { body.innerHTML = `<div class="empty-state">Fetching your overall rank…</div>`; return; }
-  if (state.rankTrackerError) { body.innerHTML = `<div class="status-banner error">${state.rankTrackerError}</div>`; return; }
-  const r = state.rankTrackerData;
-  if (!r) { body.innerHTML = `<div class="empty-state">Click "Check rank" to fetch your current overall rank.</div><button class="dir-btn" id="checkRankBtn" style="margin-top:8px">Check rank</button>`; wireRankTrackerButton(); return; }
-  let trendHtml = "";
-  if (r.prevRank != null && r.rank != null && r.prevRank !== r.rank) {
-    const improved = r.rank < r.prevRank; // lower rank number = better
-    const delta = Math.abs(r.prevRank - r.rank);
-    trendHtml = `<span style="color:${improved ? "var(--emerald)" : "var(--red,#ff5468)"};font-weight:700">${improved ? "▲" : "▼"} ${delta.toLocaleString()}</span> <span style="color:var(--ink-faint);font-size:11px">since last check</span>`;
-  } else if (r.prevRank != null) {
-    trendHtml = `<span style="color:var(--ink-faint);font-size:11px">No change since last check</span>`;
-  } else {
-    trendHtml = `<span style="color:var(--ink-faint);font-size:11px">First check — trend will show next time</span>`;
-  }
-  body.innerHTML = `
-    <div class="manager-summary">
-      <div class="stat-block"><div class="stat-label">Overall rank</div><div class="stat-value mono">${r.rank !== null ? r.rank.toLocaleString() : "—"}</div></div>
-      <div class="stat-block"><div class="stat-label">Overall points</div><div class="stat-value mono">${r.points !== null ? r.points : "—"}</div></div>
-      <div class="stat-block"><div class="stat-label">Percentile ${r.percentile === null ? "" : "(approx.)"}</div><div class="stat-value mono">${r.percentile !== null ? `Top ${r.percentile.toFixed(1)}%` : "— (total manager count unavailable)"}</div></div>
-    </div>
-    <div style="margin-top:8px">${trendHtml}</div>
-    <button class="dir-btn" id="checkRankBtn" style="margin-top:12px">Refresh</button>
-  `;
-  wireRankTrackerButton();
-}
-function wireRankTrackerButton() {
-  const btn = document.getElementById("checkRankBtn");
-  if (!btn) return;
-  btn.onclick = async () => {
-    state.rankTrackerLoading = true; state.rankTrackerError = null; renderRankTrackerBody();
-    try {
-      state.rankTrackerData = await loadRankTracker();
-    } catch (e) {
-      state.rankTrackerError = `Couldn't load rank data (${e.message}).`;
-      state.rankTrackerData = null;
-    } finally {
-      state.rankTrackerLoading = false;
-      renderRankTrackerBody();
-    }
-  };
 }
 function setupRivalsControls() {
   const btn = document.getElementById("loadRivalBtn");
@@ -10595,8 +9847,6 @@ function renderInsightsTab() {
   setupPriceWatchControls();
   renderPriceWatchPanel();
   renderSquadNewsPanel();
-  setupSetPieceTaggerControls();
-  renderRankTrackerBody();
   setupRivalsControls();
   tickProjAccuracyTracking().then(renderProjAccuracyPanel);
   renderProjAccuracyPanel(); // render immediately with whatever's already logged, tick above will re-render after async work
