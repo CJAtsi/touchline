@@ -596,8 +596,14 @@
   .detail-panel > div { min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; }
   .detail-panel .radar-block { min-width: 0; min-height: 0; width: fit-content; max-width: 100%; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 0 auto; }
   .detail-panel .empty-block-compact { padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--ink-faint); font-size: 12px; }
-  .attr-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
-  @media (max-width: 480px) { .attr-editor-grid { grid-template-columns: 1fr; } }
+  /* Flows into new columns after ~5 rows instead of a fixed 2-column
+     layout that stretched to 10-11 rows tall for the full 21-attribute
+     set — keeps the block a predictable height so it sits neatly
+     alongside the fixture ticker / radar / club-override blocks around
+     it instead of towering over them. */
+  .attr-editor-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(5, auto); column-gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  .attr-editor-grid > .attr-row { min-width: 190px; }
+  @media (max-width: 480px) { .attr-editor-grid { grid-template-rows: repeat(6, auto); } .attr-editor-grid > .attr-row { min-width: 160px; } }
   .attr-editor .attr-row { flex-wrap: wrap; min-width: 0; }
   .attr-editor .attr-row > span:first-child { flex: 1 1 90px; min-width: 90px; }
   .detail-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-bottom: 10px; }
@@ -1372,6 +1378,10 @@
       <div id="autopickPriorityBody" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
       <p class="foot-note" style="margin-bottom:8px">Risk tolerance</p>
       <div id="autopickRiskBody" class="chip-btn-row" style="margin-bottom:14px"></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="autopickRespectBudget" checked /> Respect £100m budget</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="autopickRespectClub" checked /> Respect max 3 players per club</label>
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn" id="autopickRunBtn" style="flex:1">Run Auto Pick</button>
         <button class="chip-btn" id="autopickCancelBtn">Cancel</button>
@@ -2767,13 +2777,24 @@ function attributeEditorHtml(playerId) {
   `;
 }
 function wireAttributeEditor(container, playerId) {
+  // Re-renders ONLY this attribute-editor block in place (not the whole
+  // player table via renderStats()) so nudging a slider/number/reset
+  // button doesn't blow away and rebuild the entire table body — that
+  // full rebuild was what made the page jump/scroll on every single
+  // increment, since the browser has to re-lay-out everything above this
+  // block too. Re-wiring immediately after keeps the +/- steppers,
+  // slider drag, and reset button all working after this local refresh.
+  const refresh = () => {
+    container.innerHTML = attributeEditorHtml(playerId);
+    wireAttributeEditor(container, playerId);
+  };
   container.querySelectorAll("[data-attr-slider]").forEach(el => {
     el.oninput = () => {
       const key = el.dataset.attrSlider;
       container.querySelector(`[data-attr-num="${key}"][data-attr-player="${playerId}"]`).value = el.value;
       setPlayerAttribute(playerId, key, el.value);
     };
-    el.onchange = () => { renderStats(); }; // re-render once released so the ● / ↺ state updates
+    el.onchange = refresh; // once released so the ● / ↺ state updates, without disturbing page scroll
   });
   container.querySelectorAll("[data-attr-num]").forEach(el => {
     el.onchange = () => {
@@ -2782,11 +2803,11 @@ function wireAttributeEditor(container, playerId) {
       el.value = v;
       container.querySelector(`[data-attr-slider="${key}"][data-attr-player="${playerId}"]`).value = v;
       setPlayerAttribute(playerId, key, v);
-      renderStats();
+      refresh();
     };
   });
   container.querySelectorAll("[data-attr-reset]").forEach(el => {
-    el.onclick = () => { resetPlayerAttribute(playerId, el.dataset.attrReset); renderStats(); };
+    el.onclick = () => { resetPlayerAttribute(playerId, el.dataset.attrReset); refresh(); };
   });
 }
 
@@ -5693,14 +5714,25 @@ function renderProjViewModeRow() {
 // £100m for the actual XI. This computes that real minimum-bench-cost
 // floor per formation instead of a single hardcoded £83.5m for every
 // formation, so a back-3 correctly gets a higher XI budget than a back-5.
+// Fallback floor ONLY for when the live player pool is empty/unloaded
+// (cheapestAvailableByPos falls back to this too) — not used as the
+// primary source once real price data is available, since actual FPL
+// prices move over a season and a stale hardcoded number understates the
+// true floor once they do.
 const POSITION_MIN_PRICE = { GK: 4.0, DEF: 4.0, MID: 4.5, FWD: 4.5 };
-function xiBudgetForFormation(need) {
+function xiBudgetForFormation(need, excludeIds) {
   const benchGK = 1; // always exactly 1 spare GK (squad always carries 2)
   const benchDEF = Math.max(0, 5 - (need.DEF || 0));
   const benchMID = Math.max(0, 5 - (need.MID || 0));
   const benchFWD = Math.max(0, 3 - (need.FWD || 0));
-  const minBenchCost = benchGK * POSITION_MIN_PRICE.GK + benchDEF * POSITION_MIN_PRICE.DEF +
-    benchMID * POSITION_MIN_PRICE.MID + benchFWD * POSITION_MIN_PRICE.FWD;
+  // Live cheapest-available prices (see cheapestAvailableByPos), not the
+  // static POSITION_MIN_PRICE guess — a back-3 genuinely gets a higher XI
+  // budget than a back-5 because it needs fewer bench DEF slots at
+  // whatever DEF's real current price floor is, not a fixed £4.0m assumption.
+  const cheapest = typeof cheapestAvailableByPos === "function" ? cheapestAvailableByPos(excludeIds) : null;
+  const priceFor = (pos) => cheapest ? cheapest[pos] / 10 : POSITION_MIN_PRICE[pos];
+  const minBenchCost = benchGK * priceFor("GK") + benchDEF * priceFor("DEF") +
+    benchMID * priceFor("MID") + benchFWD * priceFor("FWD");
   return 100 - minBenchCost;
 }
 function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows) {
@@ -6638,7 +6670,7 @@ function renderProjectionsTab() {
             ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
             ${cols.minsPerStart ? cell("minsPerStart", r.minsPerStart || 0, r.minsPerStart ? Math.round(r.minsPerStart) : "—") : ""}
             ${cols.teamXg ? cell("teamXg", r.teamXg, r.teamXg !== null ? r.teamXg.toFixed(2) : "—") : ""}
-            ${cols.csPct ? cell("csPct", r.csPct, r.csPct !== null ? Math.round(r.csPct) + "%" : "—") : ""}
+            ${cols.csPct ? cell("csPct", p.position === "FWD" ? null : r.csPct, (p.position !== "FWD" && r.csPct !== null) ? Math.round(r.csPct) + "%" : "—") : ""}
             ${cols.contribution ? cell("contribution", r.contribution, r.contribution.toFixed(1) + "%") : ""}
             ${cols.defConPct ? cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%") : ""}
             ${cols.bonusExp ? cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2)) : ""}
@@ -6956,26 +6988,40 @@ function squadCost(playerIds) {
 }
 
 // Minimum possible spend (in tenths, matching nowCost) to legally fill
-// every squad slot NOT already occupied, at each position's real price
-// floor (POSITION_MIN_PRICE). Used to reserve enough budget for the rest
-// of the squad before letting a candidate be added — without this, the
-// builder let you spend right up to the flat £100m squad total on your
-// early picks with no regard for whether the remaining slots could still
-// be legally filled, silently leaving you stuck (e.g. 12 players for
-// £96m with 3 required slots and only £4m left). One slot for
-// `reserveForPos` is excluded from the count since the candidate being
-// evaluated fills that slot himself.
+// every squad slot NOT already occupied. Uses the REAL cheapest players
+// actually still available in the current live pool (excluding whoever's
+// already in the squad) — not the old hardcoded POSITION_MIN_PRICE
+// constant (£4.0m GK/DEF, £4.5m MID/FWD), which was a stale guess and
+// could understate the true floor once real prices move, silently
+// letting you overspend on early picks and then get stuck unable to
+// complete the squad within budget. This is also now the SAME live-price
+// approach autoPickSquad's own cheapestByPos already used internally —
+// previously the two were inconsistent, which is part of why "budget
+// still violated" could happen: the UI's disabled-button check and the
+// solver's own reserve logic weren't agreeing on what was affordable.
+// One slot for `reserveForPos` is excluded from the count since the
+// candidate being evaluated fills that slot himself.
+function cheapestAvailableByPos(excludeIds) {
+  const excluded = new Set(excludeIds || []);
+  const cheapest = {};
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const pool = state.players.filter(p => p.position === pos && !excluded.has(p.id));
+    cheapest[pos] = pool.length ? Math.min(...pool.map(p => p.nowCost)) : POSITION_MIN_PRICE[pos] * 10;
+  }
+  return cheapest;
+}
 function minReserveForRemainingSlots(squadIds, reserveForPos) {
   const counts = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
   for (const id of squadIds) {
     const p = state.players.find(pl => pl.id === id);
     if (p) counts[p.position]++;
   }
+  const cheapestByPos = cheapestAvailableByPos(squadIds);
   let reserve = 0;
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
     let stillNeeded = SQUAD_RULES[pos] - counts[pos];
     if (pos === reserveForPos) stillNeeded -= 1; // the candidate fills one of these himself
-    if (stillNeeded > 0) reserve += stillNeeded * POSITION_MIN_PRICE[pos] * 10; // tenths
+    if (stillNeeded > 0) reserve += stillNeeded * cheapestByPos[pos]; // already in tenths (nowCost units)
   }
   return reserve;
 }
@@ -7043,6 +7089,12 @@ function priorityScore(p, priority, risk) {
 function autoPickSquad(draft, opts) {
   const priority = opts?.priority || "points";
   const risk = opts?.risk || "med";
+  // Both default to true (strict/safe) — visible, switchable checkboxes in
+  // the Auto Pick modal (auto-ticked) rather than silently hardcoded, so
+  // it's clear the constraints are actually being enforced. Explicitly
+  // unticking either lets Auto Pick ignore that specific constraint.
+  const respectBudget = opts?.respectBudget !== false;
+  const respectClub = opts?.respectClub !== false;
   draft.squad = draft.squad || [];
   const newlyAddedIds = [];
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
@@ -7054,43 +7106,33 @@ function autoPickSquad(draft, opts) {
     while (need > 0) {
       const clubCounts = clubCountsFor(draft.squad);
       const remaining = BUDGET - squadCost(draft.squad);
-      // Reserve = the cheapest realistic price for every OTHER slot still to
-      // be filled (this position's remaining need, minus the one we're
-      // about to pick, plus every other position's full remaining need) —
-      // more accurate than a flat guess, since GK/FWD's cheapest options
-      // run pricier than DEF/MID's, which was starving later positions.
-      const cheapestByPos = {};
-      for (const otherPos of ["GK", "DEF", "MID", "FWD"]) {
-        const pool = state.players.filter(p => p.position === otherPos && !draft.squad.includes(p.id));
-        cheapestByPos[otherPos] = pool.length ? Math.min(...pool.map(p => p.nowCost)) : 40;
-      }
-      let reserve = (need - 1) * cheapestByPos[pos];
-      for (const otherPos of ["GK", "DEF", "MID", "FWD"]) {
-        if (otherPos === pos) continue;
-        const stillNeeded = Math.max(0, SQUAD_RULES[otherPos] - draft.squad.filter(id => {
-          const pl = state.players.find(x => x.id === id);
-          return pl && pl.position === otherPos;
-        }).length);
-        reserve += stillNeeded * cheapestByPos[otherPos];
-      }
+      // Reserve = the cheapest realistic price (from the REAL live pool,
+      // not a stale hardcoded floor) for every OTHER slot still to be
+      // filled — same shared helper the squad-builder UI's disabled-button
+      // check uses (minReserveForRemainingSlots), so the solver and the UI
+      // now always agree on what's actually affordable.
+      const reserve = minReserveForRemainingSlots(draft.squad, pos);
       // Club-overridden players are exempt from the max-3 check — see overriddenTeamId/transformPlayer.
-      const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (p.clubOverridden || (clubCounts[p.teamId] || 0) < 3);
-      let candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
-        .sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
-      if (!candidates.length) {
+      const baseFilter = p => p.position === pos && !draft.squad.includes(p.id) && (!respectClub || p.clubOverridden || (clubCounts[p.teamId] || 0) < 3);
+      let candidates = !respectBudget
+        ? state.players.filter(baseFilter).sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk))
+        : state.players.filter(p => baseFilter(p) && p.nowCost <= remaining - reserve)
+          .sort((a, b) => priorityScore(b, priority, risk) - priorityScore(a, priority, risk));
+      if (respectBudget && !candidates.length) {
         // The reserve heuristic left no room — relax it and just take the
         // cheapest legal option so the squad still finishes filling.
         candidates = state.players.filter(p => baseFilter(p) && p.nowCost <= remaining)
           .sort((a, b) => a.nowCost - b.nowCost);
       }
-      if (!candidates.length) {
+      if (respectBudget && !candidates.length) {
         // Budget is genuinely too tight even for the cheapest option in this
         // position — completing a full 15-player squad matters more than
         // staying under budget at this point, so drop the budget constraint
         // entirely and take the cheapest legal (still respecting the 3-per-
-        // club cap) player. The builder UI already flags going over budget
-        // clearly (⚠️ + red "in the bank" pill), so this is visible and
-        // fixable by the user afterwards rather than silently leaving gaps.
+        // club cap, if that's still switched on) player. The builder UI
+        // already flags going over budget clearly (⚠️ + red "in the bank"
+        // pill), so this is visible and fixable by the user afterwards
+        // rather than silently leaving gaps.
         candidates = state.players.filter(baseFilter).sort((a, b) => a.nowCost - b.nowCost);
       }
       if (!candidates.length) {
@@ -7253,7 +7295,17 @@ function openAutopickModal(draft) {
   riskBody.querySelectorAll("[data-autopick-risk]").forEach(btn => {
     btn.onclick = () => { state.autopickOptions.risk = btn.dataset.autopickRisk; openAutopickModal(draft); };
   });
+  // Both auto-ticked (checked) by default — the strict/safe behaviour —
+  // but visible and switchable so it's clear the constraints are actually
+  // being applied, rather than silently baked in with no way to see or
+  // change them.
+  const budgetChk = document.getElementById("autopickRespectBudget");
+  const clubChk = document.getElementById("autopickRespectClub");
+  if (budgetChk) budgetChk.checked = state.autopickOptions.respectBudget !== false;
+  if (clubChk) clubChk.checked = state.autopickOptions.respectClub !== false;
   document.getElementById("autopickRunBtn").onclick = () => {
+    state.autopickOptions.respectBudget = budgetChk ? budgetChk.checked : true;
+    state.autopickOptions.respectClub = clubChk ? clubChk.checked : true;
     autoPickSquad(draft, state.autopickOptions);
     saveDrafts(); renderPlanner();
     modal.style.display = "none";
@@ -12546,6 +12598,13 @@ const SIM_HOME_MULT = 1.16, SIM_AWAY_MULT = 0.87;
 // teamAttackBaseline below) so a player's output also reflects the
 // opponent's real defensive quality and the fixture's FDR gap — not just
 // his own season-long per-90 rate in isolation.
+// roleEligible: some stats only make sense for players in a given inferred
+// role (see inferredRole below) — e.g. crosses are overwhelmingly a wide-
+// player/attacking-full-back action, not something a GK or orthodox CB
+// meaningfully contributes. Restricting to eligible roles is what keeps
+// team totals realistic (previously every outfield player in every
+// matchup got scored for every stat, including crosses for centre-backs,
+// which is how a simulated match ended up with ~90 crosses).
 const SIM_MATCH_OUTPUT_STATS = [
   {
     key: "shots", label: "Shots", real: true, kind: "count",
@@ -12558,6 +12617,18 @@ const SIM_MATCH_OUTPUT_STATS = [
     per90: (p) => per90Rate(p.dsKeyPasses, p.minutes),
     fallback: (p) => (p.xa90 || 0) * 3,
     fdrScaled: true,
+  },
+  {
+    key: "cbit", label: "Interceptions + blocks + clearances", real: true, kind: "count",
+    // Real FBref data (already fetched for the Player Stats "Deeper
+    // stats" theme, previously unused in the simulator) — genuine
+    // defensive volume, not modelled. Restricted to DEF/MID (a GK's
+    // clearances are a different action — shot-stopping/distribution —
+    // already covered elsewhere; FWDs essentially never rack up CBIT).
+    per90: (p) => per90Rate((p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0), p.minutes),
+    fallback: (p) => (p.defensiveContributionPer90 || 0) * 0.5,
+    fdrScaled: false, // this is the DEFENDING side's volume — scaling it by the ATTACKING baseline would be backwards
+    roleEligible: (p) => p.position === "DEF" || p.position === "MID",
   },
   {
     key: "tacklesWonPct", label: "Tackle success", real: true, kind: "pct",
@@ -12580,19 +12651,28 @@ const SIM_MATCH_OUTPUT_STATS = [
     isDirectPct: true, // per90()/fallback() here already return a 0-100 %, not a rate to convert
   },
   {
-    key: "crosses", label: "Crosses (modelled)", real: false, kind: "count",
+    key: "crossPct", label: "Cross completion %", real: false, kind: "pct",
     // No real crossing data source exists (Understat/FBref's free tiers
     // don't carry it), so this is estimated from passing + technique — no
-    // dedicated "crossing" FM attribute is modelled in this app.
+    // dedicated "crossing" FM attribute is modelled in this app. Shown as
+    // a success RATE (like the reference "5/17 · 29%" style), not a raw
+    // count, and restricted to wide-role players — a genuine crossing
+    // threat, not every outfield player.
     per90: () => null,
-    fallback: (p) => ((getFmAttributeValue(p.id, "passing") || 10) + (getFmAttributeValue(p.id, "technique") || 10)) / 2 / 20 * 4.5,
-    fdrScaled: true,
+    fallback: (p) => 20 + ((getFmAttributeValue(p.id, "passing") || 10) + (getFmAttributeValue(p.id, "technique") || 10)) / 2 / 20 * 45, // ~20-65% range
+    isDirectPct: true,
+    roleEligible: (p) => inferredRole(p) === "WIDE" || inferredRole(p) === "WB",
   },
   {
-    key: "dribblesPast", label: "Dribbles past a defender (modelled)", real: false, kind: "count",
+    key: "dribbleSuccessPct", label: "Dribble success %", real: false, kind: "pct",
+    // Same no-real-data caveat as crosses — modelled from the dribbling
+    // attribute, shown as a success rate, restricted to players who
+    // actually carry the ball at attacking players (WIDE/CENTRAL
+    // attacking roles) rather than every outfield player.
     per90: () => null,
-    fallback: (p) => (getFmAttributeValue(p.id, "dribbling") || 10) / 20 * 3.5,
-    fdrScaled: true,
+    fallback: (p) => 25 + (getFmAttributeValue(p.id, "dribbling") || 10) / 20 * 45, // ~25-70% range
+    isDirectPct: true,
+    roleEligible: (p) => p.position === "MID" || p.position === "FWD",
   },
 ];
 // Team-level attacking baseline multiplier for THIS fixture, blending the
@@ -12621,6 +12701,12 @@ function teamAttackBaseline(teamId, oppId, isHome) {
   return (fdrMult + xgMult) / 2;
 }
 function simMatchOutputForPlayer(p, stat, winProb, teamBaseline, isHome) {
+  // A player outside this stat's realistic role (e.g. a striker for
+  // cross completion %, a keeper for interceptions+blocks+clearances)
+  // contributes nothing — this is what stops every outfield player being
+  // scored for every stat regardless of role, which was producing
+  // unrealistic team totals (e.g. ~90 crosses in a single match).
+  if (stat.roleEligible && !stat.roleEligible(p)) return { value: 0, isReal: false, ineligible: true };
   if (stat.isDirectPct) {
     // Real/aerial-style direct percentage stat — the win probability
     // shifts it around its own real baseline rather than being applied to
@@ -12849,12 +12935,15 @@ function simulate90MinuteMatch(simState) {
   // IMPORTANT: a player can appear in more than one matchup row now (his
   // open-play role matchup PLUS an additional set-piece aerial matchup —
   // see autoGenerateMatchups). Count-type attacking stats (shots, chances
-  // created, crosses, dribbles past) must only be counted ONCE per player
-  // — from his primary (non-set-piece) matchup win probability — or a
-  // player in two rows would have his shots/chances double-counted into
-  // an inflated team total. Only genuinely duel-shaped stats (aerial win%,
-  // tackle success%) are meant to reflect every matchup he's part of,
-  // since those really do represent separate physical contests.
+  // created, interceptions+blocks+clearances) must only be counted ONCE
+  // per player — from his primary (non-set-piece) matchup win probability
+  // — or a player in two rows would have his shots/chances double-counted
+  // into an inflated team total. Only genuinely duel-shaped stats (aerial
+  // win%, tackle success%) are meant to reflect every matchup he's part
+  // of, since those really do represent separate physical contests. Each
+  // stat is also gated by roleEligible where present — e.g. only wide
+  // players count toward cross completion %, so a CB or striker never
+  // contributes to a stat that isn't realistically his.
   const seenForCount = { A: new Set(), B: new Set() };
   const fullMatchA = {}, fullMatchB = {};
   for (const stat of SIM_MATCH_OUTPUT_STATS) {
@@ -12863,11 +12952,15 @@ function simulate90MinuteMatch(simState) {
     seenForCount.A.clear(); seenForCount.B.clear();
     for (const r of simState.rows) {
       if (!seenForCount.A.has(r.pa.id)) {
-        fullMatchA[stat.key] += simMatchOutputForPlayer(r.pa, stat, r.probA, simState.baselineA, simState.isAHome).value;
+        if (!stat.roleEligible || stat.roleEligible(r.pa)) {
+          fullMatchA[stat.key] += simMatchOutputForPlayer(r.pa, stat, r.probA, simState.baselineA, simState.isAHome).value;
+        }
         seenForCount.A.add(r.pa.id);
       }
       if (!seenForCount.B.has(r.pb.id)) {
-        fullMatchB[stat.key] += simMatchOutputForPlayer(r.pb, stat, r.probB, simState.baselineB, !simState.isAHome).value;
+        if (!stat.roleEligible || stat.roleEligible(r.pb)) {
+          fullMatchB[stat.key] += simMatchOutputForPlayer(r.pb, stat, r.probB, simState.baselineB, !simState.isAHome).value;
+        }
         seenForCount.B.add(r.pb.id);
       }
     }
@@ -12902,14 +12995,30 @@ function simulate90MinuteMatch(simState) {
   // reflect the whole match's contested duels.
   for (const stat of SIM_MATCH_OUTPUT_STATS) {
     if (!stat.isDirectPct) continue;
-    let sumA = 0, sumB = 0, n = 0;
+    // Role-restricted percentage stats (crossPct, dribbleSuccessPct) only
+    // average over players actually eligible for that stat — a CB or GK
+    // averaged into "cross completion %" would drag a wide player's real
+    // number toward a meaningless baseline. Each side is counted
+    // independently since a fixture can have an uneven number of eligible
+    // players per side (e.g. a back-3 team with fewer WB matchups).
+    let sumA = 0, sumB = 0, nA = 0, nB = 0;
+    const seenA = new Set(), seenB = new Set();
     for (const r of simState.rows) {
-      sumA += simMatchOutputForPlayer(r.pa, stat, r.probA).value;
-      sumB += simMatchOutputForPlayer(r.pb, stat, r.probB).value;
-      n++;
+      if (!seenA.has(r.pa.id) && (!stat.roleEligible || stat.roleEligible(r.pa))) {
+        sumA += simMatchOutputForPlayer(r.pa, stat, r.probA).value;
+        nA++; seenA.add(r.pa.id);
+      }
+      if (!seenB.has(r.pb.id) && (!stat.roleEligible || stat.roleEligible(r.pb))) {
+        sumB += simMatchOutputForPlayer(r.pb, stat, r.probB).value;
+        nB++; seenB.add(r.pb.id);
+      }
     }
-    totalsA[stat.key] = n ? sumA / n : 50;
-    totalsB[stat.key] = n ? sumB / n : 50;
+    // No eligible player on a side at all (e.g. a back-5 team with zero
+    // inferred WIDE/WB players) — a neutral 50 is a safer empty-state than
+    // calling a stat's fallback() with no real player to read attributes
+    // from.
+    totalsA[stat.key] = nA ? sumA / nA : 50;
+    totalsB[stat.key] = nB ? sumB / nB : 50;
   }
   // Tackle success % uses the dedicated head-to-head calc (compares each
   // side of every DEF-involved matchup directly) rather than the generic
@@ -12984,15 +13093,56 @@ function renderSimMatchBody() {
   }).join("");
 
   const homeTag = (isHomeSide) => isHomeSide ? '<span title="Home advantage applied" style="opacity:0.7">(H)</span>' : '<span title="Away" style="opacity:0.7">(A)</span>';
+
+  // Post-simulation mismatch recommendations: the biggest probability
+  // skews among this fixture's duels, framed as an attacking opportunity
+  // for the favoured side and a defensive worry for the other — reusing
+  // the same probA/probB already computed for the bars above rather than
+  // any new modelling. Capped at the most lopsided few so it reads as a
+  // short "watch these" list, not a re-print of the whole matchup grid.
+  const MISMATCH_THRESHOLD = 0.62; // only flag duels at least ~62/38 or more skewed
+  const mismatches = rows
+    .map(r => {
+      const skew = Math.max(r.probA, r.probB);
+      const favoursA = r.probA >= r.probB;
+      return { r, skew, favoursA };
+    })
+    .filter(m => m.skew >= MISMATCH_THRESHOLD)
+    .sort((a, b) => b.skew - a.skew)
+    .slice(0, 5);
+  const mismatchesHtml = mismatches.length ? mismatches.map(m => {
+    const { r, skew, favoursA } = m;
+    const winner = favoursA ? r.pa : r.pb, loser = favoursA ? r.pb : r.pa;
+    const winnerTeam = favoursA ? teamA : teamB, loserTeam = favoursA ? teamB : teamA;
+    const pct = Math.round(skew * 100);
+    const isDefWinner = winner.position === "DEF" || winner.position === "GK";
+    const verb = isDefWinner ? "should shut down" : "should get the better of";
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);margin-bottom:6px">
+        <span style="font-size:16px">${isDefWinner ? "🛡️" : "⚔️"}</span>
+        <div style="flex:1;font-size:12px;line-height:1.4">
+          <strong>${winner.webName}</strong> <span style="color:var(--ink-faint)">(${winnerTeam.short_name})</span> ${verb}
+          <strong>${loser.webName}</strong> <span style="color:var(--ink-faint)">(${loserTeam.short_name})</span>
+          ${r.m.setPiece ? " at set pieces" : ""} — <span class="mono" style="color:var(--gold-bright);font-weight:700">${pct}%</span> favoured${r.m.label && !r.m.setPiece ? ` <span style="color:var(--ink-faint)">(${r.m.label})</span>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("") : `<p class="field-desc" style="margin:0">No standout mismatches this fixture — every duel below is fairly even.</p>`;
+
   bodyEl.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">Projected match output — ${teamA.short_name} ${homeTag(isAHome)} vs ${teamB.short_name} ${homeTag(!isAHome)}</div>
-      <p class="field-desc" style="margin:0 0 10px">Simulated over a full ${SIM_MATCH_MINUTES} minutes from ${rows.length} matchup(s) below, scaled by fixture FDR, each side's predicted xG/xGA, and home advantage. Tackle success and aerial win % are shown as real head-to-head percentages, not raw counts. ⚠ marks a stat with no reliable free data source (crosses, dribbles past) — modelled from FM-style attributes rather than real per-match numbers.</p>
+      <p class="field-desc" style="margin:0 0 10px">Simulated over a full ${SIM_MATCH_MINUTES} minutes from ${rows.length} matchup(s) below, scaled by fixture FDR, each side's predicted xG/xGA, and home advantage. Tackle success and aerial win % are shown as real head-to-head percentages, not raw counts. Stats are also restricted to realistic roles — only wide players are counted for cross completion %, only midfielders/forwards for dribble success %, only defenders/midfielders for interceptions+blocks+clearances — so a team total can no longer be inflated by every outfield player being scored for every stat. ⚠ marks a stat with no reliable free data source (cross completion %, dribble success %) — modelled from FM-style attributes rather than real per-match numbers.</p>
       ${statRowsHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Biggest mismatches</div>
+      <p class="field-desc" style="margin:0 0 10px">The most one-sided duels from the matchups below — a lopsided attacking mismatch is a captaincy/transfer signal for that player, a lopsided defensive one is a fixture to be wary of.</p>
+      ${mismatchesHtml}
     </div>
     <div class="detail-block-title">Matchups feeding this simulation</div>
     ${usingAutoMatchups
-      ? `<p class="field-desc" style="margin:0 0 10px">Auto-generated from inferred roles (wide vs central, full-back vs centre-back) plus dedicated set-piece aerial pairings — no matchups have been manually pinned for this pairing yet. <button type="button" id="simSendToTacboardBtn" class="chip-btn small" style="cursor:pointer">Send these to the Tactical board to customise →</button></p>`
+      ? `<p class="field-desc" style="margin:0 0 10px">Auto-generated from inferred roles (wide vs central, full-back vs centre-back) plus dedicated set-piece aerial pairings — no matchups have been manually pinned for this pairing yet. The FPL API has no real left/right split (no "RW" or "LB" position, just DEF/MID/FWD), so this auto layer can only infer wide-vs-central, not a specific side. For an exact pairing like a right winger vs a left-back, pin it yourself — every matchup here is editable player-vs-player. <button type="button" id="simSendToTacboardBtn" class="chip-btn small" style="cursor:pointer">Send these to the Tactical board to customise →</button></p>`
       : `<p class="field-desc" style="margin:0 0 10px">Pulled from your saved matchups on the Tactical board — edit them there, this view just reads them.</p>`}
     <div class="matchup-grid">${matchupRowsHtml}</div>
   `;
