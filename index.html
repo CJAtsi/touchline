@@ -530,6 +530,30 @@
   }
   .star-btn.on { color: var(--gold-bright); }
   .star-btn:hover { transform: scale(1.15); }
+  .pin-btn { background: none; border: none; cursor: pointer; font-size: 14px; color: var(--ink-faint); padding: 0 4px; line-height: 1; transition: color 0.15s ease, transform 0.1s ease; }
+  .pin-btn.on { color: var(--blue); }
+  .pin-btn:hover { transform: scale(1.15); }
+  .cap-badge-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+  .cap-mini-badge { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 4px; font-size: 8.5px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+  .cap-mini-badge.nailed { background: rgba(96,165,250,0.14); color: var(--blue); }
+  .cap-mini-badge.form { background: rgba(52,211,153,0.14); color: var(--emerald); }
+  .cap-mini-badge.fixswing { background: rgba(214,143,255,0.14); color: var(--pink); }
+  .cap-mini-badge.template { background: rgba(234,179,8,0.14); color: var(--amber); }
+  .cap-pinned-row { outline: 1px solid rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
+  /* Compact insight cards (item 1) — replaces dense text tables in the
+     Insights tab with a scannable grid of small cards: name/team up top,
+     one bold headline number, a couple of tiny secondary stats below. */
+  .insight-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .insight-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .insight-card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .insight-card-name { font-weight: 700; font-size: 12.5px; }
+  .insight-card-sub { font-size: 10px; color: var(--ink-faint); }
+  .insight-card-headline { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 17px; margin-top: 2px; }
+  .insight-card-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+  .insight-pill { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 700; background: var(--panel-3); color: var(--ink-dim); }
   .foot-note { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
 
   .card {
@@ -548,9 +572,10 @@
   }
 
   /* detail drawer */
-  .detail-panel { padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; align-items: start; max-height: calc(100vh - 140px); overflow-y: auto; }
+  .detail-panel { padding: 18px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); grid-auto-rows: min-content; gap: 24px; align-items: start; max-height: calc(100vh - 140px); overflow-y: auto; }
   @media (max-width: 900px) { .detail-panel { grid-template-columns: 1fr; } }
-  .detail-panel .radar-block { min-width: 300px; min-height: 300px; display: flex; align-items: center; justify-content: center; overflow: visible; }
+  .detail-panel .radar-block { min-width: 0; min-height: 0; width: fit-content; max-width: 100%; display: flex; align-items: center; justify-content: center; overflow: visible; margin: 0 auto; }
+  .detail-panel .empty-block-compact { padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--ink-faint); font-size: 12px; }
   .detail-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 700; margin-bottom: 10px; }
   .stat-mini-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
   .stat-mini .stat-mini-label { font-size: 10.5px; color: var(--ink-faint); }
@@ -1247,7 +1272,7 @@
           <input type="number" id="diffMinMinutes" value="270" style="width:70px" />
         </label>
       </div>
-      <div class="table-wrap"><table id="differentialsGrid"></table></div>
+      <div id="differentialsGrid"></div>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1258,7 +1283,7 @@
       <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
         <div class="seg" id="priceWatchSeg"></div>
       </div>
-      <div class="table-wrap"><table id="priceWatchGrid"></table></div>
+      <div id="priceWatchGrid"></div>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1266,7 +1291,7 @@
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
         Every player who isn't 100% fully fit, straight from the FPL API's own <code>status</code>/<code>news</code>/<code>chance_of_playing</code> fields — real live data, not an estimate. Shortlisted players are pinned to the top, then sorted by chance of playing (lowest/most concerning first).
       </p>
-      <div class="table-wrap"><table id="squadNewsGrid"></table></div>
+      <div id="squadNewsGrid"></div>
     </div>
 
     <div class="card" style="margin-top:20px">
@@ -1358,6 +1383,23 @@
       <select id="tacboardTeamB"></select>
     </div>
     <div id="tacboardBody"></div>
+  </section>
+
+  <section id="tab-simulation" style="display:none">
+    <h1 class="page-title">Simulation</h1>
+    <p class="page-sub">Pick any two players and see a head-to-head duel breakdown — FM-style attributes plus real FPL underlying stats, with duel outcomes shown as probabilities (not hard "who wins" verdicts): a stronger/faster player is more likely to win a given duel, never guaranteed.</p>
+    <div class="toolbar" style="margin-bottom:16px;flex-wrap:wrap;gap:16px">
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player A</div>
+        <div id="simPlayerAPickerWrap"></div>
+      </div>
+      <div style="align-self:center;color:var(--ink-faint);font-weight:700">VS</div>
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">Player B</div>
+        <div id="simPlayerBPickerWrap"></div>
+      </div>
+    </div>
+    <div id="simulationBody"></div>
   </section>
 
   <section id="tab-rankings" style="display:none">
@@ -2538,6 +2580,10 @@ let state = {
   statsTheme: "overview",
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
+  pinnedCaptainIds: [],
+  plannerOutFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
+  plannerInFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
+  simPlayerAId: null, simPlayerBId: null,
   plannerCompareMode: false, plannerCompareGw: null, plannerCompareIds: null,
   builderView: "pitch", builderFilters: { pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "", q: "" }, builderSelectedId: null,
   fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
@@ -2647,6 +2693,17 @@ async function loadPlayerHeatmap(playerId) {
   state.playerHeatmapCache[playerId] = rows;
   return rows;
 }
+// Continuous red (unlikely) -> green (likely) colour for a 0-1 probability
+// — used for route-likelihood pills (goal/assist/CS/bonus/defcon routes)
+// so shading reflects the actual computed probability rather than a
+// discrete threshold-based colour. Distinct from FDR_GRADIENT_STOPS
+// (fixture difficulty) — this is about route probability, not fixtures.
+function routeLikelihoodColor(prob) {
+  const t = Math.max(0, Math.min(1, prob));
+  const lo = [226, 96, 79], hi = [62, 207, 142];
+  const rgb = lo.map((c, i) => Math.round(c + (hi[i] - c) * t));
+  return `rgb(${rgb.join(",")})`;
+}
 function heatmapCellColor(points) {
   if (points === null || points === undefined) return "rgba(255,255,255,0.06)";
   const clamped = Math.max(-2, Math.min(15, points));
@@ -2657,10 +2714,10 @@ function heatmapCellColor(points) {
 }
 function renderPlayerHeatmapInto(container, playerId) {
   if (!container) return;
-  container.innerHTML = '<div class="field-desc">Loading heatmap…</div>';
+  container.innerHTML = '<div class="empty-block-compact">Loading heatmap…</div>';
   loadPlayerHeatmap(playerId).then(rows => {
     if (!container.isConnected) return; // panel was collapsed/removed before the fetch finished
-    if (!rows.length) { container.innerHTML = '<div class="field-desc">No finished gameweeks yet this season.</div>'; return; }
+    if (!rows.length) { container.innerHTML = '<div class="empty-block-compact">No finished gameweeks yet — fills in as GWs complete.</div>'; return; }
     container.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:3px">' + rows.map(r => `
       <div title="GW${r.gw}: ${r.points === null ? "did not play" : r.points + " pts"}" style="width:22px;height:22px;border-radius:4px;background:${heatmapCellColor(r.points)};display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(0,0,0,0.6);font-family:'JetBrains Mono',monospace">${r.gw}</div>
     `).join("") + '</div>';
@@ -3052,6 +3109,7 @@ async function loadData() {
     state.events = bootstrap.events;
     state.teamsById = Object.fromEntries(bootstrap.teams.map(t => [t.id, t]));
     state.players = bootstrap.elements.map(transformPlayer);
+    if (typeof invalidateCaptaincyScoreCache === "function") invalidateCaptaincyScoreCache();
     precomputeStrengthRanges();
     computeTeamContributionShares();
 
@@ -5617,8 +5675,13 @@ function captaincyRouteBreakdown(p, row) {
       : (nextFixtureCsPct !== null ? nextFixtureCsPct : (row.csPct || 0)) > leagueAvgCsPct() * 1.3
   );
   const defConRoute = (p.position === "DEF" || p.position === "MID") && (row.defConPct || 0) > 15;
-  const goalRoute = (p.xg90 || 0) > 0.15 || (p.position === "FWD");
-  const assistRoute = (p.xa90 || 0) > 0.1 || p.position === "MID";
+  // Goal route: computed the SAME way for every position off actual xG/90
+  // — no position-based suppression or auto-inclusion. FWDs will simply
+  // tend to have a high xg90 and so naturally score a high probability;
+  // DEFs with a genuine goal threat (set-piece takers, attacking full-
+  // backs) get properly reflected instead of being flattened to "no route".
+  const goalRoute = (p.xg90 || 0) > 0.15;
+  const assistRoute = (p.xa90 || 0) > 0.1;
   const bonusRoute = (row.bonusExp || 0) > 0.3;
   const routes = [csRoute, defConRoute, goalRoute, assistRoute, bonusRoute].filter(Boolean).length;
   // Floor = points that accrue independent of whether the match "opens
@@ -5630,7 +5693,19 @@ function captaincyRouteBreakdown(p, row) {
   const defConPts = ((row.defConPct || 0) / 100) * 2 * (row.gwCount || 1);
   const floorPts = appearancePts * (row.gwCount || 1) + csPts + defConPts;
   const ceilingPts = Math.max(0, row.proj - floorPts);
-  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute };
+
+  // ---- Continuous 0-1 likelihood per route (item 5) ----
+  // These feed the gradient-coloured route pills — same underlying signals
+  // as the boolean flags above, just expressed as a smooth probability
+  // instead of a hard threshold, and computed identically regardless of
+  // position (so a DEF's goal route is coloured by its own probability,
+  // not clamped low just because they're a defender).
+  const csProb = Math.max(0, Math.min(1, (p.position === "DEF" ? (row.csPct || 0) : (nextFixtureCsPct !== null ? nextFixtureCsPct : (row.csPct || 0))) / 45));
+  const defConProb = (p.position === "DEF" || p.position === "MID") ? Math.max(0, Math.min(1, (row.defConPct || 0) / 40)) : 0;
+  const goalProb = Math.max(0, Math.min(1, (p.xg90 || 0) / 0.6));
+  const assistProb = Math.max(0, Math.min(1, (p.xa90 || 0) / 0.4));
+  const bonusProb = Math.max(0, Math.min(1, (row.bonusExp || 0) / 1.2));
+  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, csProb, defConProb, goalProb, assistProb, bonusProb };
 }
 // Counter-attack signature: a side whose attack strength meaningfully
 // exceeds its own defence strength tends to commit numbers forward and
@@ -5675,9 +5750,19 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
 // projection, route diversity, floor weight, and the playstyle boost into
 // one sortable number, while keeping every component visible so the UI
 // can show its working rather than a single opaque score.
+// Memoized per (playerId, gwId) for the lifetime of the loaded dataset —
+// this is the hottest function in the captaincy path (called for every
+// player x every gameweek, repeatedly across renders/tab switches), and
+// its inputs (fixtures, projections, attributes) only change when fresh
+// FPL data is loaded, at which point invalidateCaptaincyScoreCache() is
+// called to drop stale entries.
+const _capScoreCache = new Map();
+function invalidateCaptaincyScoreCache() { _capScoreCache.clear(); invalidateCaptaincyBestCache(); }
 function captaincyScoreForGw(p, gwId) {
+  const cacheKey = p.id + "|" + gwId;
+  if (_capScoreCache.has(cacheKey)) return _capScoreCache.get(cacheKey);
   const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
-  if (!row.fixtures.length) return null;
+  if (!row.fixtures.length) { _capScoreCache.set(cacheKey, null); return null; }
   const breakdown = captaincyRouteBreakdown(p, row);
   const fx = row.fixtures[0];
   const boost = fx.opp ? playstyleMatchupBoost(p, fx.opp.id, fx.isHome) : 0;
@@ -5687,7 +5772,9 @@ function captaincyScoreForGw(p, gwId) {
   const routeBonus = row.proj * Math.min(0.3, Math.max(0, breakdown.routes - 1) * 0.06);
   const boostBonus = row.proj * boost * 0.15; // playstyle boost capped at +15% of base proj
   const captaincyScore = row.proj + routeBonus + boostBonus;
-  return { p, row, breakdown, boost, routeBonus, boostBonus, captaincyScore, fixture: fx };
+  const result = { p, row, breakdown, boost, routeBonus, boostBonus, captaincyScore, fixture: fx };
+  _capScoreCache.set(cacheKey, result);
+  return result;
 }
 // Captaincy-strength badge system (replaces the old DefCon-only badge).
 // Cumulative 3-tier system — a player only reaches a tier if they also
@@ -5732,6 +5819,54 @@ function captaincyBadgeHtml(p, gwId) {
   }[tier];
   return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin-left:4px;font-size:9px;background:rgba(0,255,102,0.12);color:${cfg.color};font-weight:700" title="${cfg.label}">${cfg.stars}</span>`;
 }
+// ---- Compact strength badges (item 4) ----
+// Small, specific signal pills alongside the bronze/silver/gold tier badge
+// above — each one flags a single concrete reason to like the pick, kept
+// terse (icon + short label) rather than prose so a row of them reads at
+// a glance.
+function captaincyMiniBadges(p, gwId, scored) {
+  const badges = [];
+  // Nailed-on: reliably starts and plays big minutes — uses the same
+  // start-probability model as the rest of the projection engine.
+  const startProb = projStartProb(p, false, 70);
+  if (startProb >= 0.85 && (p.minutes || 0) >= 300) {
+    badges.push({ cls: "nailed", icon: "\u{1F512}", label: "Nailed", title: "Nailed-on starter — high start probability and consistent minutes" });
+  }
+  // In-form: recent form stat clearly elevated vs season PPG.
+  const form = Number(p.form) || 0;
+  const ppg = Number(p.pointsPerGame) || 0;
+  if (form >= 5 || (ppg > 0 && form >= ppg * 1.3 && form >= 4)) {
+    badges.push({ cls: "form", icon: "\u{1F525}", label: "In form", title: `Recent form ${form.toFixed(1)} — trending well above season average` });
+  }
+  // Fixture swing: this fixture is notably easier than the player's
+  // trailing run (reuses the fixture object already computed for the
+  // score row where available).
+  const fx = scored && scored.fixture;
+  if (fx && fx.opp) {
+    const est = estimateScoreline(p.teamId, fx.opp.id, fx.isHome);
+    const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
+    if (csPct !== null && csPct > leagueAvgCsPct() * 1.4) {
+      badges.push({ cls: "fixswing", icon: "\u{1F4C8}", label: "Fixture swing", title: "Notably favourable fixture vs league-average clean-sheet rate" });
+    }
+  }
+  // Template: high-ownership "everyone owns them" pick — captaining them
+  // is low-risk relative to the field (no big rank swing either way).
+  if ((p.selectedByPercent || 0) >= 25) {
+    badges.push({ cls: "template", icon: "\u{1F465}", label: "Template", title: `${p.selectedByPercent.toFixed(1)}% owned — high-ownership template pick` });
+  }
+  return badges;
+}
+function captaincyMiniBadgesHtml(p, gwId, scored) {
+  const badges = captaincyMiniBadges(p, gwId, scored);
+  if (!badges.length) return "";
+  return `<div class="cap-badge-row">${badges.map(b => `<span class="cap-mini-badge ${b.cls}" title="${b.title}">${b.icon} ${b.label}</span>`).join("")}</div>`;
+}
+function isCaptainPinned(id) { return (state.pinnedCaptainIds || []).includes(id); }
+function toggleCaptainPin(id) {
+  if (!state.pinnedCaptainIds) state.pinnedCaptainIds = [];
+  const i = state.pinnedCaptainIds.indexOf(id);
+  if (i >= 0) state.pinnedCaptainIds.splice(i, 1); else state.pinnedCaptainIds.push(id);
+}
 function renderCaptaincyTab() {
   const body = document.getElementById("capBody");
   if (!body) return;
@@ -5767,43 +5902,72 @@ function renderCaptaincyTab() {
     pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
   }
   const scored = pool.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => b.captaincyScore - a.captaincyScore);
-  const top = source === "myteam" ? scored : scored.slice(0, 25);
+  let top = source === "myteam" ? scored : scored.slice(0, 25);
+  // Keep pinned players visible even if they fell outside the top-N cut
+  // (e.g. "Any player" mode capped at 25) so a pinned reference player
+  // never silently disappears while browsing others.
+  const pinnedIds = state.pinnedCaptainIds || [];
+  if (pinnedIds.length) {
+    const shownIds = new Set(top.map(r => r.p.id));
+    const missingPinned = pinnedIds
+      .filter(id => !shownIds.has(id))
+      .map(id => state.players.find(p => p.id === id))
+      .filter(Boolean)
+      .map(p => captaincyScoreForGw(p, gwId))
+      .filter(Boolean);
+    top = top.concat(missingPinned);
+  }
+  // Route pills are shown for every route that has a non-trivial
+  // probability (not gated to the boolean "route is live" flags), coloured
+  // on a continuous red->green scale by that route's own probability —
+  // applies identically across positions, so a defender's goal route
+  // shows and is coloured by its own (typically lower, but real) chance.
   const routeLabel = (b) => {
-    const tags = [];
-    if (b.csRoute) tags.push("CS");
-    if (b.defConRoute) tags.push("DefCon");
-    if (b.goalRoute) tags.push("Goal");
-    if (b.assistRoute) tags.push("Assist");
-    if (b.bonusRoute) tags.push("Bonus");
-    return tags;
+    const defs = [
+      { key: "cs", label: "CS", prob: b.csProb },
+      { key: "defcon", label: "DefCon", prob: b.defConProb },
+      { key: "goal", label: "Goal", prob: b.goalProb },
+      { key: "assist", label: "Assist", prob: b.assistProb },
+      { key: "bonus", label: "Bonus", prob: b.bonusProb },
+    ];
+    return defs.filter(d => d.prob > 0.03);
   };
   const rowsHtml = top.map((r, i) => {
     const team = state.teamsById[r.p.teamId];
     const opp = r.fixture.opp;
     const tags = routeLabel(r.breakdown);
-    return `<tr>
+    const pinned = isCaptainPinned(r.p.id);
+    return `<tr class="${pinned ? "cap-pinned-row" : ""}">
       <td class="label-col" style="display:flex;align-items:center;gap:8px">
+        <button class="pin-btn ${pinned ? "on" : ""}" data-cap-pin="${r.p.id}" title="${pinned ? "Unpin" : "Pin as reference — stays visible while browsing"}">${pinned ? "\u{1F4CC}" : "\u{1F4CD}"}</button>
         ${i === 0 ? '<span title="Top captaincy pick" style="font-size:14px">🎖️</span>' : ""}
         ${playerAvatarHtml(r.p, 26)}
         <div>
           <div style="font-weight:700">${r.p.webName}${captaincyBadgeHtml(r.p, gwId)}</div>
           <div style="font-size:10.5px;color:var(--ink-faint)">${team ? team.short_name : ""} · ${r.p.position} vs ${opp ? opp.short_name : "?"} ${r.fixture.isHome ? "(H)" : "(A)"}</div>
+          ${captaincyMiniBadgesHtml(r.p, gwId, r)}
         </div>
       </td>
       <td class="mono" style="font-weight:700;color:var(--gold-bright)">${r.captaincyScore.toFixed(1)}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.row.proj.toFixed(1)}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.breakdown.floorPts.toFixed(1)}</td>
-      <td>${tags.map(t => `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:var(--panel-3);color:var(--ink-dim)">${t}</span>`).join("") || `<span style="color:var(--ink-faint);font-size:11px">—</span>`}</td>
+      <td>${tags.map(t => {
+        const color = routeLikelihoodColor(t.prob);
+        return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${color};color:#0a0e0c;font-weight:700" title="${t.label} route ~${Math.round(t.prob * 100)}% likelihood">${t.label}</span>`;
+      }).join("") || `<span style="color:var(--ink-faint);font-size:11px">—</span>`}</td>
       <td class="mono" style="color:${r.boost > 0.05 ? "var(--gold-bright)" : "var(--ink-faint)"}">${r.boost > 0.05 ? "⚡ " + (r.boost * 100).toFixed(0) + "%" : "–"}</td>
     </tr>`;
   }).join("");
   body.innerHTML = `
-    <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon).</p>
+    <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon). Pin (📍) a player to keep them visible while browsing others.</p>
     <div class="table-wrap"><table>
       <thead><tr><th class="label-col">Player</th><th>Captaincy score</th><th>Base proj</th><th>Floor</th><th>Routes</th><th>Playstyle</th></tr></thead>
       <tbody>${rowsHtml || `<tr><td colspan="6" class="foot-note" style="padding:10px">No eligible players for this gameweek/source.</td></tr>`}</tbody>
     </table></div>
   `;
+  body.querySelectorAll("[data-cap-pin]").forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); toggleCaptainPin(Number(btn.dataset.capPin)); renderCaptaincyTab(); };
+  });
   renderCaptaincyTracker();
   renderCapBestChart();
 }
@@ -5905,14 +6069,34 @@ function renderCaptaincyTrackerChart(el, data) {
 // whichever player would/should have scored the most as captain (by the
 // existing captaincy scoring model), reusable by both the Captaincy tab and
 // the Planner tab (item 9 + item 11 share this one implementation).
+//
+// Memoized: computing this across a full 38-GW horizon for a squad/pool is
+// O(players x gameweeks) and was previously redone from scratch on every
+// render/tab-switch. Results are cached per (gwId + pool signature) so
+// repeated renders (e.g. re-opening the Captaincy tab) reuse prior work.
+// The cache is intentionally simple/unbounded within a session — the key
+// space is small (a handful of distinct pools x <=38 GWs).
+const _capBestCache = new Map();
+function _capPoolSignature(pool) {
+  if (!pool) return "league";
+  return "sq:" + pool.map(p => p.id).sort((a, b) => a - b).join(",");
+}
 function computeTheoreticalBestCaptaincy(gwIds, pool) {
   const candidates = pool || state.players.filter(p => (p.minutes || 0) >= 450 && p.position !== "GK");
+  const sig = _capPoolSignature(pool);
   return gwIds.map(gwId => {
+    const cacheKey = sig + "|" + gwId;
+    if (_capBestCache.has(cacheKey)) return _capBestCache.get(cacheKey);
     const scored = candidates.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => b.captaincyScore - a.captaincyScore);
     const best = scored[0];
-    return best ? { gwId, player: best.p, proj: best.row.proj, captaincyScore: best.captaincyScore } : { gwId, player: null, proj: null };
+    const result = best ? { gwId, player: best.p, proj: best.row.proj, captaincyScore: best.captaincyScore } : { gwId, player: null, proj: null };
+    _capBestCache.set(cacheKey, result);
+    return result;
   });
 }
+// Called whenever underlying data changes (new GW data loaded, squad
+// changed, etc) so stale cached "best captain" results don't linger.
+function invalidateCaptaincyBestCache() { _capBestCache.clear(); }
 // Renders a simple GW-on-x-axis / points-on-y-axis line chart into `el`.
 // data: [{ gwId, player, pts }]. Reusable base for both the theoretical
 // best-captain graph and (item 11) the "my actual captaincy" graph.
@@ -5948,16 +6132,51 @@ function renderCaptaincyLineChart(el, data, opts) {
       </svg>
     </div>`;
 }
+// Paints fast: computes+renders a small visible window of gameweeks
+// immediately (cheap, keeps the tab feeling instant), then fills in the
+// rest of the full-season horizon progressively in small chunks via
+// setTimeout so the main thread isn't blocked by one big O(players x 38)
+// pass. Each chunk re-renders the chart with everything computed so far.
+// A render token guards against a stale chunked run finishing after the
+// user has switched GW/source and triggered a fresh renderCapBestChart.
+let _capBestChartToken = 0;
 function renderCapBestChart() {
   const el = document.getElementById("capBestChart");
   if (!el) return;
+  const myToken = ++_capBestChartToken;
   const gwIds = getHorizonGws(38);
   const source = state.capSource || "myteam";
   const pool = (source === "myteam" && state.myTeamSquadIds && state.myTeamSquadIds.length)
     ? state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
     : null; // null = full league-wide pool (default inside computeTheoreticalBestCaptaincy)
-  const best = computeTheoreticalBestCaptaincy(gwIds.slice(0, 15), pool);
-  renderCaptaincyLineChart(el, best.map(b => ({ gwId: b.gwId, player: b.player, pts: b.proj })));
+
+  const VISIBLE_WINDOW = 10;
+  const CHUNK_SIZE = 6;
+  const visibleIds = gwIds.slice(0, VISIBLE_WINDOW);
+  const remainingIds = gwIds.slice(VISIBLE_WINDOW);
+
+  // Fast first paint: just the visible window (already cheap, and often
+  // fully cached from a prior render).
+  const visibleBest = computeTheoreticalBestCaptaincy(visibleIds, pool);
+  const results = visibleBest.slice();
+  renderCaptaincyLineChart(el, results.map(b => ({ gwId: b.gwId, player: b.player, pts: b.proj })));
+  if (!remainingIds.length) return;
+
+  const scheduleChunk = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16));
+  let i = 0;
+  const runChunk = () => {
+    if (myToken !== _capBestChartToken) return; // superseded by a newer render
+    const slice = remainingIds.slice(i, i + CHUNK_SIZE);
+    if (!slice.length) return;
+    const chunkBest = computeTheoreticalBestCaptaincy(slice, pool);
+    results.push(...chunkBest);
+    i += CHUNK_SIZE;
+    if (myToken === _capBestChartToken) {
+      renderCaptaincyLineChart(el, results.map(b => ({ gwId: b.gwId, player: b.player, pts: b.proj })));
+    }
+    if (i < remainingIds.length) scheduleChunk(runChunk);
+  };
+  scheduleChunk(runChunk);
 }
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
@@ -7193,6 +7412,133 @@ function renderGwSimulator(draft) {
   renderGwDetail(draft, curGwId, horizon, timeline);
 }
 
+// ---- Planner transfer picker (item 6) ----
+// Shared filter-bar markup for the planner's transfer-out/transfer-in
+// pickers, styled and behaving like the Player Stats browser's own filter
+// bar (search box, position dropdown, sort dropdown, price min/max,
+// reset) — reuses the same builder-filters CSS class as the squad-builder
+// picker so both pickers in the app look/feel identical.
+function plannerPickerFilterBarHtml(prefix, filters, showSort) {
+  return `
+    <div class="builder-filters">
+      <input type="text" id="planner${prefix}Search" placeholder="Search by name…" value="${(filters.q || "").replace(/"/g, "&quot;")}" />
+    </div>
+    <div class="builder-filters">
+      <select id="planner${prefix}PosFilter"></select>
+      ${showSort ? `<select id="planner${prefix}SortFilter"></select><button class="dir-btn" id="planner${prefix}SortDir" title="Flip sort direction"></button>` : ""}
+      £ <input type="number" step="0.1" id="planner${prefix}MinPrice" placeholder="min" style="width:64px" value="${filters.minPrice}" /> – <input type="number" step="0.1" id="planner${prefix}MaxPrice" placeholder="max" style="width:64px" value="${filters.maxPrice}" />
+      <button class="dir-btn" id="planner${prefix}Reset">Reset filters</button>
+    </div>
+  `;
+}
+function wirePlannerPickerFilterBar(prefix, filters, onChange) {
+  const posSel = document.getElementById(`planner${prefix}PosFilter`);
+  if (posSel) {
+    posSel.innerHTML = ["ALL", "GK", "DEF", "MID", "FWD"].map(p =>
+      `<option value="${p}" ${filters.pos === p ? "selected" : ""}>${p === "ALL" ? "All positions" : p}</option>`).join("");
+    posSel.onchange = () => { filters.pos = posSel.value; onChange(); };
+  }
+  const sortSel = document.getElementById(`planner${prefix}SortFilter`);
+  if (sortSel) {
+    sortSel.innerHTML = SORT_OPTIONS.map(([key, label]) =>
+      `<option value="${key}" ${filters.sort === key ? "selected" : ""}>${label}</option>`).join("");
+    sortSel.onchange = () => { filters.sort = sortSel.value; onChange(); };
+  }
+  const sortDirBtn = document.getElementById(`planner${prefix}SortDir`);
+  if (sortDirBtn) {
+    sortDirBtn.textContent = filters.dir === "asc" ? "↑ Low first" : "↓ High first";
+    sortDirBtn.onclick = () => { filters.dir = filters.dir === "asc" ? "desc" : "asc"; onChange(); };
+  }
+  const minEl = document.getElementById(`planner${prefix}MinPrice`);
+  if (minEl) minEl.oninput = () => { filters.minPrice = minEl.value; onChange(); };
+  const maxEl = document.getElementById(`planner${prefix}MaxPrice`);
+  if (maxEl) maxEl.oninput = () => { filters.maxPrice = maxEl.value; onChange(); };
+  const searchEl = document.getElementById(`planner${prefix}Search`);
+  if (searchEl) searchEl.oninput = () => { filters.q = searchEl.value; onChange(); };
+  const resetBtn = document.getElementById(`planner${prefix}Reset`);
+  if (resetBtn) resetBtn.onclick = () => {
+    filters.q = ""; filters.pos = "ALL"; filters.sort = "totalPoints"; filters.dir = "desc"; filters.minPrice = ""; filters.maxPrice = "";
+    onChange();
+  };
+}
+function plannerPickerRowHtml(p, extra) {
+  const team = state.teamsById[p.teamId];
+  return `
+    <div class="builder-row" data-player="${p.id}">
+      ${playerAvatarHtml(p, 28)}
+      <span class="b-name">${p.webName} <span class="b-sub">${team ? team.short_name : ""}</span></span>
+      <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+      <span class="b-pts mono">${extra != null ? extra : (p.totalPoints ?? 0)}</span>
+      <button class="builder-add-btn" data-action="add" data-player="${p.id}">+</button>
+    </div>
+  `;
+}
+function renderPlannerOutList(draft, gwId, entry, horizon) {
+  const listEl = document.getElementById("plannerOutList");
+  const countEl = document.getElementById("plannerOutCount");
+  if (!listEl) return;
+  const f = state.plannerOutFilters;
+  const q = foldAccents((f.q || "").trim());
+  let pool = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean).filter(p => {
+    if (f.pos !== "ALL" && p.position !== f.pos) return false;
+    if (q && !foldAccents(p.webName).includes(q)) return false;
+    if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
+    if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
+    return true;
+  });
+  countEl.textContent = `${pool.length} players in squad shown`;
+  listEl.innerHTML = pool.length ? pool.map(p => plannerPickerRowHtml(p)).join("") : `<div class="empty-state">No squad players match those filters.</div>`;
+  listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
+    btn.onclick = () => {
+      state.plannerTransferOutId = Number(btn.dataset.player);
+      state.plannerExpandedGw = gwId;
+      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    };
+  });
+  listEl.querySelectorAll(".builder-row").forEach(row => {
+    row.onclick = (e) => { if (e.target.closest(".builder-add-btn")) return; row.querySelector(".builder-add-btn").click(); };
+  });
+}
+function renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon) {
+  const listEl = document.getElementById("plannerInList");
+  const countEl = document.getElementById("plannerInCount");
+  if (!listEl) return;
+  const f = state.plannerInFilters;
+  const q = foldAccents((f.q || "").trim());
+  let pool = state.players.filter(p => {
+    if (entry.squad.includes(p.id)) return false;
+    if (f.pos !== "ALL" ? p.position !== f.pos : p.position !== outPlayer.position) return false;
+    if (q && !foldAccents(p.webName).includes(q)) return false;
+    if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
+    if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
+    return true;
+  }).map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, state.projProvenWeight).proj }))
+    .sort((a, b) => {
+      if (f.sort === "totalPoints" || !f.sort) return f.dir === "asc" ? a.proj - b.proj : b.proj - a.proj;
+      const va = a.p[f.sort] ?? 0, vb = b.p[f.sort] ?? 0;
+      return f.dir === "asc" ? va - vb : vb - va;
+    })
+    .slice(0, 60);
+  countEl.textContent = `${pool.length} eligible replacements shown`;
+  listEl.innerHTML = pool.length
+    ? pool.map(({ p, proj }) => plannerPickerRowHtml(p, proj.toFixed(1))).join("")
+    : `<div class="empty-state">No eligible replacements match those filters.</div>`;
+  listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
+    btn.onclick = () => {
+      const p = state.players.find(pl => pl.id === Number(btn.dataset.player));
+      if (!p) return;
+      log.out.push(outPlayer.id); log.in.push(p.id);
+      if (log.chip) draft.chipsUsed[log.chip] = true;
+      state.plannerTransferOutId = null;
+      saveDrafts(); renderPlanner();
+      state.plannerExpandedGw = gwId;
+      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    };
+  });
+  listEl.querySelectorAll(".builder-row").forEach(row => {
+    row.onclick = (e) => { if (e.target.closest(".builder-add-btn")) return; row.querySelector(".builder-add-btn").click(); };
+  });
+}
 function renderGwDetail(draft, gwId, horizon, timeline) {
   const el = document.getElementById(`gw-body-${gwId}`);
   if (!el) return;
@@ -7218,7 +7564,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   el.innerHTML = `
     <div class="chip-btn-row">${chipRow}</div>
     ${activeChipBanner}
-    <div style="display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start">
+    <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:18px;align-items:start">
       <div>
         <div class="detail-block-title">Transfer out → in</div>
         <div id="transferControls-${gwId}"></div>
@@ -7295,66 +7641,34 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   });
   const allInSquad = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean);
 
-  // Transfer controls — redesigned as an FPL-website-style draft panel: pick
-  // who's going OUT from your current squad (left list, click to select),
-  // then a live-filtered searchable picker shows eligible replacements for
-  // that position; click one to lock in the transfer. Replaces the old
-  // native <select> + plain text search with the same searchable-picker
-  // pattern used elsewhere in the app (searchablePlayerPickerHtml).
+  // Transfer controls — redesigned to match the Player Stats browser's
+  // filter/list UI (item 6): search-by-name, position filter, sort, price
+  // range, "Reset filters", and rows with photo/name/team/price/points/+.
+  // Reuses the exact same builder-filters/builder-list/builder-row CSS
+  // classes as the squad-builder picker (renderBuilderList) so the
+  // interaction pattern matches across the app.
   const tc = document.getElementById(`transferControls-${gwId}`);
   const selectedOutId = state.plannerTransferOutId && allInSquad.some(p => p.id === state.plannerTransferOutId)
     ? state.plannerTransferOutId : null;
-  const outListHtml = allInSquad.map(p => `
-    <div class="player-search-result planner-out-row" data-out-id="${p.id}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:12px;${selectedOutId === p.id ? "background:var(--gold-soft);outline:1px solid var(--gold-bright)" : ""}">
-      ${playerAvatarHtml(p, 20)}<span style="font-weight:600">${p.webName}</span>
-      <span style="color:var(--ink-faint);font-size:10.5px;margin-left:auto">${p.position} · ${fmtPrice(p.nowCost)}</span>
-    </div>`).join("");
   const outPlayer = selectedOutId ? state.players.find(p => p.id === selectedOutId) : null;
-  // Squad Overview's side transfer panel shows a plain browsable LIST of
-  // eligible replacements (ranked by projected points over the current
-  // horizon) rather than a search box — the searchable-picker pattern
-  // stays reserved for the main "create team" draft builder. Cap the list
-  // at a readable length; it's scrollable if there are more.
-  const inPool = outPlayer
-    ? state.players
-        .filter(p => p.position === outPlayer.position && !entry.squad.includes(p.id))
-        .map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, state.projProvenWeight).proj }))
-        .sort((a, b) => b.proj - a.proj)
-        .slice(0, 30)
-    : [];
-  const inListHtml = inPool.map(({ p, proj }) => `
-    <div class="player-search-result planner-in-row" data-in-id="${p.id}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:12px">
-      ${playerAvatarHtml(p, 20)}<span style="font-weight:600">${p.webName}</span>
-      <span style="color:var(--ink-faint);font-size:10.5px">${state.teamsById[p.teamId]?.short_name || ""} · ${fmtPrice(p.nowCost)}</span>
-      <span class="mono" style="margin-left:auto;font-weight:700;color:var(--gold-bright)">${proj.toFixed(1)}</span>
-    </div>`).join("");
   tc.innerHTML = `
     <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">1. Select player to transfer OUT</div>
-    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border-strong);border-radius:8px;padding:4px">${outListHtml}</div>
+    ${plannerPickerFilterBarHtml("out", state.plannerOutFilters, false)}
+    <div class="builder-count" id="plannerOutCount"></div>
+    <div class="builder-list" id="plannerOutList" style="max-height:220px"></div>
     ${outPlayer ? `
-      <div style="font-size:11px;color:var(--ink-faint);margin:10px 0 4px">2. Pick replacement IN (${outPlayer.position}) — ranked by projected points</div>
-      <div style="max-height:260px;overflow-y:auto;border:1px solid var(--border-strong);border-radius:8px;padding:4px">${inListHtml || `<div style="font-size:11px;color:var(--ink-faint);padding:6px 8px">No eligible ${outPlayer.position} replacements found.</div>`}</div>
+      <div style="font-size:11px;color:var(--ink-faint);margin:14px 0 4px">2. Pick replacement IN (${outPlayer.position}) — search or sort to browse</div>
+      ${plannerPickerFilterBarHtml("in", state.plannerInFilters, true)}
+      <div class="builder-count" id="plannerInCount"></div>
+      <div class="builder-list" id="plannerInList" style="max-height:260px"></div>
     ` : `<div style="font-size:11px;color:var(--ink-faint);margin-top:8px">Pick someone to transfer out first.</div>`}
   `;
-  tc.querySelectorAll(".planner-out-row").forEach(row => {
-    row.onclick = () => {
-      state.plannerTransferOutId = Number(row.dataset.outId);
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
-    };
-  });
-  tc.querySelectorAll(".planner-in-row").forEach(row => {
-    row.onclick = () => {
-      const p = state.players.find(pl => pl.id === Number(row.dataset.inId));
-      if (!p) return;
-      log.out.push(selectedOutId); log.in.push(p.id);
-      if (log.chip) draft.chipsUsed[log.chip] = true;
-      state.plannerTransferOutId = null;
-      saveDrafts(); renderPlanner();
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
-    };
-  });
+  wirePlannerPickerFilterBar("out", state.plannerOutFilters, () => renderPlannerOutList(draft, gwId, entry, horizon));
+  renderPlannerOutList(draft, gwId, entry, horizon);
+  if (outPlayer) {
+    wirePlannerPickerFilterBar("in", state.plannerInFilters, () => renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon));
+    renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon);
+  }
 
   if (log.out.length) {
     const list = document.createElement("div");
@@ -9537,26 +9851,29 @@ function computeDifferentials(ownershipCeiling, posFilter, minMinutes) {
     .slice(0, 40);
 }
 function renderDifferentialsPanel() {
-  const table = document.getElementById("differentialsGrid");
-  if (!table || !state.players.length) return;
+  const grid = document.getElementById("differentialsGrid");
+  if (!grid || !state.players.length) return;
   const ceiling = state.diffOwnershipCeiling;
   const rows = computeDifferentials(ceiling, state.diffPosFilter, state.diffMinMinutes);
-  table.innerHTML = `
-    <thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>Pos</th><th>£</th><th>Own%</th><th>Next GW proj.</th><th>Form</th><th>Total pts</th></tr></thead>
-    <tbody>${rows.length ? rows.map(p => {
-      const team = state.teamsById[p.teamId];
-      return `<tr>
-        <td class="label-col name-cell">${p.webName}</td>
-        <td class="label-col">${team ? team.short_name : "—"}</td>
-        <td>${p.position}</td>
-        <td>£${(p.nowCost / 10).toFixed(1)}</td>
-        <td style="color:var(--emerald)">${p.selectedByPercent.toFixed(1)}%</td>
-        <td style="font-weight:700">${p.epNext.toFixed(1)}</td>
-        <td>${p.form.toFixed(1)}</td>
-        <td>${p.totalPoints}</td>
-      </tr>`;
-    }).join("") : `<tr><td colspan="8" class="empty-state">No players found under ${ceiling}% ownership with the current filters — try raising the ceiling or lowering min minutes.</td></tr>`}</tbody>
-  `;
+  if (!rows.length) {
+    grid.innerHTML = `<div class="empty-state">No players found under ${ceiling}% ownership with the current filters — try raising the ceiling or lowering min minutes.</div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="insight-card-grid">${rows.map(p => {
+    const team = state.teamsById[p.teamId];
+    return `
+    <div class="insight-card">
+      <div class="insight-card-top">
+        <div><div class="insight-card-name">${p.webName}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · ${p.position} · £${(p.nowCost / 10).toFixed(1)}</div></div>
+        <div class="insight-pill" style="color:var(--emerald)">${p.selectedByPercent.toFixed(1)}% owned</div>
+      </div>
+      <div class="insight-card-headline">${p.epNext.toFixed(1)} <span style="font-size:10px;font-weight:600;color:var(--ink-faint)">next GW</span></div>
+      <div class="insight-card-meta">
+        <span class="insight-pill">Form ${p.form.toFixed(1)}</span>
+        <span class="insight-pill">${p.totalPoints} pts total</span>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
 }
 function setupDifferentialsControls() {
   const ceilingInput = document.getElementById("diffOwnershipCeiling");
@@ -9603,26 +9920,27 @@ function computePriceWatch(filter) {
     .slice(0, 40);
 }
 function renderPriceWatchPanel() {
-  const table = document.getElementById("priceWatchGrid");
-  if (!table || !state.players.length) return;
+  const grid = document.getElementById("priceWatchGrid");
+  if (!grid || !state.players.length) return;
   const rows = computePriceWatch(state.priceWatchFilter);
-  table.innerHTML = `
-    <thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>£</th><th>Own%</th><th>Net transfers (GW)</th><th>Momentum vs owners</th><th>Signal</th></tr></thead>
-    <tbody>${rows.length ? rows.map(({ p, signal }) => {
-      const team = state.teamsById[p.teamId];
-      const color = signal.direction === "RISE" ? "var(--emerald)" : "var(--red,#ff5468)";
-      const arrow = signal.direction === "RISE" ? "▲" : "▼";
-      return `<tr>
-        <td class="label-col name-cell">${p.webName}</td>
-        <td class="label-col">${team ? team.short_name : "—"}</td>
-        <td>£${(p.nowCost / 10).toFixed(1)}</td>
-        <td>${p.selectedByPercent.toFixed(1)}%</td>
-        <td style="color:${p.netTransfers >= 0 ? "var(--emerald)" : "var(--red,#ff5468)"}">${p.netTransfers >= 0 ? "+" : ""}${p.netTransfers.toLocaleString()}</td>
-        <td class="mono">${signal.momentumPct >= 0 ? "+" : ""}${signal.momentumPct.toFixed(2)}%</td>
-        <td style="color:${color};font-weight:700">${arrow} ${signal.direction === "RISE" ? "Likely rise" : "Likely fall"}</td>
-      </tr>`;
-    }).join("") : `<tr><td colspan="7" class="empty-state">No strong transfer-momentum signals right now.</td></tr>`}</tbody>
-  `;
+  if (!rows.length) {
+    grid.innerHTML = `<div class="empty-state">No strong transfer-momentum signals right now.</div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="insight-card-grid">${rows.map(({ p, signal }) => {
+    const team = state.teamsById[p.teamId];
+    const color = signal.direction === "RISE" ? "var(--emerald)" : "var(--red,#ff5468)";
+    const arrow = signal.direction === "RISE" ? "▲" : "▼";
+    return `
+    <div class="insight-card">
+      <div class="insight-card-top">
+        <div><div class="insight-card-name">${p.webName}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · £${(p.nowCost / 10).toFixed(1)} · ${p.selectedByPercent.toFixed(1)}% owned</div></div>
+        <div class="insight-pill" style="color:${color};font-weight:700">${arrow} ${signal.direction === "RISE" ? "Rise" : "Fall"}</div>
+      </div>
+      <div class="insight-card-headline" style="color:${color}">${signal.momentumPct >= 0 ? "+" : ""}${signal.momentumPct.toFixed(2)}%</div>
+      <div class="insight-card-meta"><span class="insight-pill" style="color:${p.netTransfers >= 0 ? "var(--emerald)" : "var(--red,#ff5468)"}">${p.netTransfers >= 0 ? "+" : ""}${p.netTransfers.toLocaleString()} net</span></div>
+    </div>`;
+  }).join("")}</div>`;
 }
 function setupPriceWatchControls() {
   const seg = document.getElementById("priceWatchSeg");
@@ -9661,24 +9979,26 @@ function computeSquadNews() {
     });
 }
 function renderSquadNewsPanel() {
-  const table = document.getElementById("squadNewsGrid");
-  if (!table || !state.players.length) return;
+  const grid = document.getElementById("squadNewsGrid");
+  if (!grid || !state.players.length) return;
   const rows = computeSquadNews();
-  table.innerHTML = `
-    <thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>Pos</th><th>Status</th><th>Chance next GW</th><th class="label-col">News</th></tr></thead>
-    <tbody>${rows.length ? rows.map(({ p, chance, isShortlisted }) => {
-      const team = state.teamsById[p.teamId];
-      const statusColor = p.status === "i" || p.status === "s" || p.status === "u" ? "var(--red,#ff5468)" : p.status === "d" ? "var(--gold-bright)" : "var(--ink-dim)";
-      return `<tr>
-        <td class="label-col name-cell">${isShortlisted ? "★ " : ""}${p.webName}</td>
-        <td class="label-col">${team ? team.short_name : "—"}</td>
-        <td>${p.position}</td>
-        <td style="color:${statusColor};font-weight:700">${STATUS_LABELS[p.status] || p.status}</td>
-        <td class="mono">${chance !== null ? chance + "%" : "—"}</td>
-        <td class="label-col" style="text-align:left;color:var(--ink-dim);font-size:11px;max-width:340px">${p.news || "—"}</td>
-      </tr>`;
-    }).join("") : `<tr><td colspan="6" class="empty-state">No fitness/availability doubts right now — everyone's fully fit per the FPL API.</td></tr>`}</tbody>
-  `;
+  if (!rows.length) {
+    grid.innerHTML = `<div class="empty-state">No fitness/availability doubts right now — everyone's fully fit per the FPL API.</div>`;
+    return;
+  }
+  grid.innerHTML = `<div class="insight-card-grid">${rows.map(({ p, chance, isShortlisted }) => {
+    const team = state.teamsById[p.teamId];
+    const statusColor = p.status === "i" || p.status === "s" || p.status === "u" ? "var(--red,#ff5468)" : p.status === "d" ? "var(--gold-bright)" : "var(--ink-dim)";
+    return `
+    <div class="insight-card">
+      <div class="insight-card-top">
+        <div><div class="insight-card-name">${isShortlisted ? "★ " : ""}${p.webName}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · ${p.position}</div></div>
+        <div class="insight-pill" style="color:${statusColor};font-weight:700">${STATUS_LABELS[p.status] || p.status}</div>
+      </div>
+      <div class="insight-card-headline" style="font-size:14px">${chance !== null ? chance + "% chance next GW" : "Chance unknown"}</div>
+      ${p.news ? `<div class="insight-card-sub" style="white-space:normal;line-height:1.35">${p.news}</div>` : ""}
+    </div>`;
+  }).join("")}</div>`;
 }
 
 // ---- 5. Mini-league / rival tracking ----
@@ -9710,17 +10030,24 @@ function renderRivalsPanel() {
   const mineOnly = state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(p => p && !rivalIds.has(p.id)).sort((a, b) => b.epNext - a.epNext);
   const shared = squad.filter(s => myIds.has(s.player.id));
   const gw = state.events.find(e => e.id === gwId);
-  const rowsFor = (list, getP) => list.map(item => {
+  const cardsFor = (list, getP) => list.map(item => {
     const p = getP(item);
     const team = state.teamsById[p.teamId];
-    return `<tr><td class="label-col name-cell">${p.webName}</td><td class="label-col">${team ? team.short_name : "—"}</td><td>${p.position}</td><td>£${(p.nowCost / 10).toFixed(1)}</td><td>${p.selectedByPercent.toFixed(1)}%</td><td style="font-weight:700">${p.epNext.toFixed(1)}</td></tr>`;
+    return `
+    <div class="insight-card">
+      <div class="insight-card-top">
+        <div><div class="insight-card-name">${p.webName}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · ${p.position} · £${(p.nowCost / 10).toFixed(1)}</div></div>
+        <div class="insight-pill">${p.selectedByPercent.toFixed(1)}%</div>
+      </div>
+      <div class="insight-card-headline">${p.epNext.toFixed(1)} <span style="font-size:10px;font-weight:600;color:var(--ink-faint)">next GW</span></div>
+    </div>`;
   }).join("");
   body.innerHTML = `
     <p class="foot-note" style="margin-top:0">${entry.name || "Rival"} (${entry.player_first_name || ""} ${entry.player_last_name || ""}) — squad as of ${gw ? gw.name : "GW " + gwId}. ${shared.length} of ${squad.length} players in common with your squad.</p>
     <div class="detail-block-title" style="margin-top:10px">Their differentials against you (${rivalOnly.length})</div>
-    <div class="table-wrap"><table><thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>Pos</th><th>£</th><th>Own%</th><th>Next GW proj.</th></tr></thead><tbody>${rowsFor(rivalOnly, s => s.player) || `<tr><td colspan="6" class="empty-state">None — you own every player in their squad.</td></tr>`}</tbody></table></div>
+    <div class="insight-card-grid">${cardsFor(rivalOnly, s => s.player) || `<div class="empty-state">None — you own every player in their squad.</div>`}</div>
     <div class="detail-block-title" style="margin-top:16px">Your differentials against them (${mineOnly.length})</div>
-    <div class="table-wrap"><table><thead><tr><th class="label-col">Player</th><th class="label-col">Team</th><th>Pos</th><th>£</th><th>Own%</th><th>Next GW proj.</th></tr></thead><tbody>${rowsFor(mineOnly, p => p) || `<tr><td colspan="6" class="empty-state">None — they own every player in your squad.</td></tr>`}</tbody></table></div>
+    <div class="insight-card-grid">${cardsFor(mineOnly, p => p) || `<div class="empty-state">None — they own every player in your squad.</div>`}</div>
   `;
 }
 function setupRivalsControls() {
@@ -9829,13 +10156,10 @@ function renderProjAccuracyPanel() {
       <div class="dash-card"><div class="dash-label">Mean absolute error</div><div class="dash-value small">${overallMae.toFixed(2)} pts</div><div class="dash-sub">across ${scored.length} tracked gameweek${scored.length === 1 ? "" : "s"}</div></div>
       <div class="dash-card"><div class="dash-label">Bias</div><div class="dash-value small">${overallBias >= 0 ? "+" : ""}${overallBias.toFixed(2)} pts</div><div class="dash-sub">${biasLabel}</div></div>
     </div>
-    <div class="table-wrap"><table>
-      <thead><tr><th class="label-col">Gameweek</th><th>Players scored</th><th>MAE</th><th>Bias</th></tr></thead>
-      <tbody>${scored.slice().reverse().map(r => {
-        const gw = state.events.find(e => e.id === r.gwId);
-        return `<tr><td class="label-col">${gw ? gw.name : "GW " + r.gwId}</td><td>${r.n}</td><td class="mono">${r.mae.toFixed(2)}</td><td class="mono" style="color:${r.bias >= 0 ? "var(--gold-bright)" : "var(--emerald)"}">${r.bias >= 0 ? "+" : ""}${r.bias.toFixed(2)}</td></tr>`;
-      }).join("")}</tbody>
-    </table></div>
+    <div class="insight-card-meta" style="gap:6px">${scored.slice().reverse().map(r => {
+      const gw = state.events.find(e => e.id === r.gwId);
+      return `<span class="insight-pill" title="${r.n} players scored" style="font-size:10.5px;padding:3px 9px">GW${r.gwId} <b style="color:var(--ink)">${r.mae.toFixed(1)}</b> <span style="color:${r.bias >= 0 ? "var(--gold-bright)" : "var(--emerald)"}">${r.bias >= 0 ? "+" : ""}${r.bias.toFixed(1)}</span></span>`;
+    }).join("")}</div>
   `;
 }
 
@@ -11415,8 +11739,144 @@ function setupTacboardControls() {
   document.getElementById("tacboardTeamB").onchange = (e) => { state.tacboard.teamB = Number(e.target.value); renderTacboardTab(); };
 }
 
+// ---------- Simulation tab (item 7) ----------
+// Player-vs-player matchup: two searchable pickers, side-by-side stat
+// cards (FM attributes + real FPL underlying stats), and a set of
+// probabilistic duel outcomes. Every duel is computed as an Elo-style
+// logistic function of the attribute difference — a stronger/faster
+// player is only ever MORE LIKELY to win, never guaranteed. This mirrors
+// how Football Manager itself resolves individual match "duels": stat
+// advantage shifts probability, it doesn't hard-determine outcomes.
+function duelWinProbability(attrA, attrB, scale) {
+  // Standard Elo-style logistic curve: prob(A wins) = 1 / (1 + 10^(-(A-B)/scale)).
+  // scale controls how strongly a given attribute gap swings the odds —
+  // 6 (on the 1-20 attribute scale) means a ~6-point advantage translates
+  // to roughly a 90/10 split, while small gaps stay close to 50/50.
+  const diff = (attrA || 10) - (attrB || 10);
+  return 1 / (1 + Math.pow(10, -diff / (scale || 6)));
+}
+const SIM_DUELS = [
+  {
+    key: "aerial", label: "Aerial / heading duel", icon: "\u{1F004}",
+    attrsA: (id) => (getFmAttributeValue(id, "heading") + getFmAttributeValue(id, "jumpingReach") + getFmAttributeValue(id, "strength")) / 3,
+    desc: "Heading + jumping reach + strength",
+  },
+  {
+    key: "pace", label: "Pace / race duel", icon: "\u{1F3C3}",
+    attrsA: (id) => (getFmAttributeValue(id, "pace") + getFmAttributeValue(id, "acceleration")) / 2,
+    desc: "Acceleration + top pace",
+  },
+  {
+    key: "dribble", label: "Dribble vs tackle", icon: "⚽",
+    attrsA: (id) => (getFmAttributeValue(id, "dribbling") + getFmAttributeValue(id, "agility") + getFmAttributeValue(id, "technique")) / 3,
+    attrsB: (id) => (getFmAttributeValue(id, "strength") + getFmAttributeValue(id, "anticipation") + getFmAttributeValue(id, "positioning")) / 3,
+    desc: "A's dribbling/agility/technique vs B's strength/anticipation/positioning (tackling proxy)",
+  },
+  {
+    key: "shooting", label: "Shot vs positioning", icon: "\u{1F945}",
+    attrsA: (id) => (getFmAttributeValue(id, "shooting") + getFmAttributeValue(id, "composure") + getFmAttributeValue(id, "technique")) / 3,
+    attrsB: (id) => {
+      const p = state.playersById ? state.playersById[id] : state.players.find(x => x.id === id);
+      // If B is a GK, use goalkeeping-relevant proxies (positioning +
+      // anticipation + agility); otherwise fall back to their own
+      // positioning/anticipation as an outfield defensive-shape proxy.
+      return (getFmAttributeValue(id, "positioning") + getFmAttributeValue(id, "anticipation") + (p && p.position === "GK" ? getFmAttributeValue(id, "agility") : getFmAttributeValue(id, "composure"))) / 3;
+    },
+    desc: "A's shooting/composure/technique vs B's positioning/anticipation (+agility if B is a GK)",
+  },
+];
+function simPlayerCardHtml(p, side) {
+  if (!p) return `<div class="empty-state">Pick a player above.</div>`;
+  const team = state.teamsById[p.teamId];
+  const attrKeys = [
+    ["pace", "Pace"], ["acceleration", "Accel"], ["strength", "Strength"], ["heading", "Heading"],
+    ["technique", "Technique"], ["dribbling", "Dribbling"], ["positioning", "Positioning"],
+    ["composure", "Composure"], ["shooting", "Shooting"], ["passing", "Passing"],
+  ];
+  const attrsHtml = attrKeys.map(([key, label]) => {
+    const val = getFmAttributeValue(p.id, key);
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="width:70px;font-size:10.5px;color:var(--ink-dim)">${label}</span>
+      <div style="flex:1;height:6px;border-radius:3px;background:var(--panel-3);overflow:hidden"><div style="width:${(val / 20) * 100}%;height:100%;background:var(--gold-bright)"></div></div>
+      <span class="mono" style="width:20px;text-align:right;font-size:10.5px;font-weight:700">${val}</span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="card" style="margin:0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        ${playerAvatarHtml(p, 40)}
+        <div>
+          <div style="font-weight:700;font-size:14px">${p.webName}</div>
+          <div style="font-size:11px;color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
+        </div>
+      </div>
+      <div class="stat-mini-grid" style="margin-bottom:10px">
+        <div class="stat-mini"><div class="stat-mini-label">xG /90</div><div class="stat-mini-value">${(p.xg90 || 0).toFixed(2)}</div></div>
+        <div class="stat-mini"><div class="stat-mini-label">xA /90</div><div class="stat-mini-value">${(p.xa90 || 0).toFixed(2)}</div></div>
+        <div class="stat-mini"><div class="stat-mini-label">Threat</div><div class="stat-mini-value">${(p.threat || 0).toFixed(0)}</div></div>
+        <div class="stat-mini"><div class="stat-mini-label">Creativity</div><div class="stat-mini-value">${(p.creativity || 0).toFixed(0)}</div></div>
+      </div>
+      <div class="detail-block-title" style="font-size:11px;margin-bottom:6px">FM attributes (1-20)</div>
+      ${attrsHtml}
+    </div>
+  `;
+}
+function simDuelBarHtml(duel, playerA, playerB) {
+  const valA = duel.attrsA(playerA.id);
+  const valB = (duel.attrsB || duel.attrsA)(playerB.id);
+  const prob = duelWinProbability(valA, valB, 6);
+  const pctA = Math.round(prob * 100);
+  const pctB = 100 - pctA;
+  const leader = pctA === pctB ? null : (pctA > pctB ? playerA : playerB);
+  const leaderPct = Math.max(pctA, pctB);
+  return `
+    <div class="insight-card" style="gap:8px">
+      <div class="insight-card-top">
+        <div class="insight-card-name">${duel.icon} ${duel.label}</div>
+        <div class="insight-card-sub">${duel.desc}</div>
+      </div>
+      <div style="display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--panel-3)">
+        <div style="width:${pctA}%;background:linear-gradient(90deg,var(--emerald),var(--gold-bright));display:flex;align-items:center;justify-content:flex-start;padding-left:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctA >= 12 ? pctA + "%" : ""}</div>
+        <div style="width:${pctB}%;background:var(--panel-2);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:var(--ink-dim)">${pctB >= 12 ? pctB + "%" : ""}</div>
+      </div>
+      <div class="insight-card-sub" style="text-align:center">
+        ${leader ? `<b style="color:var(--ink)">${leaderPct}%</b> chance <b style="color:var(--ink)">${leader.webName}</b> wins this duel` : "Evenly matched — essentially a coin flip"}
+      </div>
+    </div>
+  `;
+}
+function renderSimulationDuelPanel() {
+  const body = document.getElementById("simulationBody");
+  if (!body) return;
+  const a = state.simPlayerAId ? state.players.find(p => p.id === state.simPlayerAId) : null;
+  const b = state.simPlayerBId ? state.players.find(p => p.id === state.simPlayerBId) : null;
+  body.innerHTML = `
+    <div class="detail-panel" style="grid-template-columns:1fr 1fr;padding:0">
+      <div>${simPlayerCardHtml(a, "a")}</div>
+      <div>${simPlayerCardHtml(b, "b")}</div>
+    </div>
+    ${a && b ? `
+      <div class="detail-block-title" style="margin-top:18px">Duel likelihoods</div>
+      <p class="field-desc" style="margin:0 0 10px">Probabilistic, not a hard verdict — a stat advantage shifts the odds, it doesn't decide the outcome (logistic function of the attribute gap, Elo-style).</p>
+      <div class="insight-card-grid">${SIM_DUELS.map(d => simDuelBarHtml(d, a, b)).join("")}</div>
+    ` : `<div class="empty-state" style="margin-top:16px">Pick both players above to see duel probabilities.</div>`}
+  `;
+}
+function renderSimulationTab() {
+  const aRoot = document.getElementById("simPlayerAPickerWrap");
+  const bRoot = document.getElementById("simPlayerBPickerWrap");
+  if (!aRoot || !bRoot || !state.players.length) return;
+  const playerA = state.simPlayerAId ? state.players.find(p => p.id === state.simPlayerAId) : null;
+  const playerB = state.simPlayerBId ? state.players.find(p => p.id === state.simPlayerBId) : null;
+  aRoot.innerHTML = searchablePlayerPickerHtml("simPlayerAPicker", state.players, playerA, "Search player A…");
+  bRoot.innerHTML = searchablePlayerPickerHtml("simPlayerBPicker", state.players, playerB, "Search player B…");
+  wireSearchablePlayerPicker("simPlayerAPicker", state.players, (p) => { state.simPlayerAId = p.id; renderSimulationDuelPanel(); });
+  wireSearchablePlayerPicker("simPlayerBPicker", state.players, (p) => { state.simPlayerBId = p.id; renderSimulationDuelPanel(); });
+  renderSimulationDuelPanel();
+}
+
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "projections", "shortlist", "team", "captaincy", "planner", "table", "fdr", "insights", "h2h", "tacboard", "rankings"];
+const TAB_NAMES = ["stats", "projections", "shortlist", "team", "captaincy", "planner", "table", "fdr", "insights", "h2h", "tacboard", "simulation", "rankings"];
 const TAB_ICONS = {
   stats: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V10M12 19V5M19 19v-6"/></svg>',
   projections: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5-6 4 3 7-9"/><path d="M15 4h5v5"/></svg>',
@@ -11430,8 +11890,9 @@ const TAB_ICONS = {
   tacboard: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5v17M12 9.5a3 3 0 010 5"/></svg>',
   rankings: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20v-6h4v6M10 20V9h4v11M16 20v-4h4v4"/></svg>',
   insights: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3.5"/></svg>',
+  simulation: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.2"/><circle cx="17" cy="12" r="3.2"/><path d="M10.2 12h3.6"/></svg>',
 };
-const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", rankings: "Rankings", insights: "Insights" };
+const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
 function switchTab(name) {
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
@@ -11442,6 +11903,7 @@ function switchTab(name) {
   if (name === "captaincy") renderCaptaincyTab();
   if (name === "insights") renderInsightsTab();
   if (name === "fdr") renderChipAdvisorPanel();
+  if (name === "simulation") renderSimulationTab();
 }
 function setupTabs() {
   document.querySelectorAll("#tabs button").forEach(btn => {
