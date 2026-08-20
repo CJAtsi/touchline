@@ -1629,7 +1629,12 @@ function setSpecificPosition(playerId, pos) {
 // noise, not signal.
 function nameWithPosition(p) {
   const specific = getSpecificPosition(p.id);
-  return specific ? `${p.webName} (${specific})` : p.webName;
+  const base = specific ? `${p.webName} (${specific})` : p.webName;
+  // Flags a player whose xG90/xA90/CS/DefCon/pointsPerGame are currently a
+  // prior-league conversion (estimatePriorLeagueProjection), not real Prem
+  // data — same "always visible wherever the name is" placement as the
+  // specific-position suffix above, so it's never mistaken for real stats.
+  return p.priorLeagueApplied ? `${base} 🔄` : base;
 }
 function positionEditorHtml(playerId) {
   const p = state.players.find(pl => pl.id === playerId);
@@ -2780,14 +2785,16 @@ function savePlayerAttributes() { persistSet("playerAttributes", JSON.stringify(
 // UEFA-coefficient tiers — treat as a rough prior, not a precise
 // scientific figure, and free to override per-player by editing the
 // entered stats directly.
+// User-supplied conversion table (2026-08-20): midpoint of each league's
+// quoted multiplier range, expressing expected goals/assists output
+// translation vs the Premier League (1.00 = no drop-off). Applied to
+// converted goals/assists/xG90/xA90 the same way the old table was.
 const LEAGUE_DROPOFF = {
-  // Big 5 European leagues — closest in standard to the Prem.
-  "La Liga": 0.88, "Bundesliga": 0.85, "Serie A": 0.85, "Ligue 1": 0.80,
-  // Strong second tier of European leagues.
-  "Eredivisie": 0.68, "Primeira Liga": 0.72, "Belgian Pro League": 0.65,
-  "Championship": 0.62, "Scottish Premiership": 0.60,
-  // Weaker/smaller leagues, MLS-tier, other confederations.
-  "MLS": 0.55, "Brazilian Serie A": 0.70, "Argentine Liga Profesional": 0.65,
+  "Premier League": 1.00,
+  "La Liga": 0.90, "Serie A": 0.875, "Bundesliga": 0.825, "Ligue 1": 0.80,
+  "Primeira Liga": 0.725, "Championship": 0.675, "Eredivisie": 0.64,
+  "Belgian Pro League": 0.61, "Süper Lig": 0.585, "Brazilian Serie A": 0.525,
+  "MLS": 0.51, "Scottish Premiership": 0.425, "Austrian Bundesliga": 0.41,
   "Other / smaller league": 0.50,
 };
 function loadPriorLeagueStats() { return persistGet("priorLeagueStats"); }
@@ -2803,12 +2810,37 @@ function clearPriorLeagueStats(playerId) {
   delete state.priorLeagueStats[playerId];
   savePriorLeagueStats();
 }
+// Looks up a team's REAL last-season (2025/26) clean-sheet percentage from
+// PL_TABLE_LAST_SEASON's cs field (played/38 games) — sourced via web
+// search (StatMuse), not FPL's own API. Used for the prior-league "what
+// would their CS look like at this specific club" estimate. Returns null
+// for a team with no last-season row (e.g. a club not in that table).
+function teamLastSeasonCsPct(teamId) {
+  const team = state.teamsById && state.teamsById[teamId];
+  if (!team) return null;
+  const row = PL_TABLE_LAST_SEASON.find(r => r.short === team.short_name);
+  if (!row || !row.played) return null;
+  return (row.cs / row.played) * 100;
+}
 // Converts entered prior-league totals into the same xg90/xa90/pointsPerGame
 // shape the rest of the projection engine already reads, scaled down by the
-// league's dropoff factor. Goals/assists are used directly as a stand-in for
-// xG/xA (real underlying xG from a minor league is rarely available for
-// free) — a reasonable approximation since actual output is what we're
-// trying to translate across leagues anyway.
+// league's dropoff factor, PLUS a "converted" tag and as much of the wider
+// stat picture as can be reasonably filled in from the raw inputs:
+//   - goals/assists: real underlying xG/xA from a minor league is rarely
+//     free/available, so goal/assist COUNTS are used directly as the input,
+//     scaled by league dropoff, then p90 rates kept as decimals (xg90/xa90)
+//     while converted whole-season goals/assists are rounded to integers
+//     (you can't score half a goal) for any place that shows raw totals.
+//   - defcon: only computed if the user entered a raw defensive-contribution
+//     total (defcon90 stays undefined/null otherwise — no guess is made).
+//   - CS: modelled from the player's chosen "last club" (lastClubTeamId) —
+//     that club's REAL last-season clean-sheet% (teamLastSeasonCsPct) is
+//     taken as this player's own clean-sheet rate had he played there,
+//     weighted by his converted appearance share (apps/38, capped at 1).
+//   - pointsPerGame: composed the same way the live projection engine does
+//     (appearance + goal contribution + CS + defcon), not a bespoke formula,
+//     so a prior-league "proven ability" number is built from the same
+//     scoring logic as everyone else's rather than a simplified stand-in.
 function estimatePriorLeagueProjection(playerId) {
   const raw = getPriorLeagueStats(playerId);
   if (!raw || !raw.minutes || raw.minutes <= 0) return null;
@@ -2816,16 +2848,51 @@ function estimatePriorLeagueProjection(playerId) {
   const per90 = (v) => ((v || 0) / raw.minutes) * 90;
   const xg90 = per90(raw.goals) * dropoff;
   const xa90 = per90(raw.assists) * dropoff;
-  // Rough points-per-game estimate so the "proven ability" blend in
-  // computeProjectionRow also has something better than 0 to work with —
-  // built the same way FPL scores appearance + goal/assist contribution,
-  // assuming ~75 mins/game (a plausible fresh-signing minutes share) and
-  // using GOAL_PTS for his listed FPL position where available.
-  const assumedMinsPerGame = 75;
+  const convertedGoals = Math.round((raw.goals || 0) * dropoff);
+  const convertedAssists = Math.round((raw.assists || 0) * dropoff);
   const player = state.players.find(p => p.id === playerId);
   const goalPts = (player && GOAL_PTS[player.position]) || 5;
-  const pointsPerGame = 2 + (xg90 * goalPts + xa90 * 3) * (assumedMinsPerGame / 90);
-  return { xg90, xa90, pointsPerGame, dropoff, source: raw };
+  // DefCon/90 — decimal p90 rate, only if a raw total was actually entered.
+  const defcon90 = (raw.defcon != null && raw.defcon !== "" && Number(raw.defcon) > 0)
+    ? per90(Number(raw.defcon)) : null;
+  // CS% at the chosen last club, weighted by converted appearance share
+  // (apps out of a full 38-game season, capped at 1 so a player who somehow
+  // logged more apps than a full season — e.g. cup/playoff-heavy league —
+  // doesn't get boosted past the club's real rate).
+  const clubCsPct = raw.lastClubTeamId ? teamLastSeasonCsPct(Number(raw.lastClubTeamId)) : null;
+  const appShare = raw.apps ? Math.max(0, Math.min(1, raw.apps / 38)) : 0.6; // default: plausible fresh-signing share
+  const csPct = clubCsPct != null ? clubCsPct * appShare : null;
+  // Simulated BPS: no real historical BPS exists for a foreign league, so
+  // approximate from the same inputs the FPL bonus system actually rewards
+  // — goal contributions, defensive contributions, and clean sheets — using
+  // rough BPS-per-event weights in line with FPL's own bonus-points scale
+  // (goals/assists and CS/DefCon involvement are consistently the biggest
+  // single-match BPS drivers). This feeds the same expected-bonus shape the
+  // rest of the app uses (bpsPer90), not a separate one-off number.
+  const assumedMinsPerGame = 75;
+  const gamesPerSeason = raw.minutes / assumedMinsPerGame;
+  const bpsFromGoals = convertedGoals * 24; // goal ≈ 24 BPS in FPL's real scale
+  const bpsFromAssists = convertedAssists * 18; // assist ≈ 18 BPS
+  const bpsFromDefcon = defcon90 != null ? (defcon90 / 10) * (raw.minutes / 90) * 2 : 0; // rough defcon-event BPS
+  const bpsFromCs = csPct != null ? (csPct / 100) * gamesPerSeason * 12 : 0; // CS game ≈ 12 BPS for the def unit
+  const simulatedBpsTotal = bpsFromGoals + bpsFromAssists + bpsFromDefcon + bpsFromCs;
+  const bpsPer90 = raw.minutes > 0 ? (simulatedBpsTotal / raw.minutes) * 90 : 0;
+  // Points-per-game built the same way computeProjectionRow composes a real
+  // projection: appearance + attacking contribution + CS + defcon, using
+  // assumedMinsPerGame as a plausible fresh-signing minutes share.
+  const minsFactor = Math.min(1, assumedMinsPerGame / 90);
+  const appearancePts = 1 * (1 - minsFactor) + 2 * minsFactor; // full appearance credit at this minutes share
+  const attackPts = (xg90 * goalPts + xa90 * 3) * minsFactor;
+  const csPts = (CS_PTS[(player && player.position) || "MID"] || 0) * ((csPct || 0) / 100);
+  const defConPts = defcon90 != null
+    ? Math.min(1, defcon90 / ((player && player.position === "DEF") ? 10 : 12)) * 2
+    : 0;
+  const bonusPts = bpsPer90 > 0 ? Math.max(0, Math.min(3, (bpsPer90 - 20) / 15)) : 0; // rough bonus share from simulated BPS
+  const pointsPerGame = appearancePts + attackPts + csPts + defConPts + bonusPts;
+  return {
+    xg90, xa90, pointsPerGame, dropoff, source: raw,
+    convertedGoals, convertedAssists, defcon90, csPct, bpsPer90, simulatedBpsTotal,
+  };
 }
 // Single choke point for the prior-league override's downstream effects —
 // same pattern as applyPlayerClubOverrides() below. estimatePriorLeagueProjection()
@@ -2854,6 +2921,20 @@ function applyPriorLeagueOverrides(playerId) {
       p.pointsPerGame = est.pointsPerGame;
       p.pointsPer90 = est.pointsPerGame;
       p.priorLeagueApplied = true;
+      // Converted-data extras — whole-number goals/assists, decimal p90
+      // rates, defcon (only if a raw total was entered), modelled CS% at
+      // the chosen last club, and simulated BPS. Left undefined (not 0)
+      // when there's nothing to base them on, so downstream code that
+      // checks `!= null` doesn't mistake "no estimate" for "zero".
+      p.priorLeagueConvertedGoals = est.convertedGoals;
+      p.priorLeagueConvertedAssists = est.convertedAssists;
+      if (est.defcon90 != null) {
+        p.defensiveContributionPer90 = est.defcon90;
+        p.priorLeagueDefcon90 = est.defcon90;
+      }
+      if (est.csPct != null) p.priorLeagueCsPct = est.csPct;
+      p.bpsPer90 = est.bpsPer90;
+      p.priorLeagueSimulatedBps = est.simulatedBpsTotal;
     } else if (p.priorLeagueApplied) {
       // Override cleared (or no longer eligible, e.g. player has since
       // started a Prem game) — a zero-minutes player's real FPL-derived
@@ -2863,6 +2944,9 @@ function applyPriorLeagueOverrides(playerId) {
       p.xg90 = 0; p.xa90 = 0; p.xgi90 = 0; p.expectedGoalInvolvements = 0;
       p.pointsPerGame = 0; p.pointsPer90 = 0;
       p.priorLeagueApplied = false;
+      p.priorLeagueConvertedGoals = undefined; p.priorLeagueConvertedAssists = undefined;
+      if (p.priorLeagueDefcon90 != null) { p.defensiveContributionPer90 = 0; p.priorLeagueDefcon90 = undefined; }
+      p.priorLeagueCsPct = undefined; p.bpsPer90 = 0; p.priorLeagueSimulatedBps = undefined;
     }
     if (modelNextEvent && typeof projectPoints === "function" && typeof state.fixturesByTeam !== "undefined" && state.fixturesByTeam) {
       p.epNext = projectPoints(p, modelNextEvent.id);
@@ -2871,23 +2955,39 @@ function applyPriorLeagueOverrides(playerId) {
   }
 }
 function priorLeagueEditorHtml(playerId) {
-  const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "" };
+  const p = state.players.find(pl => pl.id === playerId);
+  const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "", defcon: "", lastClubTeamId: p ? String(p.teamId) : "" };
   const leagueOptions = Object.keys(LEAGUE_DROPOFF).map(l =>
     `<option value="${l}" ${cur.league === l ? "selected" : ""}>${l} (×${LEAGUE_DROPOFF[l].toFixed(2)})</option>`).join("");
+  const teamOptions = (state.teams || []).slice().sort((a, b) => a.name.localeCompare(b.name)).map(t =>
+    `<option value="${t.id}" ${String(cur.lastClubTeamId) === String(t.id) ? "selected" : ""}>${t.name}</option>`).join("");
+  const est = getPriorLeagueStats(playerId) ? estimatePriorLeagueProjection(playerId) : null;
   return `
     <div class="prior-league-editor" style="font-size:12px">
-      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">No Prem minutes yet — enter their last known league output (last season or current, whichever is more recent) and it'll scale to a Prem-equivalent projection instead of defaulting to 0. Applies to any player, not just this one.</div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">No Prem minutes yet — enter their last known league output (last season or current, whichever is more recent) and it'll scale to a Prem-equivalent projection instead of defaulting to 0. Fill in as many fields as you have — goals/assists/minutes drive xG90/xA90/BPS, DefCon total is optional, and "Last/new club" drives the modelled clean-sheet%. Applies to any player, not just this one.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">League <select data-pl-field="league">${leagueOptions}</select></label>
+        <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">Club (for CS/DefCon estimate) <select data-pl-field="lastClubTeamId"><option value="">— none —</option>${teamOptions}</select></label>
         <label style="display:flex;flex-direction:column;gap:2px">Minutes <input type="number" min="0" step="1" value="${cur.minutes}" data-pl-field="minutes" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Apps <input type="number" min="0" step="1" value="${cur.apps}" data-pl-field="apps" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Goals <input type="number" min="0" step="1" value="${cur.goals}" data-pl-field="goals" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Assists <input type="number" min="0" step="1" value="${cur.assists}" data-pl-field="assists" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">DefCon (total, optional) <input type="number" min="0" step="1" value="${cur.defcon ?? ""}" data-pl-field="defcon" placeholder="Leave blank if unknown" /></label>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button type="button" class="dir-btn" data-pl-save="${playerId}">Save &amp; apply</button>
         ${getPriorLeagueStats(playerId) ? `<button type="button" class="dir-btn" data-pl-clear="${playerId}">Clear override</button>` : ""}
       </div>
+      ${est ? `
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--panel-3);font-size:11px;color:var(--ink-dim);line-height:1.6">
+        <div style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px">🔄 Converted estimate preview</div>
+        <div>Goals/Assists (converted, whole season): <b>${est.convertedGoals}</b> / <b>${est.convertedAssists}</b></div>
+        <div>xG/90: <b>${est.xg90.toFixed(2)}</b> &nbsp; xA/90: <b>${est.xa90.toFixed(2)}</b></div>
+        <div>DefCon/90: <b>${est.defcon90 != null ? est.defcon90.toFixed(2) : "— not entered"}</b></div>
+        <div>Modelled CS%: <b>${est.csPct != null ? est.csPct.toFixed(1) + "%" : "— no club selected"}</b></div>
+        <div>Simulated BPS/90: <b>${est.bpsPer90.toFixed(1)}</b></div>
+        <div>Projected pts/game: <b>${est.pointsPerGame.toFixed(2)}</b></div>
+      </div>` : ""}
     </div>
   `;
 }
@@ -2897,10 +2997,12 @@ function wirePriorLeagueEditor(container, playerId) {
     const get = (f) => container.querySelector(`[data-pl-field="${f}"]`)?.value;
     const data = {
       league: get("league") || "Other / smaller league",
+      lastClubTeamId: get("lastClubTeamId") || "",
       minutes: Number(get("minutes")) || 0,
       apps: Number(get("apps")) || 0,
       goals: Number(get("goals")) || 0,
       assists: Number(get("assists")) || 0,
+      defcon: get("defcon") === "" ? "" : Number(get("defcon")) || 0,
     };
     setPriorLeagueStats(playerId, data);
     applyPriorLeagueOverrides(playerId);
@@ -3784,27 +3886,31 @@ function lastSeasonStrengthFactor(teamId) {
 // league this season (relegated clubs just won't match anything and drop
 // out automatically; newly promoted clubs have no historical row and are
 // treated as mid-table until real results come in).
+// cs (clean sheets) sourced 2026-08-20 via web search (StatMuse 2025/26
+// Premier League clean-sheets-by-club standings) — used by the
+// prior-league "what would their CS/DefCon be at their new club" estimate
+// below. Not from FPL's own API (no live access from this environment).
 const PL_TABLE_LAST_SEASON = [
-  { short: "ARS", played: 38, won: 26, drawn: 7, lost: 5, gf: 71, ga: 27, gd: 44, points: 85 },
-  { short: "MCI", played: 38, won: 23, drawn: 9, lost: 6, gf: 77, ga: 35, gd: 42, points: 78 },
-  { short: "MUN", played: 38, won: 20, drawn: 11, lost: 7, gf: 69, ga: 50, gd: 19, points: 71 },
-  { short: "AVL", played: 38, won: 19, drawn: 8, lost: 11, gf: 56, ga: 49, gd: 7, points: 65 },
-  { short: "LIV", played: 38, won: 17, drawn: 9, lost: 12, gf: 63, ga: 53, gd: 10, points: 60 },
-  { short: "BOU", played: 38, won: 13, drawn: 18, lost: 7, gf: 58, ga: 54, gd: 4, points: 57 },
-  { short: "SUN", played: 38, won: 14, drawn: 12, lost: 12, gf: 42, ga: 48, gd: -6, points: 54 },
-  { short: "BHA", played: 38, won: 14, drawn: 11, lost: 13, gf: 52, ga: 46, gd: 6, points: 53 },
-  { short: "BRE", played: 38, won: 14, drawn: 11, lost: 13, gf: 55, ga: 52, gd: 3, points: 53 },
-  { short: "CHE", played: 38, won: 14, drawn: 10, lost: 14, gf: 58, ga: 52, gd: 6, points: 52 },
-  { short: "FUL", played: 38, won: 15, drawn: 7, lost: 16, gf: 47, ga: 51, gd: -4, points: 52 },
-  { short: "NEW", played: 38, won: 14, drawn: 7, lost: 17, gf: 53, ga: 55, gd: -2, points: 49 },
-  { short: "EVE", played: 38, won: 13, drawn: 10, lost: 15, gf: 47, ga: 50, gd: -3, points: 49 },
-  { short: "LEE", played: 38, won: 11, drawn: 14, lost: 13, gf: 49, ga: 56, gd: -7, points: 47 },
-  { short: "CRY", played: 38, won: 11, drawn: 12, lost: 15, gf: 41, ga: 51, gd: -10, points: 45 },
-  { short: "NFO", played: 38, won: 11, drawn: 11, lost: 16, gf: 48, ga: 51, gd: -3, points: 44 },
-  { short: "TOT", played: 38, won: 10, drawn: 11, lost: 17, gf: 48, ga: 57, gd: -9, points: 41 },
-  { short: "WHU", played: 38, won: 10, drawn: 9, lost: 19, gf: 46, ga: 65, gd: -19, points: 39 },
-  { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gf: 38, ga: 75, gd: -37, points: 22 },
-  { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gf: 27, ga: 68, gd: -41, points: 20 },
+  { short: "ARS", played: 38, won: 26, drawn: 7, lost: 5, gf: 71, ga: 27, gd: 44, points: 85, cs: 19 },
+  { short: "MCI", played: 38, won: 23, drawn: 9, lost: 6, gf: 77, ga: 35, gd: 42, points: 78, cs: 16 },
+  { short: "MUN", played: 38, won: 20, drawn: 11, lost: 7, gf: 69, ga: 50, gd: 19, points: 71, cs: 8 },
+  { short: "AVL", played: 38, won: 19, drawn: 8, lost: 11, gf: 56, ga: 49, gd: 7, points: 65, cs: 9 },
+  { short: "LIV", played: 38, won: 17, drawn: 9, lost: 12, gf: 63, ga: 53, gd: 10, points: 60, cs: 10 },
+  { short: "BOU", played: 38, won: 13, drawn: 18, lost: 7, gf: 58, ga: 54, gd: 4, points: 57, cs: 11 },
+  { short: "SUN", played: 38, won: 14, drawn: 12, lost: 12, gf: 42, ga: 48, gd: -6, points: 54, cs: 11 },
+  { short: "BHA", played: 38, won: 14, drawn: 11, lost: 13, gf: 52, ga: 46, gd: 6, points: 53, cs: 10 },
+  { short: "BRE", played: 38, won: 14, drawn: 11, lost: 13, gf: 55, ga: 52, gd: 3, points: 53, cs: 10 },
+  { short: "CHE", played: 38, won: 14, drawn: 10, lost: 14, gf: 58, ga: 52, gd: 6, points: 52, cs: 9 },
+  { short: "FUL", played: 38, won: 15, drawn: 7, lost: 16, gf: 47, ga: 51, gd: -4, points: 52, cs: 9 },
+  { short: "NEW", played: 38, won: 14, drawn: 7, lost: 17, gf: 53, ga: 55, gd: -2, points: 49, cs: 8 },
+  { short: "EVE", played: 38, won: 13, drawn: 10, lost: 15, gf: 47, ga: 50, gd: -3, points: 49, cs: 11 },
+  { short: "LEE", played: 38, won: 11, drawn: 14, lost: 13, gf: 49, ga: 56, gd: -7, points: 47, cs: 8 },
+  { short: "CRY", played: 38, won: 11, drawn: 12, lost: 15, gf: 41, ga: 51, gd: -10, points: 45, cs: 12 },
+  { short: "NFO", played: 38, won: 11, drawn: 11, lost: 16, gf: 48, ga: 51, gd: -3, points: 44, cs: 9 },
+  { short: "TOT", played: 38, won: 10, drawn: 11, lost: 17, gf: 48, ga: 57, gd: -9, points: 41, cs: 9 },
+  { short: "WHU", played: 38, won: 10, drawn: 9, lost: 19, gf: 46, ga: 65, gd: -19, points: 39, cs: 7 },
+  { short: "BUR", played: 38, won: 4, drawn: 10, lost: 24, gf: 38, ga: 75, gd: -37, points: 22, cs: 4 },
+  { short: "WOL", played: 38, won: 3, drawn: 11, lost: 24, gf: 27, ga: 68, gd: -41, points: 20, cs: 4 },
 ];
 // Start-of-2026/27-season Attack/Defence/Overall ratings (1-5 scale),
 // derived directly from the real 2025/26 final-table goals-for/against
@@ -13346,21 +13452,167 @@ const SETTINGS_EXPORT_KEYS = [
 // while its value here is empty/undefined, so shipping this with an empty
 // object is always safe — it just means "no seed yet" rather than
 // blanking anyone's real data.
+// Filled in from cjatsi's export dated 2026-08-20T11:03:30.657Z
+// (touchline-settings-2026-08-20.json). attributeDefs and playerPositions
+// were not present in that export, so they stay unseeded (no-op) below.
 const DEFAULT_SEED_DATA = {
-  // fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
-  // rankFormula: { squadWeight: 1, strengthWeight: 1 },
-  // modelWeights: { ... },
-  // rankingsPresets: { ... },
-  // playerAttributes: { ... },
+  fdrFormula: {
+    "attackWeight": 0.8,
+    "defenceWeight": 0.8,
+    "overallWeight": 1.7,
+    "homeAdvantage": 0.5
+  },
+  rankFormula: {
+    "squadWeight": 1,
+    "strengthWeight": 1
+  },
+  modelWeights: {
+    "piRatingWeight": 0.35,
+    "oddsWeight": 0.35,
+    "weibullShape": 1.15,
+    "copulaTheta": -0.15,
+    "piLearningRate": 0.06,
+    "piCrossInfluence": 0.6
+  },
+  rankingsPresets: {
+    "Main": {
+      "fdrFormula": {
+        "attackWeight": 0.8,
+        "defenceWeight": 0.8,
+        "overallWeight": 1.7,
+        "homeAdvantage": 0.5
+      },
+      "rankFormula": {
+        "squadWeight": 1,
+        "strengthWeight": 1.4
+      },
+      "modelWeights": {
+        "piRatingWeight": 0.35,
+        "oddsWeight": 0.35,
+        "weibullShape": 1.15,
+        "copulaTheta": -1.2,
+        "piLearningRate": 0.06,
+        "piCrossInfluence": 0.6
+      },
+      "teamOverrides": {
+        "1": { "attack": 4.6, "defence": 4.8, "overall": 4.7 },
+        "2": { "attack": 3.4, "defence": 3, "overall": 3.2 },
+        "3": { "attack": 3.1, "defence": 2.8, "overall": 3 },
+        "4": { "attack": 3.7, "defence": 3, "overall": 3.4 },
+        "5": { "attack": 3.2, "defence": 4, "overall": 3.6 },
+        "6": { "attack": 4, "defence": 3.2, "overall": 3.6 },
+        "7": { "attack": 1.6, "defence": 1.4, "overall": 1.4 },
+        "8": { "attack": 2.9, "defence": 2.5, "overall": 2.7 },
+        "9": { "attack": 3.1, "defence": 2.7, "overall": 2.9 },
+        "10": { "attack": 3.1, "defence": 2.6, "overall": 2.9 },
+        "11": { "attack": 1, "defence": 1, "overall": null },
+        "12": { "attack": 1.5, "defence": 1.4, "overall": 1.4 },
+        "13": { "attack": 3.5, "defence": 3.3, "overall": 3.4 },
+        "14": { "attack": 4.1, "defence": 2.9, "overall": 3.5 },
+        "15": { "attack": 4.9, "defence": 4.2, "overall": 4.5 },
+        "16": { "attack": 4.3, "defence": 3.5, "overall": 3.9 },
+        "17": { "attack": 2.9, "defence": 2.5, "overall": 2.7 },
+        "18": { "attack": 2.8, "defence": 2.3, "overall": 2.6 },
+        "19": { "attack": 3.7, "defence": 3.5, "overall": 3.6 },
+        "20": { "attack": 3.3, "defence": 3.5, "overall": 3.4 }
+      }
+    }
+  },
+  playerAttributes: {
+    "106": { "passing": 20 },
+    "397": { "pace": 12 },
+    "411": {
+      "acceleration": 19, "jumpingReach": 16, "shooting": 19, "strength": 17,
+      "workRate": 10, "heading": 14, "penaltyTaking": 15
+    },
+    "557": {
+      "acceleration": 14, "shooting": 14, "offTheBall": 15, "agility": 15,
+      "pace": 13, "dribbling": 11, "iq": 18, "composure": 18, "corners": 18,
+      "strength": 10, "anticipation": 16, "vision": 16, "longShots": 11,
+      "technique": 14, "firstTouch": 15, "workRate": 15, "positioning": 11,
+      "passing": 15
+    }
+  },
   // attributeDefs: [ ... ],
-  // priorLeagueStats: { ... },
-  // playerClubOverrides: { ... },
+  priorLeagueStats: {
+    "557": {
+      "league": "Belgian Pro League",
+      "minutes": 3072,
+      "apps": 36,
+      "goals": 17,
+      "assists": 23
+    }
+  },
+  playerClubOverrides: {
+    "31": 1
+  },
   // playerPositions: { ... },
-  // teamOverrides: { ... },
-  // fixtureRunTiers: { ... },
-  // preferKits: ...,
-  // shortlist: [ ... ],
-  // shortlistGroups: [ ... ],
+  teamOverrides: {
+    "1": { "attack": 4.9, "defence": 4.9, "overall": 4.9 },
+    "2": { "attack": 3.4, "defence": 3, "overall": 3.2 },
+    "3": { "attack": 3.1, "defence": 2.8, "overall": 3 },
+    "4": { "attack": 3.7, "defence": 3, "overall": 3.4 },
+    "5": { "attack": 3.2, "defence": 4, "overall": 3.6 },
+    "6": { "attack": 4, "defence": 3.2, "overall": 3.6 },
+    "7": { "attack": 1.6, "defence": 1.4, "overall": 1.4 },
+    "8": { "attack": 2.9, "defence": 2.5, "overall": 2.7 },
+    "9": { "attack": 3.1, "defence": 2.7, "overall": 2.9 },
+    "10": { "attack": 3.1, "defence": 2.6, "overall": 2.9 },
+    "11": { "attack": 1, "defence": 1, "overall": null },
+    "12": { "attack": 1.5, "defence": 1.4, "overall": 1.4 },
+    "13": { "attack": 3.5, "defence": 3.3, "overall": 3.4 },
+    "14": { "attack": 4.1, "defence": 2.9, "overall": 3.5 },
+    "15": { "attack": 4.7, "defence": 4.2, "overall": 4.5 },
+    "16": { "attack": 4.3, "defence": 3.5, "overall": 3.9 },
+    "17": { "attack": 2.9, "defence": 2.5, "overall": 2.7 },
+    "18": { "attack": 2.8, "defence": 2.3, "overall": 2.6 },
+    "19": { "attack": 3.7, "defence": 3.5, "overall": 3.6 },
+    "20": { "attack": 3.3, "defence": 3.5, "overall": 3.4 }
+  },
+  fixtureRunTiers: {
+    "strict": { "label": "Strictly good", "minLen": 3, "maxAvg": 2.2 },
+    "medium": { "label": "Fairly easy", "minLen": 4, "maxAvg": 2.3 },
+    "lenient": { "label": "Lenient", "minLen": 4, "maxAvg": 2.5 }
+  },
+  preferKits: 0,
+  shortlist: [
+    { "playerId": 426, "note": "", "groups": ["g1786619903409", "g1786632510060"], "tier": "S" },
+    { "playerId": 12, "note": "", "groups": ["g1786619903409", "g1786632510060"], "tier": "S" },
+    { "playerId": 399, "note": "", "groups": ["g1786619903409"], "tier": "S" },
+    { "playerId": 336, "note": "", "groups": ["g1786619903409"], "tier": "B" },
+    { "playerId": 338, "note": "", "groups": ["g1786632404198"], "tier": "B" },
+    { "playerId": 532, "note": "", "groups": ["g1786632404198"], "tier": "B" },
+    { "playerId": 13, "note": "", "groups": ["g1786632404198"], "tier": "A" },
+    { "playerId": 200, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 60, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 96, "note": "", "groups": ["g1786632404198"], "tier": "B" },
+    { "playerId": 210, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 525, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 498, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 69, "note": "", "groups": ["g1786632404198"], "tier": "C" },
+    { "playerId": 106, "note": "", "groups": ["g1786632510060"], "tier": "A" },
+    { "playerId": 55, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 480, "note": "", "groups": ["g1786632510060"], "tier": "A" },
+    { "playerId": 542, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 346, "note": "", "groups": ["g1786632510060"], "tier": "A" },
+    { "playerId": 68, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 223, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 427, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 237, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 367, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 79, "note": "", "groups": ["g1786632510060"], "tier": "C" },
+    { "playerId": 94, "note": "", "groups": ["g1786632510060"], "tier": "B" },
+    { "playerId": 453, "note": "", "groups": ["g1786632510060"], "tier": "C" },
+    { "playerId": 165, "note": "", "groups": ["g1786632510060"], "tier": "S" },
+    { "playerId": 25, "note": "", "groups": ["g1786632510060"], "tier": "C" },
+    { "playerId": 411, "note": "", "groups": ["g1786632510060"], "tier": null },
+    { "playerId": 31, "note": "", "groups": [], "tier": null }
+  ],
+  shortlistGroups: [
+    { "id": "g1786619903409", "name": "Pp90" },
+    { "id": "g1786632404198", "name": "defcon prospects" },
+    { "id": "g1786632510060", "name": "Marksmen" }
+  ],
 };
 // Runs once per browser, before any of the normal per-feature storage
 // reads below. Only ever WRITES a key if that browser has genuinely never
