@@ -1028,7 +1028,7 @@
   <button data-tab="h2h"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8.5" cy="12" r="5"/><circle cx="15.5" cy="12" r="5"/></svg></span><span class="tb-label">Head-to-head</span></button>
   <button data-tab="tacboard"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5v17M12 9.5a3 3 0 010 5"/></svg></span><span class="tb-label">Tactical board</span></button>
   <button data-tab="simulation"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></span><span class="tb-label">Simulation</span></button>
-  <button data-tab="table"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8.5 9.5v10"/></svg></span><span class="tb-label">Teams</span></button>
+  <button data-tab="table"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8.5 9.5v10"/></svg></span><span class="tb-label">Clubs</span></button>
 </nav>
 
 <header>
@@ -1043,7 +1043,7 @@
 
   <section id="tab-projections" style="display:none">
     <h1 class="page-title">Projections</h1>
-    <p class="page-sub">Predicts what actually drives points over the selected gameweek range — projected points (blending season form with underlying xG/xA, team involvement share, and fixture strength), chance of starting, team expected goals/clean-sheet%, and realistic DefCon/bonus likelihoods.</p>
+    <p class="page-sub">Predicts what actually drives points over the selected gameweek range — projected points (blending season form with underlying xG/xA, club involvement share, and fixture strength), chance of starting, club expected goals/clean-sheet%, and realistic DefCon/bonus likelihoods.</p>
     <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">From <select id="projFromGw"></select></label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">To <select id="projToGw"></select></label>
@@ -1089,7 +1089,7 @@
 
     <div class="toolbar" style="margin-bottom:8px">
       <div class="seg" id="posSeg"></div>
-      <select id="teamSelect"><option value="ALL">All teams</option></select>
+      <select id="teamSelect"><option value="ALL">All clubs</option></select>
       <div class="price-range">
         £ <input type="number" step="0.5" id="minPrice" placeholder="min" /> – <input type="number" step="0.5" id="maxPrice" placeholder="max" />
       </div>
@@ -1117,7 +1117,7 @@
         <input type="number" id="tierRankMin" min="1" max="20" value="1" style="width:62px" />
         <span style="color:var(--ink-dim)">–</span>
         <input type="number" id="tierRankMax" min="1" max="20" value="20" style="width:62px" />
-        <button class="dir-btn" id="rankLegendToggle" type="button" title="Show which teams are which rank">?</button>
+        <button class="dir-btn" id="rankLegendToggle" type="button" title="Show which clubs are which rank">?</button>
       </div>
       <div class="spacer" style="gap:6px;flex-direction:column;align-items:flex-start;border-left:1px solid var(--panel-2);padding-left:10px">
         <span style="font-size:10.5px;color:var(--ink-faint)">Add up points across a custom GW range (e.g. GW1–GW5) instead of the whole season</span>
@@ -1182,12 +1182,17 @@
 
   <section id="tab-captaincy" style="display:none">
     <h1 class="page-title">Captaincy</h1>
-    <p class="page-sub">Beyond raw projected points — weighs each candidate's route to points (a goals-only striker has a lower floor than a midfielder who can also score via clean sheets, DefCon, assists, and bonus) and gives a playstyle-matchup boost from the player attributes (Player stats tab) when the fixture suits their game, e.g. a quick, mobile forward against a team that sits off and invites counter-attacks.</p>
+    <p class="page-sub">Beyond raw projected points — weighs each candidate's route to points (a goals-only striker has a lower floor than a midfielder who can also score via clean sheets, DefCon, assists, and bonus) and gives a playstyle-matchup boost from the player attributes (Player stats tab) when the fixture suits their game, e.g. a quick, mobile forward against a club that sits off and invites counter-attacks.</p>
     <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
       <select id="capGwSelect"></select>
       <div id="capSourceToggle" class="view-toggle" role="group">
         <button type="button" data-cap-source="myteam">My team's squad only</button>
         <button type="button" data-cap-source="all">Any player (top candidates league-wide)</button>
+      </div>
+      <div id="capModeToggle" class="view-toggle" role="group">
+        <button type="button" data-cap-mode="default" title="Default — sort/score by the standard captaincy score (projection + route diversity + playstyle)">Balanced</button>
+        <button type="button" data-cap-mode="safe" title="Re-sort and re-score by reliability — floor, route volume/coefficient, and proven consistency. Nobody is hidden, just reordered.">🛡️ Safe</button>
+        <button type="button" data-cap-mode="explosive" title="Re-sort and re-score by ceiling — xGI, team goals, fixture ease, and playstyle/matchup edge, with a bump for low-owned hidden gems. Nobody is hidden, just reordered.">💥 Explosive</button>
       </div>
       <div id="capBaseViewPickerWrap" style="min-width:220px" title="Pin any player as a base/reference row — including goalkeepers and low-minutes players the two views above filter out — so you can compare them against whoever else you're browsing."></div>
     </div>
@@ -1271,7 +1276,7 @@
 
     <div class="card" style="margin-top:20px">
       <div class="detail-block-title" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Team stats — form, goals, and shots/xG/possession/CBIT and more</span>
+        <span>Club stats — form, goals, and shots/xG/possession/CBIT and more</span>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim);white-space:nowrap;font-weight:400">
           <input type="checkbox" id="teamsHeatmapToggle" /> 🔥 Heatmap
         </label>
@@ -1303,7 +1308,7 @@
         <span id="fdrRunThresholdVal" class="mono" style="min-width:26px"></span>
       </label>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab). Green bars below a team's row mark every run of 2+ favourable fixtures in a row (not just the single best one) — drag the good-run sensitivity slider above to loosen/tighten what counts as "favourable".</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available — see "Edit prediction model" on the Rankings tab). Green bars below a club's row mark every run of 2+ favourable fixtures in a row (not just the single best one) — drag the good-run sensitivity slider above to loosen/tighten what counts as "favourable".</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -1324,7 +1329,7 @@
           </select>
           before vs after
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)" title="Minimum drop in average FDR (1-5 scale) for a team to count as 'swinging easier' — lower this to surface more, smaller swings.">Min swing
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)" title="Minimum drop in average FDR (1-5 scale) for a club to count as 'swinging easier' — lower this to surface more, smaller swings.">Min swing
           <input type="number" id="fdrSwingThresholdInput" step="0.1" min="0.1" max="2" style="width:60px" />
         </label>
       </div>
@@ -1364,12 +1369,12 @@
 
   <section id="tab-insights" style="display:none">
     <h1 class="page-title">Insights</h1>
-    <p class="page-sub">Differentials, price-change signals, squad news, mini-league rival comparison, and projection accuracy tracking — all built from real FPL API fields already loaded elsewhere in the app. Heuristic panels are clearly labelled as such.</p>
+    <p class="page-sub">Differentials, price-change signals, squad news, mini-league rival comparison, and projection accuracy tracking — all built from real FPL API fields already loaded elsewhere in the app. Heuristic panels are clearly labelled as such. Each panel is a short, curated list (not a full player-pool dump) surfacing what's actually decision-relevant for that panel's question — use the filters within a panel to dig further.</p>
 
     <div class="card" style="border-left:3px solid var(--emerald)">
       <div class="detail-block-title" id="differentialsTitle">💎 Differentials — low ownership, high upside</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Players under your ownership ceiling, ranked by projected points (Touchline's own next-GW model, same as Player Stats' "Next GW proj."). <strong>Simple, explainable ranking</strong> — filtered by ownership, then sorted by projected points, no hidden scoring formula.
+        Top 12 players under your ownership ceiling, ranked by projected points (Touchline's own next-GW model, same as Player Stats' "Next GW proj."). <strong>Simple, explainable ranking</strong> — filtered by ownership, then sorted by projected points, no hidden scoring formula. Tighten the ownership ceiling or raise min minutes to narrow further.
       </p>
       <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Ownership ceiling
@@ -1392,7 +1397,7 @@
     <div class="card" style="margin-top:20px;border-left:3px solid var(--gold-bright)">
       <div class="detail-block-title" id="priceWatchTitle">💰 Price watch — likely risers &amp; fallers</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        <strong>Heuristic estimate, not a guarantee</strong> — there's no official/reliable external price-prediction feed, so this uses a well-known proxy real FPL price-tracking sites rely on: net transfer momentum THIS gameweek relative to the player's own ownership base (see <code>priceChangeSignal()</code> in code for the exact formula/thresholds). It can miss FPL's actual overnight price-change algorithm, which factors in more than is exposed via the public API.
+        Top 12 strongest signals. <strong>Heuristic estimate, not a guarantee</strong> — there's no official/reliable external price-prediction feed, so this uses a well-known proxy real FPL price-tracking sites rely on: net transfer momentum THIS gameweek relative to the player's own ownership base (see <code>priceChangeSignal()</code> in code for the exact formula/thresholds). It can miss FPL's actual overnight price-change algorithm, which factors in more than is exposed via the public API.
       </p>
       <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
         <div class="seg" id="priceWatchSeg"></div>
@@ -1525,7 +1530,7 @@
       <div id="simulationBody"></div>
     </div>
     <div id="simMatchSection" style="display:none">
-      <p class="field-desc" style="margin:0 0 12px">Runs off the matchups you've set up on the <strong>Tactical board</strong> tab for a team pairing — every player-vs-player matchup pinned there is simulated together and rolled up into projected match output (shots, chances created, tackles won, aerials), instead of one isolated 1v1 duel at a time. Set up matchups on the Tactical board first if you don't see any below.</p>
+      <p class="field-desc" style="margin:0 0 12px">Runs off the matchups you've set up on the <strong>Tactical board</strong> tab for a club pairing — every player-vs-player matchup pinned there is simulated together and rolled up into projected match output (shots, chances created, tackles won, aerials), instead of one isolated 1v1 duel at a time. Set up matchups on the Tactical board first if you don't see any below.</p>
       <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
         <select id="simMatchTeamA"></select>
         <span style="color:var(--ink-dim)">vs</span>
@@ -1551,7 +1556,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Prediction model</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Powers the predicted scorelines and win/draw/loss % on the FDR tab. Win/draw/loss % blends three sources: <strong>Pi-ratings</strong> (an iterative team-strength rating built from every real result this season — not a static preseason number), the <strong>scoreline model itself</strong>, and <strong>real betting odds</strong> when available (needs the Worker's <code>/odds</code> route + a free API key — see the deploy notes). The exact predicted score comes from a <strong>Weibull-count distribution with a copula</strong> linking the two teams' goal counts, replacing the previous Poisson/Dixon-Coles model.
+        Powers the predicted scorelines and win/draw/loss % on the FDR tab. Win/draw/loss % blends three sources: <strong>Pi-ratings</strong> (an iterative club-strength rating built from every real result this season — not a static preseason number), the <strong>scoreline model itself</strong>, and <strong>real betting odds</strong> when available (needs the Worker's <code>/odds</code> route + a free API key — see the deploy notes). The exact predicted score comes from a <strong>Weibull-count distribution with a copula</strong> linking the two teams' goal counts, replacing the previous Poisson/Dixon-Coles model.
       </p>
       <div class="formula-panel" id="modelFormulaPanel"></div>
       <p class="foot-note" id="oddsStatusNote" style="margin-top:8px"></p>
@@ -1560,7 +1565,7 @@
 
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Saved setting slots</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Save the current FDR weights, club ranking weights, and prediction-model weights together as a named slot, so you can switch between setups without re-entering every value. Team overrides and fixture-run tiers aren't included — those persist on their own regardless of which slot is active.</p>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Save the current FDR weights, club ranking weights, and prediction-model weights together as a named slot, so you can switch between setups without re-entering every value. Club overrides and fixture-run tiers aren't included — those persist on their own regardless of which slot is active.</p>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <input type="text" id="rankingsPresetName" placeholder="Slot name (e.g. \"Aggressive\")" style="flex:1" />
         <button class="btn" id="rankingsPresetSave">Save current as slot</button>
@@ -1918,7 +1923,7 @@ const SORT_OPTIONS = [
   ["cleanSheets", "Clean sheets"], ["goalsConcededPer90", "Goals conceded /90"], ["xgc90", "xGC /90"],
   ["saves90", "Saves /90"], ["defensiveContribution", "Defensive contribution"], ["bps", "BPS"],
   ["minutes", "Minutes"], ["minsPerStart", "Mins /start"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
-  ["assistsPer90", "Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
+  ["assistsPer90", "Assists /90"], ["gaPer90", "Goals+Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
   ["influencePer90", "Influence /90"], ["creativityPer90", "Creativity /90"], ["threatPer90", "Threat /90"],
   ["teamGoalShare", "% of team goals+assists"], ["teamXgiShare", "% of team xGI"],
 ];
@@ -1933,10 +1938,10 @@ const STAT_THEMES = {
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
       ["Value", ["selectedByPercent", "netTransfers", "ppm", "ppm90", "ppmPerApp"]],
-      ["Output", ["goalsScored", "assists", "goalsPer90", "assistsPer90", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
+      ["Output", ["goalsScored", "assists", "goalsPer90", "assistsPer90", "gaPer90", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["ppmPerApp", "Pts/£m/App"],
-      ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
+      ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["gaPer90", "GA/90"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
   },
   attacking: {
     label: "Attacking",
@@ -2027,6 +2032,12 @@ const COLUMN_FORMAT = {
   pointsPer90: p => [p.pointsPer90.toFixed(1), ""],
   goalsPer90: p => [p.goalsPer90.toFixed(2), ""],
   assistsPer90: p => [p.assistsPer90.toFixed(2), ""],
+  // GA/90 (goals+assists per 90) — sits next to G/90 and A/90. Stored as a
+  // real field on the player object (mapPlayer/scopedPlayer/prior-league
+  // override paths all set it alongside goalsPer90/assistsPer90) rather
+  // than derived only here, so it's also usable as a real SORT_OPTIONS key
+  // (sorting reads p[f.sort] directly, not through COLUMN_FORMAT).
+  gaPer90: p => [p.gaPer90.toFixed(2), ""],
   bonusPer90: p => [p.bonusPer90.toFixed(2), ""],
   bpsPer90: p => [p.bpsPer90.toFixed(1), ""],
   influencePer90: p => [p.influencePer90.toFixed(1), ""],
@@ -2996,6 +3007,7 @@ function applyPriorLeagueOverrides(playerId) {
       p.bps = Math.round(est.simulatedBpsTotal);
       p.goalsPer90 = est.xg90; // goals-as-proxy-for-xG, same approximation the rest of this estimate already makes
       p.assistsPer90 = est.xa90;
+      p.gaPer90 = est.xg90 + est.xa90; // keep in sync with the goalsPer90/assistsPer90 override above (Round 13's GA/90 field, same staleness risk Round 9 fixed for the other Output columns)
       // Playing-time and value columns (Mins, Mins/start, Pts/£m, Pts/£m/90,
       // Pts/£m/App) were still reading real FPL minutes/starts/totalPoints
       // — genuinely 0 for a player with no Prem appearances — so the
@@ -3029,7 +3041,7 @@ function applyPriorLeagueOverrides(playerId) {
       if (p.priorLeagueDefcon90 != null) { p.defensiveContributionPer90 = 0; p.priorLeagueDefcon90 = undefined; }
       p.priorLeagueCsPct = undefined; p.bpsPer90 = 0; p.priorLeagueSimulatedBps = undefined;
       p.goalsScored = 0; p.assists = 0; p.cleanSheets = 0; p.bonus = 0; p.bps = 0;
-      p.goalsPer90 = 0; p.assistsPer90 = 0;
+      p.goalsPer90 = 0; p.assistsPer90 = 0; p.gaPer90 = 0;
       p.minutes = 0; p.starts = 0; p.minsPerStart = 0;
       p.totalPoints = 0; p.ppm = 0; p.ppm90 = 0; p.ppmPerApp = 0;
     }
@@ -3507,7 +3519,7 @@ function scopedPlayer(p) {
     saves90: per90(s ? s.saves : 0), defensiveContributionPer90: per90(s ? s.defensive_contribution : 0),
     goalsConcededPer90: per90(s ? s.goals_conceded : 0),
     pointsPer90: per90Floored(s ? s.total_points : 0), goalsPer90: per90Floored(s ? s.goals_scored : 0),
-    assistsPer90: per90Floored(s ? s.assists : 0), bonusPer90: per90Floored(s ? s.bonus : 0),
+    assistsPer90: per90Floored(s ? s.assists : 0), gaPer90: per90Floored(s ? (s.goals_scored + s.assists) : 0), bonusPer90: per90Floored(s ? s.bonus : 0),
     bpsPer90: per90Floored(s ? s.bps : 0), influencePer90: per90(s ? s.influence : 0),
     creativityPer90: per90(s ? s.creativity : 0), threatPer90: per90(s ? s.threat : 0),
     ictPer90: per90(s ? (s.influence + s.creativity + s.threat) / 10 : 0),
@@ -3802,6 +3814,11 @@ function transformPlayer(e) {
     pointsPer90: e.minutes > 0 ? (e.total_points / Math.max(e.minutes, 180)) * 90 : 0,
     goalsPer90: e.minutes > 0 ? (e.goals_scored / Math.max(e.minutes, 180)) * 90 : 0,
     assistsPer90: e.minutes > 0 ? (e.assists / Math.max(e.minutes, 180)) * 90 : 0,
+    // GA/90: stored as its own real field (not just derived in
+    // COLUMN_FORMAT) so it can be a genuine SORT_OPTIONS entry — the sort
+    // mechanism reads p[f.sort] directly rather than through
+    // COLUMN_FORMAT, unlike the heatmap/cell-render path.
+    gaPer90: e.minutes > 0 ? ((e.goals_scored + e.assists) / Math.max(e.minutes, 180)) * 90 : 0,
     bonusPer90: e.minutes > 0 ? (e.bonus / Math.max(e.minutes, 180)) * 90 : 0,
     bpsPer90: e.minutes > 0 ? (e.bps / Math.max(e.minutes, 180)) * 90 : 0,
     influencePer90: e.minutes > 0 ? (num(e.influence) / Math.max(e.minutes, 180)) * 90 : 0,
@@ -7207,9 +7224,49 @@ function captaincyRouteBreakdown(p, row) {
   const bonusProb = Math.max(0, Math.min(1, (row.bonusExp || 0) / 1.2));
   // Rescaled so 50 (evenly matched) reads as 0 probability and 100
   // (total domination) reads as 1 — matches the 0-1 shape of every other
-  // route probability here even though the underlying score is 0-100.
+  // route probability here even though the underlying score is 0-100. Only
+  // ever positive (clamped at 0 below 50) because this specific number
+  // feeds the "is this a genuine EXTRA route to points" signal (routes
+  // count, route bonus, the matchupRoute boolean above) — a below-average
+  // matchup isn't a route to points, it's just not a bad one either, so it
+  // correctly contributes nothing extra there.
   const matchupProb = Math.max(0, Math.min(1, ((row.matchupScore || 50) - 50) / 40));
-  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, matchupRoute, csProb, defConProb, goalProb, assistProb, bonusProb, matchupProb };
+  // Matchup QUALITY — a full 0-1 read across the WHOLE matchupScore range
+  // (0=worst possible matchup, 50=even, 100=best possible), unlike
+  // matchupProb above which floors at 0 for anything below-average. Every
+  // player has a direct opponent and therefore a matchup, good or bad —
+  // this is what lets the Matchup pill show and colour-code for genuinely
+  // every player (red for a bad matchup, amber for even, green for good),
+  // rather than only showing when the matchup happens to be favourable.
+  const matchupQuality = Math.max(0, Math.min(1, (row.matchupScore || 50) / 100));
+  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, matchupRoute, csProb, defConProb, goalProb, assistProb, bonusProb, matchupProb, matchupQuality };
+}
+// ---- Route coefficient (item 1) ----
+// The ×N pill next to Routes is a plain COUNT of live routes — it treats a
+// player with two 90%-likely routes the same as one with two 15%-likely
+// routes. This is a genuinely different number: each route's own points
+// weight (how much a hit on that route is worth) times its probability
+// (how likely it is to actually hit), summed across every route — so
+// "many routes AND a real chance of hitting them" scores higher than
+// "many routes that are all long shots", per your steer. Point-weights
+// are the real FPL scoring values (CS/DefCon/goal/assist/bonus differ in
+// value per position/event) rather than a flat 1-per-route, so a
+// high-value route (e.g. a MID's 5pt goal) contributes more than a
+// low-value one (2pt DefCon) at the same probability. Matchup isn't a
+// scoring event of its own (it's a context multiplier on the others), so
+// it's deliberately excluded from the coefficient — including it would
+// double-count the same edge the playstyle boost already prices in.
+function captaincyRouteCoefficient(p, breakdown) {
+  const csPtsVal = CS_PTS[p.position] || 0;
+  const goalPtsVal = GOAL_PTS[p.position] || 4; // GOAL_PTS mirrors real FPL per-position goal values (FWD 4, MID 5, DEF/GK 6)
+  const terms = [
+    breakdown.csProb * csPtsVal,
+    breakdown.defConProb * 2, // DefCon is a flat 2pts in real FPL scoring regardless of position
+    breakdown.goalProb * goalPtsVal,
+    breakdown.assistProb * 3, // assists are a flat 3pts across every position in real FPL scoring
+    breakdown.bonusProb * 2, // modal/expected bonus band is ~2pts when it lands
+  ];
+  return terms.reduce((s, v) => s + v, 0);
 }
 // Counter-attack signature: a side whose attack strength meaningfully
 // exceeds its own defence strength tends to commit numbers forward and
@@ -7236,9 +7293,21 @@ function counterAttackSignature(teamId, isHome) {
 // (this is a tiebreaker/nudge, not a reordering of the whole model) and
 // reads attributes via getFmAttributeValue so a real FM26 import (if the
 // user does one later) feeds this automatically without any code changes.
+// Two components, both additive to the same 0-1ish boost:
+//   1. TEAM-level openness (original, unchanged) — this side's whole
+//      attack-vs-defence gap makes space in behind generally, rewarding a
+//      quick/mobile player's pace/acceleration/off-the-ball.
+//   2. DIRECT-OPPONENT comparison (new) — this player's own attacking
+//      strength specifically against whoever they're actually likely to
+//      face (likelyOpponentFor — pinned Tactical board matchup if set,
+//      else the same role-inference the rest of the app uses), via the
+//      same role-weighted matchupAttributeEdge already used for Simulation
+//      duels and the Tactical board's "model suggests" line. This is the
+//      literal "they're quick and get assists but the player marking them
+//      is slow and weak defensively" case — a genuine 1v1 read, not just
+//      "the team overall looks open".
 function playstyleMatchupBoost(p, opponentTeamId, isHome) {
   const openness = counterAttackSignature(opponentTeamId, isHome);
-  if (openness <= 0) return 0;
   const pace = getFmAttributeValue(p.id, "pace");
   const accel = getFmAttributeValue(p.id, "acceleration");
   const offBall = getFmAttributeValue(p.id, "offTheBall");
@@ -7248,7 +7317,22 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
   // matchup edge) — the (avg-10)/9 term goes negative below attribute 10
   // and is floored at 0 so slow players never get a boost.
   const mobilityScore = Math.max(0, ((pace + accel + offBall) / 3 - 10) / 9);
-  return openness * mobilityScore; // 0 to ~1
+  const teamOpennessBoost = openness * mobilityScore; // 0 to ~1
+  // Direct-opponent edge: matchupAttributeEdge's pctA/pctB already role-
+  // weights each side correctly (an attacker's score leans on their
+  // attacking attributes, a defender's on defensive ones), so "this
+  // player's strengths clearly beat whoever's marking them" falls out of
+  // the SAME real comparison Simulation/Tactical board already trust, not
+  // a separately-tuned formula. Only rewards the favourable direction (a
+  // player being outclassed by their marker should not show as a NEGATIVE
+  // playstyle boost here — that's what the "Biggest mismatches"/matchup
+  // route/pill already communicate; this stays a pure upside nudge like
+  // teamOpennessBoost above) and only kicks in once the edge is genuinely
+  // one-sided (>58%), not just a coin-flip-adjacent edge.
+  const opp = likelyOpponentFor(p, opponentTeamId);
+  const edge = opp ? matchupAttributeEdge(p, opp) : null;
+  const directEdgeBoost = edge && edge.favoured === "A" && edge.pctA > 58 ? (edge.pctA - 58) / 42 : 0; // 0 to 1
+  return Math.max(0, Math.min(1, teamOpennessBoost + directEdgeBoost * 0.6)); // direct edge weighted below team openness — see boostBonus's own 15%-of-proj cap downstream for the final scale
 }
 // Full captaincy score for one player over a single gameweek — blends raw
 // projection, route diversity, floor weight, and the playstyle boost into
@@ -7262,9 +7346,38 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
 // called to drop stale entries.
 const _capScoreCache = new Map();
 function invalidateCaptaincyScoreCache() { _capScoreCache.clear(); invalidateCaptaincyBestCache(); }
+// ---- Fitness/knock status for captaincy (real FPL data, no estimate) ----
+// Uses the exact same status/chance_of_playing fields the Squad news panel
+// (STATUS_LABEL/STATUS_SEVERITY, ~line 1669/11921) already surfaces —
+// this is just a captaincy-specific READING of that same real data, not a
+// new data source. Two tiers:
+//   "out"  = confirmed unavailable — injured/suspended/unavailable status,
+//            OR a chance-of-playing explicitly at 0%. A captaincy pick who
+//            (per the real FPL API) won't play at all is worthless as a
+//            captaincy candidate regardless of how good their fixture looks,
+//            so these are removed from the list entirely rather than merely
+//            down-ranked.
+//   "knock" = doubtful status, OR a chance-of-playing in the 1-99% band
+//            (25/50/75% are FPL's real granularity) without being fully
+//            confirmed out. Still a real candidate — flagged with a 25%
+//            score deficit rather than removed, since "doubtful" genuinely
+//            can mean anything from "won't risk it" to "just precautionary,
+//            expected to start".
+function captaincyFitnessStatus(p) {
+  const chance = typeof p.chanceOfPlaying === "number" ? p.chanceOfPlaying : null;
+  if (p.status === "i" || p.status === "s" || p.status === "u" || chance === 0) return "out";
+  if (p.status === "d" || (chance !== null && chance < 100)) return "knock";
+  return "fit";
+}
 function captaincyScoreForGw(p, gwId) {
   const cacheKey = p.id + "|" + gwId;
   if (_capScoreCache.has(cacheKey)) return _capScoreCache.get(cacheKey);
+  // Confirmed-out players never get a captaincy score at all — treated
+  // exactly like "no fixture this gameweek" (the existing null-result path
+  // below), which is what already makes renderCaptaincyTab's
+  // `.filter(Boolean)` drop them from the pool with no separate wiring needed.
+  const fitness = captaincyFitnessStatus(p);
+  if (fitness === "out") { _capScoreCache.set(cacheKey, null); return null; }
   const row = computeProjectionRow(p, gwId, gwId, false, 70, 0.8);
   if (!row.fixtures.length) { _capScoreCache.set(cacheKey, null); return null; }
   const breakdown = captaincyRouteBreakdown(p, row);
@@ -7275,10 +7388,95 @@ function captaincyScoreForGw(p, gwId) {
   // count alone outweigh a much higher raw projection.
   const routeBonus = row.proj * Math.min(0.3, Math.max(0, breakdown.routes - 1) * 0.06);
   const boostBonus = row.proj * boost * 0.15; // playstyle boost capped at +15% of base proj
-  const captaincyScore = row.proj + routeBonus + boostBonus;
-  const result = { p, row, breakdown, boost, routeBonus, boostBonus, captaincyScore, fixture: fx };
+  let captaincyScore = row.proj + routeBonus + boostBonus;
+  // Knock deficit: applied to the FINAL score (after route/playstyle
+  // bonuses), not the base projection, so a flagged player's whole
+  // captaincy case — including "many good routes" — is discounted by the
+  // same 25%, not just their raw points.
+  if (fitness === "knock") captaincyScore *= 0.75;
+  const routeCoefficient = captaincyRouteCoefficient(p, breakdown);
+  const explosiveScore = captaincyExplosiveScore(p, row, breakdown, boost, fitness);
+  const safeScore = captaincySafeScore(p, row, breakdown, routeCoefficient, fitness);
+  const result = { p, row, breakdown, boost, routeBonus, boostBonus, captaincyScore, fixture: fx, fitness, routeCoefficient, explosiveScore, safeScore };
   _capScoreCache.set(cacheKey, result);
   return result;
+}
+// ---- Safe / Explosive re-scoring modes (item 3) ----
+// Both re-SCORE and re-SORT the same pool the default "Captaincy score"
+// column does — they never filter/hide anyone, per your steer (everyone
+// stays visible either way, just reordered). Neither replaces
+// captaincyScore itself (still shown/used as the default sort) — these are
+// alternate lenses over the exact same underlying data.
+//
+// EXPLOSIVE = highest ceiling — leans on raw attacking upside (xGI, team
+// predicted goals, an easy fixture) and the playstyle/matchup edge
+// (already the strongest "this specific game could explode" signal this
+// app has), with a genuine "hidden gem" property: a low-ownership player
+// whose underlying signals are strong gets a real bump relative to a
+// high-ownership player with the same raw ceiling, so a template captain
+// doesn't automatically dominate just for being popular — surfaces
+// something a template-only view would bury.
+function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
+  if (fitness === "out") return 0;
+  const xgi = p.xgi90 || 0;
+  const teamXg = row.teamXg || 0;
+  // Fixture ease: avgFdr is 1 (easiest) to 5 (hardest) — inverted and
+  // normalized to 0-1 so an easy fixture (low FDR) scores near 1.
+  const fixtureEase = row.avgFdr !== null ? Math.max(0, Math.min(1, (5 - row.avgFdr) / 4)) : 0.5;
+  // For defenders specifically: real CS%/goals-conceded ability matters for
+  // an explosive defensive haul (CS + potential attacking returns) — folded
+  // in only for DEF/GK, per your steer ("for a defender also CS/goals-
+  // conceded ability"), using the same real csPct the rest of the app
+  // already computes plus the inverse of the club's real goals-conceded
+  // rate (a defensively leaky side caps a defender's explosive upside even
+  // if the fixture looks easy on paper).
+  const isDefensive = p.position === "DEF" || p.position === "GK";
+  const csUpside = isDefensive ? Math.max(0, Math.min(1, (row.csPct || 0) / 60)) : 0;
+  const gcRate = p.goalsConcededPer90 != null ? p.goalsConcededPer90 : 1.3; // league-ish average fallback
+  const defenceUpside = isDefensive ? Math.max(0, Math.min(1, (2 - gcRate) / 2)) : 0;
+  // Ceiling points from the route breakdown (row.proj minus the floor) —
+  // the model's own read of "how much of this projection is contingent
+  // upside" rather than a guaranteed baseline.
+  const ceilingNorm = Math.max(0, Math.min(1, breakdown.ceilingPts / 8)); // ~8pts ceiling is a genuinely explosive contingent upside
+  const xgiNorm = Math.max(0, Math.min(1, xgi / 1.0));
+  const teamXgNorm = Math.max(0, Math.min(1, teamXg / 2.2));
+  // Weighted sum — playstyle/matchup boost weighted heaviest per your
+  // steer ("lean heavily on playstyle and matchup"), then ceiling/ xGI,
+  // then team goals/fixture ease, defensive-specific terms only apply to
+  // DEF/GK (0 otherwise so they don't dilute an attacker's score).
+  let score = boost * 0.30 + ceilingNorm * 0.22 + xgiNorm * 0.16 + teamXgNorm * 0.12 + fixtureEase * 0.10 + csUpside * 0.05 + defenceUpside * 0.05;
+  // Hidden-gem surfacing: a genuinely low-owned player (under ~8%) with a
+  // real underlying score gets a modest multiplicative bump — enough to
+  // surface a smaller-club/overlooked-matchup player who wouldn't win a
+  // straight raw-ceiling contest against a heavily-owned superstar with a
+  // similar (but not dramatically higher) underlying case, without letting
+  // low ownership alone drag a genuinely weak case up the list (the bump
+  // is multiplicative on an already-real score, not an additive freebie).
+  const ownership = p.selectedByPercent || 0;
+  const hiddenGemMult = ownership < 8 ? 1 + Math.max(0, (8 - ownership) / 8) * 0.25 : 1; // up to +25% for ~0% owned
+  score *= hiddenGemMult;
+  if (fitness === "knock") score *= 0.75; // same 25% knock deficit as the default captaincy score
+  return score;
+}
+// SAFE = reliable floor even on a "slow" individual game — leans on route
+// COUNT/coefficient (multiple independent ways to return covers a lower
+// per-route conversion chance on any one of them) and the model's own
+// floorPts (points that don't need the match to open up), plus a
+// consistency read from proven season-long ability (pointsPerGame) so a
+// genuinely better/more consistent player is favoured even when their
+// individual route conversion numbers aren't the flashiest — exactly your
+// "volume of routes covers it" framing. Deliberately does NOT weight
+// ownership/hidden-gem — Safe is about reliability, not finding an edge.
+function captaincySafeScore(p, row, breakdown, routeCoefficient, fitness) {
+  if (fitness === "out") return 0;
+  const floorNorm = Math.max(0, Math.min(1, breakdown.floorPts / 6)); // ~6pts floor is a genuinely nailed-on safe return
+  const routeCoefNorm = Math.max(0, Math.min(1, routeCoefficient / 6));
+  const routesNorm = Math.max(0, Math.min(1, breakdown.routes / 5));
+  const consistency = Math.max(0, Math.min(1, (p.pointsPerGame || 0) / 7)); // proven season-long PPG, large sample
+  const startReliability = Math.max(0, Math.min(1, ((p.minutes || 0) >= 300 ? 1 : (p.minutes || 0) / 300)));
+  let score = floorNorm * 0.35 + routeCoefNorm * 0.25 + routesNorm * 0.15 + consistency * 0.15 + startReliability * 0.10;
+  if (fitness === "knock") score *= 0.75; // a genuine knock undermines "reliable" regardless of mode
+  return score;
 }
 // Captaincy-strength badge system (replaces the old DefCon-only badge).
 // Cumulative 3-tier system — a player only reaches a tier if they also
@@ -7412,6 +7610,19 @@ function renderCaptaincyTab() {
       btn.onclick = () => { state.capSource = btn.dataset.capSource; renderCaptaincyTab(); };
     });
   }
+  // Safe/Explosive mode toggle (item 3): re-sorts AND re-scores the same
+  // pool the default view uses — it never filters/hides anyone, per your
+  // clarification. "default" (Balanced) is the original captaincyScore
+  // behaviour, unchanged.
+  const modeToggle = document.getElementById("capModeToggle");
+  const capMode = state.capScoreMode || "default";
+  if (modeToggle) {
+    modeToggle.querySelectorAll("[data-cap-mode]").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.capMode === capMode);
+      btn.onclick = () => { state.capScoreMode = btn.dataset.capMode; renderCaptaincyTab(); };
+    });
+  }
+  const modeScoreAccessor = capMode === "safe" ? (r => r.safeScore) : capMode === "explosive" ? (r => r.explosiveScore) : (r => r.captaincyScore);
   const gwId = state.capGwId || (gwSelect ? Number(gwSelect.value) : null);
   if (!gwId) { body.innerHTML = `<div class="empty-state">No upcoming gameweek data yet.</div>`; return; }
   // Default to "Any player" so this tab always shows real candidates the
@@ -7429,7 +7640,12 @@ function renderCaptaincyTab() {
   } else {
     pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
   }
-  const scored = pool.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => b.captaincyScore - a.captaincyScore);
+  // The top-N cut for "Any player" is made using whichever mode is active —
+  // Explosive's whole point is surfacing a hidden gem that wouldn't crack a
+  // Balanced-score top 25, so cutting by captaincyScore before applying the
+  // mode would defeat that (a hidden gem could be excluded before its
+  // Explosive score ever gets a chance to rank it in).
+  const scored = pool.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => modeScoreAccessor(b) - modeScoreAccessor(a));
   let top = source === "myteam" ? scored : scored.slice(0, 25);
   // Keep pinned players visible even if they fell outside the top-N cut
   // (e.g. "Any player" mode capped at 25) so a pinned reference player
@@ -7450,6 +7666,13 @@ function renderCaptaincyTab() {
   // on a continuous red->green scale by that route's own probability —
   // applies identically across positions, so a defender's goal route
   // shows and is coloured by its own (typically lower, but real) chance.
+  // Matchup is handled separately from the other five: every player has a
+  // direct opponent whether that matchup is good, even, or bad, so the
+  // Matchup pill always renders (not filtered by the >0.03 threshold the
+  // other routes use) and is coloured across the FULL red->green range by
+  // matchupQuality (0=worst possible matchup .. 1=best), not matchupProb
+  // (which floors at 0 for anything below-average — correct for "is this a
+  // genuine extra route to points" but wrong for "show me every matchup").
   const routeLabel = (b) => {
     const defs = [
       { key: "cs", label: "CS", prob: b.csProb },
@@ -7457,9 +7680,10 @@ function renderCaptaincyTab() {
       { key: "goal", label: "Goal", prob: b.goalProb },
       { key: "assist", label: "Assist", prob: b.assistProb },
       { key: "bonus", label: "Bonus", prob: b.bonusProb },
-      { key: "matchup", label: "Matchup", prob: b.matchupProb },
     ];
-    return defs.filter(d => d.prob > 0.03);
+    const shown = defs.filter(d => d.prob > 0.03);
+    shown.push({ key: "matchup", label: "Matchup", prob: b.matchupQuality, alwaysShown: true });
+    return shown;
   };
   // Sortable headers: state.capSortKey/capSortDir persist across re-renders
   // (survive gw/source switches) so sorting isn't reset by picking a player
@@ -7472,6 +7696,7 @@ function renderCaptaincyTab() {
     score: r => r.captaincyScore,
     proj: r => r.row.proj,
     floor: r => r.breakdown.floorPts,
+    routeCoef: r => r.routeCoefficient,
   };
   if (sortKey && sortAccessors[sortKey]) {
     const acc = sortAccessors[sortKey];
@@ -7488,12 +7713,13 @@ function renderCaptaincyTab() {
         ${i === 0 && !sortKey ? '<span title="Top captaincy pick" style="font-size:14px">🎖️</span>' : ""}
         ${playerAvatarHtml(r.p, 26)}
         <div>
-          <div style="font-weight:700">${nameWithPosition(r.p)}${captaincyBadgeHtml(r.p, gwId)}</div>
+          <div style="font-weight:700">${nameWithPosition(r.p)}${captaincyBadgeHtml(r.p, gwId)}${r.fitness === "knock" ? `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin-left:4px;font-size:9px;background:rgba(255,84,104,0.16);color:var(--red,#ff5468);font-weight:700" title="${STATUS_LABEL[r.p.status] ? STATUS_LABEL[r.p.status][0] : "Doubtful"}${r.p.chanceOfPlaying != null ? ` — ${r.p.chanceOfPlaying}% chance of playing` : ""} — captaincy score discounted 25% for this knock">🤕 −25%</span>` : ""}</div>
           <div style="font-size:10.5px;color:var(--ink-faint)">${team ? team.short_name : ""} · ${r.p.position} vs ${opp ? opp.short_name : "?"} ${r.fixture.isHome ? "(H)" : "(A)"}</div>
+          ${matchupPlaystyleTagsHtml(team, opp)}
           ${captaincyMiniBadgesHtml(r.p, gwId, r)}
         </div>
       </td>
-      <td class="mono" style="font-weight:700;color:var(--gold-bright)">${r.captaincyScore.toFixed(1)}</td>
+      <td class="mono" style="font-weight:700;color:var(--gold-bright)">${r.captaincyScore.toFixed(1)}${capMode === "safe" ? `<div class="mono" style="font-size:9px;color:var(--emerald);font-weight:700" title="Safe score — reliability-weighted: floor, route volume/coefficient, proven consistency">🛡️ ${r.safeScore.toFixed(2)}</div>` : capMode === "explosive" ? `<div class="mono" style="font-size:9px;color:#ff9f43;font-weight:700" title="Explosive score — ceiling-weighted: xGI, team goals, fixture ease, playstyle/matchup, with a hidden-gem ownership bump">💥 ${r.explosiveScore.toFixed(2)}</div>` : ""}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.row.proj.toFixed(1)}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.breakdown.floorPts.toFixed(1)}</td>
       <td>
@@ -7501,16 +7727,19 @@ function renderCaptaincyTab() {
           <span class="mono" style="font-size:10px;color:var(--ink-faint);font-weight:700" title="${r.breakdown.routes} independent route${r.breakdown.routes === 1 ? "" : "s"} to points">${r.breakdown.routes}×</span>
           ${tags.map(t => {
             const color = routeLikelihoodColor(t.prob);
-            return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${color};color:#0a0e0c;font-weight:700" title="${t.label} route ~${Math.round(t.prob * 100)}% likelihood">${t.label}</span>`;
-          }).join("") || `<span style="color:var(--ink-faint);font-size:11px">—</span>`}
+            const title = t.alwaysShown ? `Matchup quality ~${Math.round(t.prob * 100)}/100 vs likely direct opponent` : `${t.label} route ~${Math.round(t.prob * 100)}% likelihood`;
+            return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${color};color:#0a0e0c;font-weight:700" title="${title}">${t.label}</span>`;
+          }).join("")}
         </div>
       </td>
+      <td class="mono" style="color:var(--ink-dim)" title="Route score — each route's points value × its probability, summed">${r.routeCoefficient.toFixed(1)}</td>
       <td class="mono" style="color:${r.boost > 0.05 ? "var(--gold-bright)" : "var(--ink-faint)"}">${r.boost > 0.05 ? "⚡ " + (r.boost * 100).toFixed(0) + "%" : "–"}</td>
     </tr>`;
   }).join("");
   body.innerHTML = `
     ${noTeamLoaded ? `<p class="field-desc" style="margin:0 0 10px;color:var(--gold-bright)">Showing "Any player" — load your team on the My team tab to switch to your own squad only.</p>` : ""}
-    <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon), nudged up slightly for players with several independent routes to points (shown as the ×N count next to Routes). Click a numeric column header to sort. Pin (📍) a player to keep them visible while browsing others.</p>
+    ${capMode !== "default" ? `<p class="field-desc" style="margin:0 0 10px;color:${capMode === "safe" ? "var(--emerald)" : "#ff9f43"}">${capMode === "safe" ? "🛡️ Safe mode" : "💥 Explosive mode"} — the list below is re-sorted (and each row shows a small 🛡️/💥 sub-score) by ${capMode === "safe" ? "reliability: floor, route volume/coefficient, and proven consistency, so a player with several realistic routes still ranks well even if no single route is a huge conversion chance" : "ceiling: xGI, team goals, an easy fixture, and playstyle/matchup edge, with a bump for low-owned hidden gems so a smaller-club or overlooked-matchup player can surface above a template pick with a similar underlying case"}. Nobody is filtered out — everyone from the pool below stays visible, just reordered.</p>` : ""}
+    <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon), nudged up slightly for players with several independent routes to points (shown as the ×N count next to Routes). Route score = each route's real FPL points value × its probability of hitting, summed — higher means more (and stronger, more likely) routes to points combined, so a player with several realistic routes outranks one with the same route COUNT that are all long shots. Every player shows a Matchup pill (red = tough matchup, green = favourable) even when it isn't a genuine extra route. The small "🎯 Possession vs 🔺 High press"-style line under a player's fixture shows each club's known tactical identity where it's on file. Click a numeric column header to sort. Pin (📍) a player to keep them visible while browsing others. A doubtful/knock (🤕) player's score is discounted 25%; a confirmed-out player (injured/suspended/unavailable, or a real 0% chance of playing) is removed from this list entirely for this gameweek — straight from the FPL API's own status/chance-of-playing fields.</p>
     <div class="table-wrap"><table>
       <thead><tr>
         <th class="label-col">Player</th>
@@ -7518,9 +7747,10 @@ function renderCaptaincyTab() {
         <th class="sortable-th${sortKey === "proj" ? " sorted" : ""}" data-cap-sort="proj" style="cursor:pointer" title="Sort by base projection">Base proj${sortKey === "proj" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th class="sortable-th${sortKey === "floor" ? " sorted" : ""}" data-cap-sort="floor" style="cursor:pointer" title="Sort by floor">Floor${sortKey === "floor" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th>Routes</th>
+        <th class="sortable-th${sortKey === "routeCoef" ? " sorted" : ""}" data-cap-sort="routeCoef" style="cursor:pointer" title="Sort by route score — each route's points value × its probability, summed">Route score${sortKey === "routeCoef" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th>Playstyle</th>
       </tr></thead>
-      <tbody>${rowsHtml || `<tr><td colspan="6" class="foot-note" style="padding:10px">No eligible players for this gameweek/source.</td></tr>`}</tbody>
+      <tbody>${rowsHtml || `<tr><td colspan="7" class="foot-note" style="padding:10px">No eligible players for this gameweek/source.</td></tr>`}</tbody>
     </table></div>
   `;
   body.querySelectorAll("[data-cap-pin]").forEach(btn => {
@@ -10897,7 +11127,7 @@ function openFdrPredictModal(teamId, oppId, isHome, gwId) {
   document.getElementById("fdrPredictBody").innerHTML = `
     <div class="detail-block-title">GW${gwId} — ${home.name} vs ${away.name}</div>
     <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the single most probable result from the model; win/draw/loss % blended with Pi-ratings and real odds where available. Season Avg GF/GA (Teams/FDR tabs) use the expected-goals average instead, which can differ from this single-match pick.</p>
+    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) — the single most probable result from the model; win/draw/loss % blended with Pi-ratings and real odds where available. Season Avg GF/GA (Clubs/FDR tabs) use the expected-goals average instead, which can differ from this single-match pick.</p>
     <div style="text-align:center;margin:8px 0 12px;font-size:12px">
       <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
       <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
@@ -10972,7 +11202,7 @@ const FDR_MODE_POSITION_HINT = {
   pgoalsAgainst: "🥅 Higher pGoals-against = tougher defensively — useful as a warning signal when picking defensive assets to avoid.",
   win: "🏆 Best for BPS/bonus-heavy picks — players on the winning side collect bonus points more reliably regardless of position.",
   cleansheet: "🔒 Best for rotating defensive returns — goalkeepers, defenders, and DefCon-eligible midfielders.",
-  twoplus: "🎯 Best for premium attacking captaincy picks — teams likely to score 2+ favour big-ticket forwards/mids.",
+  twoplus: "🎯 Best for premium attacking captaincy picks — clubs likely to score 2+ favour big-ticket forwards/mids.",
 };
 function renderFdrPairingsGrid(list, gwIds, curId, mode) {
   const el = document.getElementById("fdrPairingsGrid");
@@ -11107,7 +11337,7 @@ function renderFdrSwingPanel() {
       <div class="scout-card fdr-swing-card">
         <div class="fdr-swing-card-head">
           <span>GW${beforeGw} → ${gw ? gw.name : "GW " + s.gwId}${s.gwId === curId ? " •" : ""}:</span>
-          <span style="color:${direction === "easy" ? "var(--emerald)" : "var(--red,#ff5468)"}">${list.length} teams' fixtures get ${direction === "easy" ? "easier" : "harder"}</span>
+          <span style="color:${direction === "easy" ? "var(--emerald)" : "var(--red,#ff5468)"}">${list.length} clubs' fixtures get ${direction === "easy" ? "easier" : "harder"}</span>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:5px">${teamsHtml}${list.length > 10 ? `<span style="font-size:11px;color:var(--ink-faint);align-self:center">+${list.length - 10} more</span>` : ""}</div>
       </div>
@@ -11743,7 +11973,7 @@ function renderChipAdvisorPanel() {
     bbHtml = `<p class="foot-note" style="margin:0 0 10px">No active squad loaded (Planner squad or My team) — showing pool-wide signal instead: gameweeks with the most clubs playing twice.</p>` +
       (top.length ? top.map(s => {
         const gw = state.events.find(e => e.id === s.gwId);
-        return `<div class="scout-card"><div class="fdr-swing-card-head"><span>${gw ? gw.name : "GW " + s.gwId}</span><span style="color:var(--emerald)">${s.doubleTeams.length} team${s.doubleTeams.length === 1 ? "" : "s"} with a double</span></div><div style="font-size:12px;color:var(--ink-dim)">${s.doubleTeams.map(t => t.short_name).join(", ")}${s.blankTeams.length ? ` · ${s.blankTeams.length} team${s.blankTeams.length === 1 ? "" : "s"} blank (${s.blankTeams.map(t => t.short_name).join(", ")})` : ""}</div></div>`;
+        return `<div class="scout-card"><div class="fdr-swing-card-head"><span>${gw ? gw.name : "GW " + s.gwId}</span><span style="color:var(--emerald)">${s.doubleTeams.length} club${s.doubleTeams.length === 1 ? "" : "s"} with a double</span></div><div style="font-size:12px;color:var(--ink-dim)">${s.doubleTeams.map(t => t.short_name).join(", ")}${s.blankTeams.length ? ` · ${s.blankTeams.length} club${s.blankTeams.length === 1 ? "" : "s"} blank (${s.blankTeams.map(t => t.short_name).join(", ")})` : ""}</div></div>`;
       }).join("") : `<div class="empty-state">No double gameweeks currently confirmed in the fixture list for this horizon.</div>`);
   }
 
@@ -11789,7 +12019,11 @@ function computeDifferentials(ownershipCeiling, posFilter, minMinutes) {
     .filter(p => p.minutes >= minMinutes)
     .filter(p => p.status === "a" || p.chanceOfPlaying === null || p.chanceOfPlaying >= 75) // exclude clearly unavailable players from a "should I bring them in" list
     .sort((a, b) => b.epNext - a.epNext)
-    .slice(0, 40);
+    // Streamlined from 40 to 12 (item 7) — a genuine shortlist of realistic
+    // differential picks reads better than a near-full player-pool dump;
+    // the existing ownership ceiling / position / min-minutes filters
+    // already narrow the pool further if you want to dig past the top 12.
+    .slice(0, 12);
 }
 function renderDifferentialsPanel() {
   const grid = document.getElementById("differentialsGrid");
@@ -11860,7 +12094,9 @@ function computePriceWatch(filter) {
     .filter(x => x.signal.direction !== "STABLE")
     .filter(x => filter === "ALL" || x.signal.direction === filter)
     .sort((a, b) => Math.abs(b.signal.momentumPct) - Math.abs(a.signal.momentumPct))
-    .slice(0, 40);
+    // Streamlined from 40 to 12 (item 7), same reasoning as Differentials
+    // above — the RISE/FALL/ALL toggle already narrows further on demand.
+    .slice(0, 12);
 }
 function renderPriceWatchPanel() {
   const grid = document.getElementById("priceWatchGrid");
@@ -11977,7 +12213,16 @@ function renderRivalsPanel() {
   const mineOnly = state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(p => p && !rivalIds.has(p.id)).sort((a, b) => b.epNext - a.epNext);
   const shared = squad.filter(s => myIds.has(s.player.id));
   const gw = state.events.find(e => e.id === gwId);
-  const cardsFor = (list, getP) => list.map(item => {
+  // Streamlined per your steer — this used to dump EVERY non-shared player
+  // from both squads as identical cards (up to ~15 a side, easily 25-30
+  // cards of "info overload" for two big squads with little overlap).
+  // Capped to the top few genuine THREATS/OPPORTUNITIES by next-GW
+  // projection (the metric this was already sorted by) rather than a full
+  // roster diff — the actual decision-relevant question is "who's their
+  // best differential I should worry about" / "who's my best edge over
+  // them", not a complete inventory of every squad difference.
+  const RIVALS_CAP = 6;
+  const cardsFor = (list, getP) => list.slice(0, RIVALS_CAP).map(item => {
     const p = getP(item);
     const team = state.teamsById[p.teamId];
     return `
@@ -11991,9 +12236,9 @@ function renderRivalsPanel() {
   }).join("");
   body.innerHTML = `
     <p class="foot-note" style="margin-top:0">${entry.name || "Rival"} (${entry.player_first_name || ""} ${entry.player_last_name || ""}) — squad as of ${gw ? gw.name : "GW " + gwId}. ${shared.length} of ${squad.length} players in common with your squad.</p>
-    <div class="detail-block-title" style="margin-top:10px">Their differentials against you (${rivalOnly.length})</div>
+    <div class="detail-block-title" style="margin-top:10px">Their biggest threats to you (top ${Math.min(RIVALS_CAP, rivalOnly.length)} of ${rivalOnly.length} differentials, by next-GW proj.)</div>
     <div class="insight-card-grid">${cardsFor(rivalOnly, s => s.player) || `<div class="empty-state">None — you own every player in their squad.</div>`}</div>
-    <div class="detail-block-title" style="margin-top:16px">Your differentials against them (${mineOnly.length})</div>
+    <div class="detail-block-title" style="margin-top:16px">Your biggest edges over them (top ${Math.min(RIVALS_CAP, mineOnly.length)} of ${mineOnly.length} differentials, by next-GW proj.)</div>
     <div class="insight-card-grid">${cardsFor(mineOnly, p => p) || `<div class="empty-state">None — they own every player in your squad.</div>`}</div>
   `;
 }
@@ -12982,7 +13227,7 @@ function renderH2hMatchups(body, teamA, teamB) {
       : "";
     return `
       <div class="matchup-card">
-        <div class="matchup-side">${pa ? playerAvatarHtml(pa, 24) : ""}<span>${pa ? pa.webName : "?"}</span></div>
+        <div class="matchup-side">${pa ? playerAvatarHtml(pa, 24) : ""}<span>${pa ? nameWithPosition(pa) : "?"}</span></div>
         <div class="matchup-mid">
           <input type="text" class="note-input" data-matchup-label="${m.id}" value="${m.label || ""}" placeholder="e.g. LW vs RB" />
           <div class="matchup-winner-row">
@@ -12993,7 +13238,7 @@ function renderH2hMatchups(body, teamA, teamB) {
           </div>
           ${edgeLabel}
         </div>
-        <div class="matchup-side">${pb ? playerAvatarHtml(pb, 24) : ""}<span>${pb ? pb.webName : "?"}</span></div>
+        <div class="matchup-side">${pb ? playerAvatarHtml(pb, 24) : ""}<span>${pb ? nameWithPosition(pb) : "?"}</span></div>
       </div>
     `;
   }).join("");
@@ -13275,6 +13520,41 @@ const PLAYSTYLE_BY_SHORT = {
   SUN: "Possession-oriented, patient build-up from the back.",
   TOT: "Possession-heavy positional play with high-risk build-up from the back, prioritising control over directness.",
 };
+// Short, single-word-ish tactical tags derived from PLAYSTYLE_BY_SHORT's
+// free text above via keyword matching, rather than a second hand-authored
+// table — so the two stay in sync automatically if the prose above is ever
+// edited. Used where a compact tag (Captaincy's per-matchup playstyle
+// column) reads better than a full sentence; PLAYSTYLE_BY_SHORT's prose
+// itself is unaffected and still available for anywhere a fuller
+// description reads better. A club can carry more than one tag (e.g.
+// "Possession" AND "High press" both legitimately apply to several sides).
+const PLAYSTYLE_TAG_RULES = [
+  { tag: "Possession", icon: "🎯", re: /possession/i },
+  { tag: "High press", icon: "🔺", re: /high[\s-]?press|press(?:ing)?\b|gegenpress/i },
+  { tag: "Low block", icon: "🧱", re: /low block|compact|disciplined defensively/i },
+  { tag: "Direct/counter", icon: "⚡", re: /direct|counter|transitions|vertical/i },
+  { tag: "Set-piece focus", icon: "🎯", re: /set[\s-]?piece/i },
+];
+function clubPlaystyleTags(teamShort) {
+  const text = PLAYSTYLE_BY_SHORT[teamShort];
+  if (!text) return [];
+  return PLAYSTYLE_TAG_RULES.filter(r => r.re.test(text)).map(r => ({ tag: r.tag, icon: r.icon }));
+}
+// Compact "club style vs opponent style" line for a per-matchup view (item
+// 5, Captaincy) — capped at the first 2 tags per side so a club with many
+// applicable tags doesn't wrap onto multiple lines in a dense table row.
+// Silently renders nothing when a club has no PLAYSTYLE_BY_SHORT entry
+// (newly-promoted/newly-appointed managers, deliberately left blank rather
+// than guessed — same "leave blank, don't guess" convention as that table's
+// own comment) rather than showing a confusing empty tag row.
+function matchupPlaystyleTagsHtml(team, opp) {
+  if (!team || !opp) return "";
+  const teamTags = clubPlaystyleTags(team.short_name).slice(0, 2);
+  const oppTags = clubPlaystyleTags(opp.short_name).slice(0, 2);
+  if (!teamTags.length && !oppTags.length) return "";
+  const fmt = (tags) => tags.map(t => `${t.icon} ${t.tag}`).join(", ") || "—";
+  return `<div style="font-size:9.5px;color:var(--ink-faint);margin-top:1px" title="Tactical identity — ${team.name}: ${teamTags.map(t => t.tag).join(", ") || "no data"}. ${opp.name}: ${oppTags.map(t => t.tag).join(", ") || "no data"}.">${fmt(teamTags)} <span style="opacity:0.5">vs</span> ${fmt(oppTags)}</div>`;
+}
 
 // Last N results (most recent last), e.g. "LWDWW". Null if nothing played yet.
 // Real, data-driven playstyle profile — built from this season's actual
@@ -13284,11 +13564,24 @@ const PLAYSTYLE_BY_SHORT = {
 // this sticks to derivable full-time metrics: tempo (goals/game either
 // way), defensive solidity (clean sheets + goals conceded rate), and
 // scoring reliability (BTTS/failed-to-score rates).
-function computeClubPlaystyleProfile(teamId) {
-  const fx = (state.allFixtures || []).filter(f => f.finished && f.team_h_score != null && (f.team_h === teamId || f.team_a === teamId));
+// venue: "ALL" (default), "HOME", or "AWAY" — restricts the real-results
+// sample to that club's home or away fixtures only, same convention as
+// teamVenueRecord/computeLiveTable's own venue filter. This is what feeds
+// the FootyStats-style "Form Overall/Home/Away" split (item 6) — every
+// number here is derived from real finished fixtures for the selected
+// venue slice, not a separate estimate.
+function computeClubPlaystyleProfile(teamId, venue) {
+  const fx = (state.allFixtures || []).filter(f => {
+    if (!f.finished || f.team_h_score == null) return false;
+    const isHome = f.team_h === teamId;
+    if (!isHome && f.team_a !== teamId) return false;
+    if (venue === "HOME" && !isHome) return false;
+    if (venue === "AWAY" && isHome) return false;
+    return true;
+  });
   const n = fx.length;
   if (!n) return null;
-  let gf = 0, ga = 0, cleanSheets = 0, btts = 0, failedToScore = 0, highTempo = 0, twoPlusGoals = 0;
+  let gf = 0, ga = 0, cleanSheets = 0, btts = 0, failedToScore = 0, highTempo = 0, twoPlusGoals = 0, won = 0, drawn = 0, lost = 0;
   fx.forEach(f => {
     const isHome = f.team_h === teamId;
     const teamGf = isHome ? f.team_h_score : f.team_a_score;
@@ -13299,9 +13592,12 @@ function computeClubPlaystyleProfile(teamId) {
     if (teamGf > 0 && teamGa > 0) btts++;
     if (teamGf + teamGa >= 3) highTempo++;
     if (teamGf >= 2) twoPlusGoals++;
+    if (teamGf > teamGa) won++; else if (teamGf === teamGa) drawn++; else lost++;
   });
   return {
-    n,
+    n, won, drawn, lost,
+    winPct: (won / n) * 100,
+    ppg: (won * 3 + drawn) / n, // points per game — the real FootyStats "Form PPG" figure
     gfPerGame: gf / n, gaPerGame: ga / n,
     cleanSheetPct: (cleanSheets / n) * 100,
     bttsPct: (btts / n) * 100,
@@ -13356,6 +13652,52 @@ function playstyleHeadToHeadHtml(teamA, teamB) {
       <div style="text-align:center;flex:1;min-width:200px">${playstyleTagsHtml(pa)}</div>
       <div style="text-align:center;flex:1;min-width:200px">${playstyleTagsHtml(pb)}</div>
     </div>
+  `;
+}
+// ---------- FootyStats-style Form comparison table (item 6) ----------
+// Overall/Home/Away splits — PPG, Win%, GF/GA avg, BTTS%, CS%, FTS% — for
+// both clubs side by side, same shape as the FootyStats "Current Form"
+// panel you referenced. Every number comes from computeClubPlaystyleProfile
+// (real finished fixtures this season, venue-filtered), no estimate layer.
+// xG/xGA is deliberately NOT included here — the FPL fixtures endpoint only
+// carries actual goals, not per-match xG, and there's no free/reliable
+// per-club-per-match xG source available to this app (Understat's own
+// scrape is already broken per Round 10's note; that was player-level
+// anyway, not club/match level) — shown as a flagged limitation in the
+// footnote rather than fabricated from a fixture-specific model number
+// that wouldn't mean the same thing as a season-average figure.
+function footyStatsFormTableHtml(teamA, teamB) {
+  const rowsFor = (venueLabel, venue) => {
+    const pa = computeClubPlaystyleProfile(teamA.id, venue);
+    const pb = computeClubPlaystyleProfile(teamB.id, venue);
+    const cell = (v, fmt) => v == null ? "—" : fmt(v);
+    const line = (label, va, vb, fmt) => `
+      <tr>
+        <td class="mono" style="text-align:right;font-weight:700">${cell(va, fmt)}</td>
+        <td style="text-align:center;color:var(--ink-dim);font-size:11px;white-space:nowrap">${label}</td>
+        <td class="mono">${cell(vb, fmt)}</td>
+      </tr>`;
+    return `
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:var(--gold-bright);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;text-align:center">${venueLabel}${pa || pb ? ` <span style="color:var(--ink-faint);font-weight:400">(n=${pa?.n ?? 0} / ${pb?.n ?? 0})</span>` : ""}</div>
+        <table style="width:100%;max-width:460px;margin:0 auto">
+          <tbody>
+            ${line("PPG", pa?.ppg, pb?.ppg, v => v.toFixed(2))}
+            ${line("Win %", pa?.winPct, pb?.winPct, v => v.toFixed(0) + "%")}
+            ${line("Scored / game", pa?.gfPerGame, pb?.gfPerGame, v => v.toFixed(2))}
+            ${line("Conceded / game", pa?.gaPerGame, pb?.gaPerGame, v => v.toFixed(2))}
+            ${line("BTTS %", pa?.bttsPct, pb?.bttsPct, v => v.toFixed(0) + "%")}
+            ${line("Clean sheet %", pa?.cleanSheetPct, pb?.cleanSheetPct, v => v.toFixed(0) + "%")}
+            ${line("Failed to score %", pa?.failedToScorePct, pb?.failedToScorePct, v => v.toFixed(0) + "%")}
+          </tbody>
+        </table>
+      </div>`;
+  };
+  return `
+    ${rowsFor("Overall", "ALL")}
+    ${rowsFor("Home", "HOME")}
+    ${rowsFor("Away", "AWAY")}
+    <p class="foot-note" style="margin-top:2px">All figures from this season's real finished fixtures (Overall/Home/Away splits) — n is the sample size (games played) each side of the venue-split rows. xG/xGA isn't shown: the FPL fixtures feed only carries actual goals, and no free, reliable per-club-per-match xG source is available to this app (same underlying gap Round 10 already found for Understat/FBref club-level scraping).</p>
   `;
 }
 function teamRecentForm(teamId, n) {
@@ -13538,6 +13880,7 @@ function renderH2H() {
   }
   const aHome = customFdr(teamA.id, teamB.id, true).toFixed(1);
   const bHome = customFdr(teamB.id, teamA.id, true).toFixed(1);
+  const mgrA = MANAGER_BY_SHORT[teamA.short_name], mgrB = MANAGER_BY_SHORT[teamB.short_name];
   const rivalry = rivalryName(teamA, teamB);
   const tableA = computeLiveTable(state.allFixtures, {})?.find(r => r.teamId === teamA.id) || null;
   const tableB = computeLiveTable(state.allFixtures, {})?.find(r => r.teamId === teamB.id) || null;
@@ -13584,6 +13927,21 @@ function renderH2H() {
       <div class="detail-block-title">This season's meetings (real data)</div>
       <div class="fixture-list">${meetingsHtml}</div>
       <p class="foot-note" style="margin-top:4px;color:var(--ink-faint)">Multi-season head-to-head history isn't exposed by the FPL API, so only this season's meetings are shown above as real data.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Current form — Overall / Home / Away (real data)</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">PPG, Win%, and goals/BTTS/clean-sheet/failed-to-score splits, each venue slice computed from this season's real finished fixtures only — the FootyStats-style team-strength read.</p>
+      ${footyStatsFormTableHtml(teamA, teamB)}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Managers</div>
+      <div style="display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;text-align:center">
+        <div><div style="font-weight:700">${mgrA ? mgrA.name : "Not on file"}</div><div class="foot-note">${teamA.short_name}${mgrA ? ` · since ${mgrA.since}` : ""}</div></div>
+        <div><div style="font-weight:700">${mgrB ? mgrB.name : "Not on file"}</div><div class="foot-note">${teamB.short_name}${mgrB ? ` · since ${mgrB.since}` : ""}</div></div>
+      </div>
+      <p class="foot-note" style="margin-top:8px;color:var(--ink-faint)">Manager-vs-manager historical head-to-head records (e.g. career meetings between these two managers across other clubs) aren't available from any free source this app can reach — current appointment only, same "leave blank rather than guess" convention as the rest of this page.</p>
     </div>
 
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
@@ -14128,6 +14486,20 @@ function simDuelBarHtml(duel, playerA, playerB) {
   const pctB = 100 - pctA;
   const leader = pctA === pctB ? null : (pctA > pctB ? playerA : playerB);
   const leaderPct = Math.max(pctA, pctB);
+  // Bars grow outward from a shared centre line rather than stacking
+  // left-to-right — same scaling approach "Projected match output" uses
+  // (each side's fill is a fraction of whichever side has the larger
+  // value, so the winning side always fills its own half all the way to
+  // the shared centre line and the trailing side fills proportionally
+  // less), just applied to a probability pair instead of a raw count
+  // pair. Each half of the track is its own flex:1 box (50% of total
+  // width); A's half anchors its fill to the right edge (grows leftward,
+  // toward centre), B's half anchors to the left edge (grows rightward,
+  // toward centre). A dead-even 50/50 duel fills BOTH halves completely,
+  // meeting exactly at the shared middle.
+  const maxPct = Math.max(pctA, pctB, 1);
+  const halfFillA = (pctA / maxPct) * 100;
+  const halfFillB = (pctB / maxPct) * 100;
   return `
     <div class="insight-card" style="gap:8px">
       <div class="insight-card-top">
@@ -14135,8 +14507,12 @@ function simDuelBarHtml(duel, playerA, playerB) {
         <div class="insight-card-sub">${duel.desc}</div>
       </div>
       <div style="display:flex;height:20px;border-radius:6px;overflow:hidden;background:var(--panel-3)">
-        <div style="width:${pctA}%;background:linear-gradient(90deg,var(--emerald),var(--gold-bright));display:flex;align-items:center;justify-content:flex-start;padding-left:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctA >= 12 ? pctA + "%" : ""}</div>
-        <div style="width:${pctB}%;background:var(--panel-2);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:var(--ink-dim)">${pctB >= 12 ? pctB + "%" : ""}</div>
+        <div style="flex:1;display:flex;justify-content:flex-end">
+          <div style="width:${halfFillA}%;background:linear-gradient(270deg,var(--emerald),var(--gold-bright));display:flex;align-items:center;justify-content:flex-start;padding-left:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctA >= 20 ? pctA + "%" : ""}</div>
+        </div>
+        <div style="flex:1">
+          <div style="width:${halfFillB}%;background:var(--panel-2);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:var(--ink-dim)">${pctB >= 20 ? pctB + "%" : ""}</div>
+        </div>
       </div>
       <div class="insight-card-sub" style="text-align:center">
         ${leader ? `<b style="color:var(--ink)">${leaderPct}%</b> chance <b style="color:var(--ink)">${nameWithPosition(leader)}</b> wins this duel` : "Evenly matched — essentially a coin flip"}
@@ -14419,6 +14795,46 @@ function likelyOpponentFor(p, oppTeamId) {
 //    whichever attacker is closest, not necessarily "his" open-play
 //    opposite number. Capped at a small number so this doesn't explode
 //    into an unreadable wall of cards.
+// ---- Set-piece TAKER identification (item 10) ----
+// Blends TWO signals, per your steer ("who takes the most corners is
+// likely a taker, not just ability alone"):
+//   1. Real data: FPL's own cornersOrder field (corners_and_indirect_
+//      freekicks_order from the API — the club's actual declared pecking
+//      order, 1 = primary taker, 2 = backup, null = not on the list at
+//      all). This is genuinely real, not modelled — the single most
+//      reliable signal when it's set.
+//   2. FM-style ability: getFmAttributeValue(id, "corners") — set-piece-
+//      delivery ability (technique/crossing-adjacent), used as a
+//      tiebreaker/fallback when cornersOrder is null (a club that hasn't
+//      had a corner yet this season, or a player who's been on the list
+//      but the API hasn't populated it) — see the flat corners=10
+//      attribute-estimate default a few hundred lines up, which this
+//      still reads through the same getFmAttributeValue choke point so a
+//      future real FM26 import feeds in automatically.
+// Investigated first (per your clarification) whether real per-player
+// corner-TAKEN counts exist anywhere already wired up in this app: no —
+// the ds* fields (dsShots/dsKeyPasses/dsXGChain/dsXGBuildup from
+// Understat, dsTackles/dsInterceptions/dsBlocks/dsClearances/dsAerialsWon
+// from FBref) carry no corner-count stat at all. cornersOrder (real FPL
+// data) is therefore the only genuine "who takes corners" signal actually
+// available — it's a declared pecking order rather than a live per-match
+// count, but it IS real, not modelled, so it's weighted heavily below.
+function identifySetPieceTakers(teamId, limit) {
+  const squad = state.players.filter(p => p.teamId === teamId && p.position !== "GK");
+  const scored = squad.map(p => {
+    const order = p.cornersOrder;
+    // Real declared order dominates when present: order 1 scores 20 (max
+    // attribute scale), order 2 scores 14, order 3+ scores 8 — still
+    // ability-breakable among same-order players, but a declared primary
+    // taker should essentially never be outranked by attribute guesswork
+    // alone. No declared order (null) falls through to pure ability.
+    const orderScore = order === 1 ? 20 : order === 2 ? 14 : order != null ? 8 : null;
+    const abilityScore = getFmAttributeValue(p.id, "corners");
+    const combined = orderScore != null ? orderScore * 0.75 + abilityScore * 0.25 : abilityScore;
+    return { p, combined, hasRealOrder: order != null };
+  }).sort((a, b) => b.combined - a.combined);
+  return scored.slice(0, limit || 3);
+}
 function autoGenerateMatchups(teamAId, teamBId) {
   const squadOf = (teamId) => state.players.filter(pl => pl.teamId === teamId);
   const byRole = (teamId) => {
@@ -14477,14 +14893,42 @@ function autoGenerateMatchups(teamAId, teamBId) {
     }
   }
   // 2. Set-piece aerial matchups — every defender gets an ADDITIONAL
-  // pairing against the opponent's most aerially-threatening outfield
-  // players (by real dsAerialsWon data where available, else totalPoints
-  // as a proxy), layered on top of the open-play primary matchups above.
-  // Capped at 3 per side to keep the matchup list readable.
+  // pairing against the opponent's most aerially-threatening players,
+  // layered on top of the open-play primary matchups above. Restricted to
+  // the top 4 genuinely tall/aerial-capable candidates per side (item 10)
+  // — a real set-piece attacking threat is realistically the CBs who go
+  // up for corners plus a couple of the tallest attackers, not "whichever
+  // outfield player happens to have the most points" (the old totalPoints
+  // fallback could surface a small, technical winger with no aerial
+  // presence purely for being a good player generally). Ranked by the SAME
+  // heading+jumpingReach+strength blend the "Aerial / heading duel"
+  // (SIM_DUELS) already uses, so this is consistent with how aerial
+  // ability is judged everywhere else in Simulation — with real
+  // dsAerialsWon data (FBref) blended in on top where it exists, since
+  // actual aerial win counts are a better signal than attributes alone
+  // when we genuinely have them.
+  const aerialAbilityScore = (p) => (getFmAttributeValue(p.id, "heading") + getFmAttributeValue(p.id, "jumpingReach") + getFmAttributeValue(p.id, "strength")) / 3;
   const aerialThreats = (teamId) => squadOf(teamId)
     .filter(p => p.position !== "GK")
-    .sort((a, b) => (b.dsAerialsWon ?? -1) - (a.dsAerialsWon ?? -1) || (b.totalPoints || 0) - (a.totalPoints || 0))
-    .slice(0, 3);
+    .map(p => {
+      const abilityScore = aerialAbilityScore(p);
+      // Real dsAerialsWon (0-20ish per season typically) rescaled onto the
+      // same rough 1-20 attribute range so it can blend with abilityScore
+      // on a comparable footing, then averaged 50/50 when real data
+      // exists — falls back to attribute-only when it doesn't, rather
+      // than guessing at a made-up "real" number.
+      const realNorm = p.dsAerialsWon != null ? Math.max(1, Math.min(20, p.dsAerialsWon)) : null;
+      const combined = realNorm != null ? (abilityScore + realNorm) / 2 : abilityScore;
+      return { p, combined };
+    })
+    // Tall/CB-type gate: genuinely tall/strong-in-the-air candidates only
+    // (attribute blend >=12/20) OR a real aerial-duel-winning track record
+    // — excludes a technically-gifted-but-short/weak player even if their
+    // totalPoints are high, matching "tall/CB-type players" specifically.
+    .filter(x => x.combined >= 12 || (x.p.dsAerialsWon || 0) >= 5)
+    .sort((a, b) => b.combined - a.combined)
+    .slice(0, 4)
+    .map(x => x.p);
   const aDefenders = squadOf(teamAId).filter(p => p.position === "DEF").sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 3);
   const bDefenders = squadOf(teamBId).filter(p => p.position === "DEF").sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0)).slice(0, 3);
   const bThreats = aerialThreats(teamBId), aThreats = aerialThreats(teamAId);
@@ -14697,13 +15141,80 @@ function simulate90MinuteMatch(simState) {
   if (tackleN) { totalsA.tacklesWonPct = tackleSumA / tackleN; totalsB.tacklesWonPct = tackleSumB / tackleN; }
   return { totalsA, totalsB, snapshots };
 }
+// ---------- Standout players (post-simulation contribution breakdown) ----------
+// simulate90MinuteMatch only ever accumulates into team-level totals — for
+// "who actually drove this result" you need each individual player's own
+// stat-line, which nothing above computes or keeps. Rather than threading
+// per-player bookkeeping through the minute-by-minute engine (which would
+// mean touching the already-verified accumulation loop above), this walks
+// simState.rows directly and derives each player's own goals/assists/xG/xA/
+// defensive-actions contribution for this simulated match, using the SAME
+// scaling shape (duel win probability + team attacking baseline + home/away)
+// simMatchOutputForPlayer already applies to shots/chances/CBIT — so a
+// standout's numbers are consistent with, not a separately-tuned rehash of,
+// the totals shown above.
+// Expected goals/assists aren't part of SIM_MATCH_OUTPUT_STATS (that list is
+// shots/chances/defensive-volume style match-event counts, not literal
+// goals), so this derives them straight from the player's own xg90/xa90 —
+// the same underlying real per-90 rate the rest of the app's projection
+// engine treats as the best available goal/assist expectation — nudged by
+// the same duel/FDR/home multipliers as everything else in this simulator.
+function simPlayerStatLine(p, winProb, teamBaseline, isHome, isDefender) {
+  const duelMult = 1 + (winProb - 0.5) * 0.8;
+  const fdrMult = teamBaseline != null ? teamBaseline : 1;
+  const homeMult = isHome ? SIM_HOME_MULT : SIM_AWAY_MULT;
+  const attackMult = duelMult * fdrMult * homeMult;
+  const xG = Math.max(0, (p.xg90 || 0) * attackMult);
+  const xA = Math.max(0, (p.xa90 || 0) * attackMult);
+  // Defensive actions (CBIT) use the SAME per90/fallback source as the
+  // "Interceptions + blocks + clearances" team stat, but scaled by this
+  // player's OWN duel win probability (a defender doing well in his duel
+  // suppresses the opponent, which is a defensive "win", not an attacking
+  // one) rather than the attacking team baseline — mirrors
+  // SIM_MATCH_OUTPUT_STATS' cbit row's fdrScaled:false note.
+  const cbitStat = SIM_MATCH_OUTPUT_STATS.find(s => s.key === "cbit");
+  const cbitEligible = cbitStat.roleEligible(p);
+  const cbitRate = cbitEligible ? (cbitStat.per90(p) ?? cbitStat.fallback(p)) : 0;
+  const defActions = cbitEligible ? Math.max(0, cbitRate * (1 + (winProb - 0.5) * 0.8)) : 0;
+  return { xG, xA, defActions };
+}
+// Builds a ranked "who stood out" list for the just-simulated fixture —
+// each eligible player's own projected stat-line contribution (not just a
+// share of the team total), so the takeaway is e.g. "Saka: 0.6 xG, 0.4 xA"
+// rather than only "Arsenal: 14 shots". A player can appear in more than
+// one matchup row (primary + set-piece); like the count-type stats above,
+// only his FIRST (primary, non-set-piece) row counts toward his own
+// attacking stat-line so he isn't double-counted just for having an extra
+// aerial-duel pairing.
+function computeSimStandoutPlayers(simState, limit) {
+  if (!simState || !simState.rows.length) return [];
+  const seen = new Set();
+  const out = [];
+  for (const r of simState.rows) {
+    if (!seen.has(r.pa.id)) {
+      seen.add(r.pa.id);
+      const line = simPlayerStatLine(r.pa, r.probA, simState.baselineA, simState.isAHome, r.pa.position === "DEF" || r.pa.position === "GK");
+      out.push({ p: r.pa, side: "A", ...line, impact: line.xG * 4 + line.xA * 3 + line.defActions * 0.3 });
+    }
+    if (!seen.has(r.pb.id)) {
+      seen.add(r.pb.id);
+      const line = simPlayerStatLine(r.pb, r.probB, simState.baselineB, !simState.isAHome, r.pb.position === "DEF" || r.pb.position === "GK");
+      out.push({ p: r.pb, side: "B", ...line, impact: line.xG * 4 + line.xA * 3 + line.defActions * 0.3 });
+    }
+  }
+  // "Impact" is a rough FPL-points-shaped weighting (goal ~4-6pts, assist
+  // ~3pts, defensive contribution threshold worth 2pts) purely to RANK who
+  // stood out most — the actual displayed numbers are always the real
+  // xG/xA/defensive-action figures, this weighting never changes what's shown.
+  return out.sort((a, b) => b.impact - a.impact).slice(0, limit || 5);
+}
 function renderSimMatchBody() {
   const bodyEl = document.getElementById("simMatchBody");
   if (!bodyEl) return;
   const teamAId = Number(document.getElementById("simMatchTeamA")?.value);
   const teamBId = Number(document.getElementById("simMatchTeamB")?.value);
   const simState = buildSimMatchState(teamAId, teamBId);
-  if (!simState) { bodyEl.innerHTML = `<div class="empty-state">Pick both teams above.</div>`; return; }
+  if (!simState) { bodyEl.innerHTML = `<div class="empty-state">Pick both clubs above.</div>`; return; }
   const { teamA, teamB, isAHome, usingAutoMatchups, matchups, key, rows } = simState;
   if (!rows.length) {
     bodyEl.innerHTML = `<div class="empty-state">Not enough player data for ${teamA.short_name} vs ${teamB.short_name} to build matchups yet.</div>`;
@@ -14713,13 +15224,20 @@ function renderSimMatchBody() {
 
   const matchupRowsHtml = rows.map(r => {
     const pctA = Math.round(r.probA * 100), pctB = 100 - pctA;
+    // Same centre-anchored bar treatment as simDuelBarHtml/"Projected match
+    // output" — each half of the track fills toward the shared middle,
+    // scaled against whichever side is more favoured, instead of a single
+    // stacked A-then-B bar (which reads as one continuous block rather than
+    // two sides pulling against each other from a shared centre line).
+    const maxPct = Math.max(pctA, pctB, 1);
+    const halfFillA = (pctA / maxPct) * 100, halfFillB = (pctB / maxPct) * 100;
     return `
       <div class="matchup-card">
         <div class="matchup-side">${playerAvatarHtml(r.pa, 24)}<span>${nameWithPosition(r.pa)}</span></div>
         <div class="matchup-mid">
           <div style="display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--panel-3);margin:2px 0">
-            <div style="width:${pctA}%;background:linear-gradient(90deg,var(--emerald),var(--gold-bright))"></div>
-            <div style="width:${pctB}%;background:var(--panel-2)"></div>
+            <div style="flex:1;display:flex;justify-content:flex-end"><div style="width:${halfFillA}%;background:linear-gradient(270deg,var(--emerald),var(--gold-bright))"></div></div>
+            <div style="flex:1"><div style="width:${halfFillB}%;background:var(--panel-2)"></div></div>
           </div>
           <div style="font-size:10px;color:var(--ink-faint);text-align:center">${r.m.label ? r.m.label + " · " : ""}${r.m.setPiece ? "⚽ set-piece · " : ""}${pctA}% / ${pctB}%</div>
         </div>
@@ -14794,11 +15312,59 @@ function renderSimMatchBody() {
     `;
   }).join("") : `<p class="field-desc" style="margin:0">No standout mismatches this fixture — every duel below is fairly even.</p>`;
 
+  // Standout players: each individual's own projected stat-line for this
+  // simulated match (not a share of the team total) — see
+  // computeSimStandoutPlayers/simPlayerStatLine above. Ranked by a rough
+  // points-shaped "impact" score purely for ordering; every number shown is
+  // the real underlying xG/xA/defensive-actions figure, not the impact score.
+  const standouts = computeSimStandoutPlayers(simState, 5);
+  const standoutsHtml = standouts.length ? standouts.map(s => {
+    const side = s.side === "A" ? teamA : teamB;
+    const parts = [];
+    if (s.xG >= 0.08) parts.push(`<span class="mono" style="color:var(--gold-bright);font-weight:700">${s.xG.toFixed(2)}</span> xG`);
+    if (s.xA >= 0.08) parts.push(`<span class="mono" style="color:var(--gold-bright);font-weight:700">${s.xA.toFixed(2)}</span> xA`);
+    if (s.defActions >= 0.3) parts.push(`<span class="mono" style="color:var(--emerald);font-weight:700">${s.defActions.toFixed(1)}</span> def. actions`);
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;background:var(--panel-2);margin-bottom:6px">
+        ${playerAvatarHtml(s.p, 28)}
+        <div style="flex:1;font-size:12px;line-height:1.4">
+          <strong>${nameWithPosition(s.p)}</strong> <span style="color:var(--ink-faint)">(${side.short_name})</span><br>
+          <span style="color:var(--ink-dim)">${parts.length ? parts.join(" · ") : "Limited standout output projected"}</span>
+        </div>
+      </div>
+    `;
+  }).join("") : `<p class="field-desc" style="margin:0">No standout individual contributions projected for this fixture.</p>`;
+
+  // Set-piece takers (item 10) — top candidates per side, blending real
+  // FPL cornersOrder with FM-style set-piece ability (identifySetPieceTakers).
+  const takersA = identifySetPieceTakers(teamAId, 3), takersB = identifySetPieceTakers(teamBId, 3);
+  const takersListHtml = (takers) => takers.length ? takers.map((t, i) => `
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:12px">
+        <span class="mono" style="color:var(--ink-faint);width:14px">${i + 1}.</span>
+        ${playerAvatarHtml(t.p, 20)}
+        <span>${nameWithPosition(t.p)}</span>
+        ${t.hasRealOrder ? `<span class="fdr-pill" style="width:auto;padding:0 5px;font-size:9px;background:rgba(224,169,79,0.18);color:var(--gold-bright)" title="FPL's own declared corners/free-kicks order">order #${t.p.cornersOrder}</span>` : `<span style="font-size:9px;color:var(--ink-faint)" title="No declared order from FPL — ranked by set-piece delivery ability instead">ability-based</span>`}
+      </div>
+    `).join("") : `<p class="foot-note" style="margin:0">No candidates found.</p>`;
+
   bodyEl.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">Projected match output — ${teamA.short_name} ${homeTag(isAHome)} vs ${teamB.short_name} ${homeTag(!isAHome)}</div>
-      <p class="field-desc" style="margin:0 0 10px">Simulated over a full ${SIM_MATCH_MINUTES} minutes from ${rows.length} matchup(s) below, scaled by fixture FDR, each side's predicted xG/xGA, and home advantage. Tackle success and aerial win % are shown as real head-to-head percentages, not raw counts. Stats are also restricted to realistic roles — only wide players are counted for cross completion %, only midfielders/forwards for dribble success %, only defenders/midfielders for interceptions+blocks+clearances — so a team total can no longer be inflated by every outfield player being scored for every stat. ⚠ marks a stat with no reliable free data source (cross completion %, dribble success %) — modelled from FM-style attributes rather than real per-match numbers.</p>
+      <p class="field-desc" style="margin:0 0 10px">Simulated over a full ${SIM_MATCH_MINUTES} minutes from ${rows.length} matchup(s) below, scaled by fixture FDR, each side's predicted xG/xGA, and home advantage. Tackle success and aerial win % are shown as real head-to-head percentages, not raw counts. Stats are also restricted to realistic roles — only wide players are counted for cross completion %, only midfielders/forwards for dribble success %, only defenders/midfielders for interceptions+blocks+clearances — so a club total can no longer be inflated by every outfield player being scored for every stat. ⚠ marks a stat with no reliable free data source (cross completion %, dribble success %) — modelled from FM-style attributes rather than real per-match numbers.</p>
       ${statRowsHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">🌟 Standout players</div>
+      <p class="field-desc" style="margin:0 0 10px">Individual contributors projected to drive this result, and their own stat-line (xG/xA/defensive actions) — not just a share of the team totals above. Derived from each player's real xG90/xA90 nudged by their own duel odds and this fixture's attacking context, same scaling the team stats above use.</p>
+      ${standoutsHtml}
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">🚩 Set-piece takers</div>
+      <p class="field-desc" style="margin:0 0 10px">Blends FPL's own declared corners/free-kicks order (real data, weighted heavily when set) with FM-style set-piece delivery ability as a tiebreaker/fallback when no order is declared.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px"><div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px;font-weight:700">${teamA.short_name}</div>${takersListHtml(takersA)}</div>
+        <div style="flex:1;min-width:200px"><div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px;font-weight:700">${teamB.short_name}</div>${takersListHtml(takersB)}</div>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="detail-block-title">Biggest mismatches</div>
@@ -14896,7 +15462,7 @@ const TAB_ICONS = {
   insights: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3.5"/></svg>',
   simulation: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.2"/><circle cx="17" cy="12" r="3.2"/><path d="M10.2 12h3.6"/></svg>',
 };
-const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
+const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Clubs", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
 function switchTab(name) {
   closeSidebar(); // no-op unless the tablet-range overlay is currently open — see setupSidebarToggle
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
