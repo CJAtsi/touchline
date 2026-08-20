@@ -44,8 +44,88 @@
     --glass-blur-strong: 30px;
     --radius-lg: 16px;
     --shadow: 0 1px 1px rgba(0,0,0,0.4), 0 22px 44px -18px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.045);
+    --header-bg: rgba(14,15,20,0.6);
+    --body-glow-1: rgba(255,255,255,0.035);
+    --body-glow-2: rgba(255,255,255,0.025);
+    color-scheme: dark;
+  }
+  /* Theme switcher (General item): light / mid / dark — every rule above
+     and throughout the app reads colour through these SAME custom
+     property names, so re-pointing them here re-themes the whole app
+     without touching the hundreds of `var(--x)` call sites. "mid" is a
+     light-grey glass in between dark and light; "light" is a white-based
+     glass, deliberately more transparent/airy than mid. Accent colours
+     (--gold/--gold-bright, aliased to white in dark mode per the comment
+     above) become a deep violet in both light themes, since white-on-white
+     would be invisible. */
+  :root[data-theme="mid"] {
+    --bg-0: #c7c8d1;
+    --bg-1: #d6d7de;
+    --panel: rgba(245,245,248,0.55);
+    --panel-2: rgba(245,245,248,0.7);
+    --panel-3: rgba(245,245,248,0.85);
+    --border: rgba(20,20,35,0.14);
+    --border-strong: rgba(20,20,35,0.4);
+    --ink: #1c1c24;
+    --ink-dim: #4a4a55;
+    --ink-faint: #74747f;
+    --gold: #5b21b6;
+    --gold-bright: #6d28d9;
+    --gold-soft: rgba(109,40,217,0.14);
+    --emerald: #047857;
+    --emerald-dim: rgba(4,120,87,0.16);
+    --red: #b91c1c;
+    --red-soft: rgba(185,28,28,0.14);
+    --amber: #92400e;
+    --amber-soft: rgba(146,64,14,0.15);
+    --blue: #1d4ed8;
+    --pink: #a21caf;
+    --purple: #5b21b6;
+    --glow-soft: 0 0 12px rgba(109,40,217,0.2);
+    --glow-strong: 0 0 20px rgba(109,40,217,0.32);
+    --shadow: 0 1px 1px rgba(0,0,0,0.08), 0 22px 44px -18px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.05);
+    --header-bg: rgba(210,210,220,0.55);
+    --body-glow-1: rgba(255,255,255,0.5);
+    --body-glow-2: rgba(120,80,220,0.06);
+    color-scheme: light;
+  }
+  :root[data-theme="light"] {
+    --bg-0: #f2f2f5;
+    --bg-1: #ffffff;
+    --panel: rgba(255,255,255,0.45);
+    --panel-2: rgba(255,255,255,0.62);
+    --panel-3: rgba(255,255,255,0.8);
+    --border: rgba(30,30,45,0.12);
+    --border-strong: rgba(30,30,45,0.38);
+    --ink: #16161d;
+    --ink-dim: #55555f;
+    --ink-faint: #86869a;
+    --gold: #6d28d9;
+    --gold-bright: #7c3aed;
+    --gold-soft: rgba(124,58,237,0.12);
+    --emerald: #059669;
+    --emerald-dim: rgba(5,150,105,0.14);
+    --red: #dc2626;
+    --red-soft: rgba(220,38,38,0.12);
+    --amber: #b45309;
+    --amber-soft: rgba(180,83,9,0.14);
+    --blue: #2563eb;
+    --pink: #c026d3;
+    --purple: #6d28d9;
+    --glow-soft: 0 0 12px rgba(124,58,237,0.18);
+    --glow-strong: 0 0 20px rgba(124,58,237,0.3);
+    --shadow: 0 1px 1px rgba(0,0,0,0.06), 0 22px 44px -18px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.03);
+    --header-bg: rgba(255,255,255,0.5);
+    --body-glow-1: rgba(255,255,255,0.7);
+    --body-glow-2: rgba(124,58,237,0.05);
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
+  /* Smooth iOS-style crossfade when switching themes — a fallback for any
+     element that doesn't already define its own transition (most
+     interactive controls do, e.g. .chip-btn, and keep their own faster
+     timing since a more specific selector's `transition` wins outright). */
+  *, *::before, *::after { transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease; }
   html, body { height: 100%; }
   html { overflow-x: hidden; width: 100%; }
   body {
@@ -53,8 +133,8 @@
     overflow-x: hidden;
     width: 100%;
     background:
-      radial-gradient(1000px 600px at 8% -10%, rgba(255,255,255,0.035), transparent 60%),
-      radial-gradient(1000px 700px at 100% 105%, rgba(255,255,255,0.025), transparent 55%),
+      radial-gradient(1000px 600px at 8% -10%, var(--body-glow-1), transparent 60%),
+      radial-gradient(1000px 700px at 100% 105%, var(--body-glow-2), transparent 55%),
       var(--bg-0);
     background-attachment: fixed;
     position: relative;
@@ -85,7 +165,7 @@
   header {
     position: sticky; top: 0; z-index: 30;
     border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0) 65%), rgba(14,15,20,0.6);
+    background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0) 65%), var(--header-bg);
     backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
     -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
     box-shadow: 0 1px 0 rgba(255,255,255,0.1), 0 12px 30px -12px rgba(0,0,0,0.6);
@@ -96,6 +176,21 @@
   }
   .brand { display: flex; align-items: center; gap: 9px; }
   .brand-wordmark { font-family: "Inter", sans-serif; font-weight: 800; font-size: 20px; letter-spacing: 0.02em; color: var(--ink); }
+  /* Theme switcher pill — top-right of the header (General item). Three
+     icon buttons in a segmented pill, same visual language as .seg. */
+  .theme-switch {
+    margin-left: auto; display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px;
+    background: var(--panel); backdrop-filter: blur(var(--glass-blur));
+  }
+  .theme-switch button {
+    background: transparent; border: none; color: var(--ink-faint); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+  .theme-switch button:hover:not(.active) { background: rgba(255,255,255,0.1); color: var(--ink-dim); }
+  .theme-switch button.active { background: var(--gold-soft); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+  .theme-switch button:active { transform: scale(0.92); }
   nav { display: flex; gap: 3px; font-size: 14px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 999px; border: 1px solid var(--border); }
   nav button {
     background: transparent; border: none; color: var(--ink-faint);
@@ -441,10 +536,10 @@
   .seg button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
 
   select, input[type=text], input[type=number] {
-    background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink);
+    background: var(--panel); border: 1px solid var(--border); color: var(--ink);
     border-radius: 999px; padding: 8px 13px; font-size: 13px; font-family: inherit; outline: none;
     transition: border-color 0.15s ease, background 0.15s ease;
-    color-scheme: dark; box-sizing: border-box;
+    color-scheme: inherit; box-sizing: border-box;
   }
   input[type=number] { padding: 8px 6px 8px 12px; min-width: 58px; text-align: left; }
   select option { background: #14161f; color: var(--ink); }
@@ -887,6 +982,10 @@
   .pitch-slot:hover { transform: translateY(-2px); }
   .pitch-slot.dragging { opacity: 0.4; }
   .pitch-slot.drag-over { outline: 2px dashed var(--gold-bright); outline-offset: 3px; border-radius: 10px; transform: translateY(-2px) scale(1.04); }
+  /* Transfers-in browse rows (Planner) are draggable onto the pitch too —
+     same dim-while-dragging feedback as an on-pitch drag. */
+  .builder-row.dragging { opacity: 0.4; }
+  .builder-row[draggable="true"] { cursor: grab; }
   /* Avatar/kit size is a % of the pitch's own width (container query units),
      not a fixed px from JS — so it keeps the same on-pitch proportion at
      any pitch size instead of the kit shrinking/growing out of step. */
@@ -1005,6 +1104,17 @@
     .pitch-slot img, .pitch-slot svg { width: 26px !important; height: 26px !important; }
   }
 </style>
+<script>
+  // Flash-of-wrong-theme prevention: applied synchronously, before body
+  // paint, from whatever was last saved to localStorage — the async
+  // storage-backed load later in the app (loadTheme) can still correct
+  // this once it resolves (e.g. a different value synced from elsewhere),
+  // but this avoids a visible dark->light snap on every page load.
+  try {
+    var __touchlineThemeFlash = localStorage.getItem("touchline:theme");
+    if (__touchlineThemeFlash === "light" || __touchlineThemeFlash === "mid") document.documentElement.dataset.theme = __touchlineThemeFlash;
+  } catch (e) {}
+</script>
 </head>
 <body>
 
@@ -1035,6 +1145,11 @@
   <div class="header-inner">
     <div class="brand"><span class="brand-wordmark">FFT</span></div>
     <div id="topTabs" class="top-tabs-row"></div>
+    <div class="theme-switch" id="themeSwitch" role="group" aria-label="Theme">
+      <button type="button" data-theme-choice="dark" title="Dark">🌙</button>
+      <button type="button" data-theme-choice="mid" title="Mid (light grey glass)">◐</button>
+      <button type="button" data-theme-choice="light" title="Light">☀️</button>
+    </div>
   </div>
 </header>
 
@@ -1362,8 +1477,6 @@
       <div class="mode-btn-row" id="fixtureRunSortRow" style="margin-bottom:10px"></div>
       <div class="table-wrap"><table id="fixtureRunGrid"></table></div>
       <div id="fixtureRunSuggestion" style="margin-top:10px"></div>
-      <div class="detail-block-title" style="margin-top:16px">Fun facts</div>
-      <div id="fdrFunFacts"></div>
     </div>
   </section>
 
@@ -1371,7 +1484,13 @@
     <h1 class="page-title">Insights</h1>
     <p class="page-sub">Differentials, price-change signals, squad news, mini-league rival comparison, and projection accuracy tracking — all built from real FPL API fields already loaded elsewhere in the app. Heuristic panels are clearly labelled as such. Each panel is a short, curated list (not a full player-pool dump) surfacing what's actually decision-relevant for that panel's question — use the filters within a panel to dig further.</p>
 
-    <div class="card" style="border-left:3px solid var(--emerald)">
+    <div class="card" style="border-left:3px solid var(--gold-bright)">
+      <div class="detail-block-title">🎉 Fun facts</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Auto-generated highlights — clean-sheet/scoring streaks, leaky defences, and standout upcoming runs — from the same real + predicted data as the Fixtures tab.</p>
+      <div id="insightsFunFacts"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;border-left:3px solid var(--emerald)">
       <div class="detail-block-title" id="differentialsTitle">💎 Differentials — low ownership, high upside</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
         Top 12 players under your ownership ceiling, ranked by projected points (Touchline's own next-GW model, same as Player Stats' "Next GW proj."). <strong>Simple, explainable ranking</strong> — filtered by ownership, then sorted by projected points, no hidden scoring formula. Tighten the ownership ceiling or raise min minutes to narrow further.
@@ -1408,8 +1527,11 @@
     <div class="card" style="margin-top:20px;border-left:3px solid var(--red,#ff5468)">
       <div class="detail-block-title" id="squadNewsTitle">🩹 Squad news — injuries, doubts, suspensions</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Every player who isn't 100% fully fit, straight from the FPL API's own <code>status</code>/<code>news</code>/<code>chance_of_playing</code> fields — real live data, not an estimate. Shortlisted players are pinned to the top, then sorted by chance of playing (lowest/most concerning first).
+        Every player who isn't 100% fully fit, straight from the FPL API's own <code>status</code>/<code>news</code>/<code>chance_of_playing</code> fields — real live data, not an estimate. Defaults to your own squad + shortlist only (league-wide runs to 40-60+ players at once). Shortlisted players are pinned to the top, then sorted by chance of playing (lowest/most concerning first).
       </p>
+      <div class="toolbar" style="margin-bottom:12px;flex-wrap:wrap">
+        <div class="seg" id="squadNewsScopeSeg"></div>
+      </div>
       <div id="squadNewsGrid"></div>
     </div>
 
@@ -1487,6 +1609,7 @@
     <div id="h2hSavedRow" class="chip-btn-row" style="margin-bottom:16px"></div>
 
     <div class="chip-btn-row" style="margin-bottom:16px">
+      <button class="chip-btn" data-h2h-view="fixtures">📅 Fixtures</button>
       <button class="chip-btn" data-h2h-view="overview">Overview</button>
       <button class="chip-btn" data-h2h-view="combinedxi">Combined XI (by points)</button>
       <button class="chip-btn" data-h2h-view="draftxi">Ability draft XI</button>
@@ -3287,8 +3410,9 @@ let state = {
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
   pinnedCaptainIds: [],
-  plannerOutFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
   plannerInFilters: { q: "", pos: "ALL", sort: "totalPoints", dir: "desc", minPrice: "", maxPrice: "" },
+  plannerReplacingId: null, // pre-selected "who's being replaced" for the transfers-in browse list (set from the pitch action modal's Transfer button)
+  plannerDeclinedRecs: {}, // { [draftId]: { consistent: [playerId,...], longTerm: [...], punt: [...] } } — declining a Recommended Transfers card excludes that player from that category going forward for this draft
   simPlayerAId: null, simPlayerBId: null,
   // Budget cap + max-3-per-club default to ON in the Best XI pitch picker
   // — a "best XI" that's actually affordable/legal by default is more
@@ -3320,9 +3444,11 @@ let state = {
   allFixtures: [], tableSource: "auto", tableFilters: { venue: "ALL", lastN: "ALL", gwFrom: "", gwTo: "", opponentTier: "ALL" },
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
-  h2hViewMode: "overview", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {},
+  h2hViewMode: "fixtures", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {}, h2hDoneMap: {}, h2hFixturesGw: null,
   h2hBoardManual: {}, h2hBoardFlip: {}, h2hSavedBoards: {}, h2hBoardMode: {}, tacOrientation: {}, tacboard: { teamA: null, teamB: null },
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
+  h2hDraftMode: "classic", // classic | flashcard
+  h2hFlashcard: {}, // { [pairKey]: { cardIdx, decisions: {slotIdx: "A"|"B"}, overrides: { A: {slotIdx: playerId}, B: {...} } } }
   h2hCombined: {}, h2hCombinedPickPos: null, h2hCombinedPickSlot: 0,
   h2hScoreboard: {}, h2hSaved: [],
   rangePoints: null, rangeLabel: null,
@@ -3351,6 +3477,7 @@ let state = {
   // ---- Insights tab state (differentials / price watch / squad news / rivals / projection accuracy) ----
   diffOwnershipCeiling: 10, diffPosFilter: "ALL", diffMinMinutes: 270,
   priceWatchFilter: "ALL", // ALL | RISE | FALL
+  squadNewsScope: "mine", // mine | all — Squad news panel default scope (item: default to squad + shortlist, not the full league)
   rivalTeamId: null, rivalData: null, rivalLoading: false, rivalError: null,
   projAccuracyLog: null, // loaded from persistent storage — see loadProjAccuracyLog()
 };
@@ -3904,6 +4031,9 @@ async function loadData() {
     await loadH2hCombined();
     await loadH2hScoreboard();
     await loadH2hSaved();
+    await loadH2hDoneMap();
+    await loadH2hFlashcard();
+    await loadTheme();
     await loadProjAccuracyLog();
     setBanner(null);
     populateTeamSelect();
@@ -4274,6 +4404,43 @@ async function persistSet(key, value) {
   } catch (e) {
     try { localStorage.setItem(LS_PREFIX + key, value); } catch (e2) { /* no persistence available at all */ }
   }
+}
+
+// ---------- theme switcher (General item: light / mid / dark) ----------
+// "dark" is the no-attribute default (:root's own values); "mid"/"light"
+// activate the :root[data-theme="..."] override blocks near the top of
+// <style>, which redefine the same custom properties every rule in the
+// app already reads through — so this one function re-themes everything.
+// Written to BOTH plain localStorage (synchronous — read back instantly by
+// the flash-prevention <script> at the top of <head>, before persistSet's
+// async storage layer would even resolve) and persistSet (this app's own
+// storage abstraction, for consistency/possible cross-device sync).
+function applyTheme(theme, persist) {
+  const valid = theme === "light" || theme === "mid" ? theme : "dark";
+  if (valid === "dark") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = valid;
+  document.querySelectorAll("#themeSwitch [data-theme-choice]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.themeChoice === valid);
+  });
+  if (persist) {
+    try { localStorage.setItem("touchline:theme", valid); } catch (e) {}
+    persistSet("theme", valid);
+  }
+}
+async function loadTheme() {
+  let saved = null;
+  try { saved = await persistGet("theme"); } catch (e) {}
+  applyTheme(saved || "dark", false);
+}
+function setupThemeSwitch() {
+  const wrap = document.getElementById("themeSwitch");
+  if (!wrap) return;
+  wrap.querySelectorAll("[data-theme-choice]").forEach(btn => {
+    btn.onclick = () => applyTheme(btn.dataset.themeChoice, true);
+  });
+  // Reflect whatever the flash-prevention script (or loadTheme, once its
+  // async read resolves) already applied to <html data-theme>.
+  applyTheme(document.documentElement.dataset.theme || "dark", false);
 }
 
 // ---------- shortlist persistence ----------
@@ -7239,7 +7406,21 @@ function captaincyRouteBreakdown(p, row) {
   // every player (red for a bad matchup, amber for even, green for good),
   // rather than only showing when the matchup happens to be favourable.
   const matchupQuality = Math.max(0, Math.min(1, (row.matchupScore || 50) / 100));
-  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, matchupRoute, csProb, defConProb, goalProb, assistProb, bonusProb, matchupProb, matchupQuality };
+  // Structural eligibility (item: "every player should see defcon/goal/
+  // assist/bonus/matchup as options under routes") — distinct from the
+  // route's PROBABILITY. CS is only a scoring route at all for GK/DEF/MID
+  // (FWD scores 0 CS points in real FPL — CS_PTS[FWD] is 0), with MID's
+  // CS_PTS already lower (1) than GK/DEF (4) so a MID's route coefficient
+  // contribution is correctly smaller even though the route itself is
+  // still live. DefCon excludes goalkeepers entirely (GKs don't accrue
+  // tackles/CBIs/recoveries in the DefCon sense). Goal/Assist/Bonus/
+  // Matchup are eligible for every position — used by the UI to render a
+  // dimmed "N/A" pill for a structurally-inapplicable route instead of
+  // silently omitting it, vs. a real (possibly low) probability pill for
+  // an eligible one.
+  const csEligible = (CS_PTS[p.position] || 0) > 0;
+  const defConEligible = p.position === "DEF" || p.position === "MID";
+  return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, matchupRoute, csProb, defConProb, goalProb, assistProb, bonusProb, matchupProb, matchupQuality, csEligible, defConEligible };
 }
 // ---- Route coefficient (item 1) ----
 // The ×N pill next to Routes is a plain COUNT of live routes — it treats a
@@ -7661,29 +7842,30 @@ function renderCaptaincyTab() {
       .filter(Boolean);
     top = top.concat(missingPinned);
   }
-  // Route pills are shown for every route that has a non-trivial
-  // probability (not gated to the boolean "route is live" flags), coloured
-  // on a continuous red->green scale by that route's own probability —
-  // applies identically across positions, so a defender's goal route
-  // shows and is coloured by its own (typically lower, but real) chance.
-  // Matchup is handled separately from the other five: every player has a
-  // direct opponent whether that matchup is good, even, or bad, so the
-  // Matchup pill always renders (not filtered by the >0.03 threshold the
-  // other routes use) and is coloured across the FULL red->green range by
+  // Route pills: EVERY player shows all six route categories as options
+  // (CS, DefCon, Goal, Assist, Bonus, Matchup) — no probability threshold
+  // filtering anymore, so a route never just silently disappears. Each is
+  // either "eligible" (a real scoring route for this position, coloured on
+  // the continuous red->green scale by its own probability, even when that
+  // probability is low) or structurally ineligible for this position (CS
+  // for a FWD, DefCon for a GK) — those render as a dimmed "N/A" pill
+  // instead, so the position-based exclusion is visible rather than just
+  // an absence the user has to infer. Matchup is always eligible — every
+  // player has a direct opponent whether that matchup is good, even, or
+  // bad — and is coloured across the FULL red->green range by
   // matchupQuality (0=worst possible matchup .. 1=best), not matchupProb
   // (which floors at 0 for anything below-average — correct for "is this a
   // genuine extra route to points" but wrong for "show me every matchup").
   const routeLabel = (b) => {
     const defs = [
-      { key: "cs", label: "CS", prob: b.csProb },
-      { key: "defcon", label: "DefCon", prob: b.defConProb },
-      { key: "goal", label: "Goal", prob: b.goalProb },
-      { key: "assist", label: "Assist", prob: b.assistProb },
-      { key: "bonus", label: "Bonus", prob: b.bonusProb },
+      { key: "cs", label: "CS", prob: b.csProb, eligible: b.csEligible },
+      { key: "defcon", label: "DefCon", prob: b.defConProb, eligible: b.defConEligible },
+      { key: "goal", label: "Goal", prob: b.goalProb, eligible: true },
+      { key: "assist", label: "Assist", prob: b.assistProb, eligible: true },
+      { key: "bonus", label: "Bonus", prob: b.bonusProb, eligible: true },
+      { key: "matchup", label: "Matchup", prob: b.matchupQuality, eligible: true, alwaysShown: true },
     ];
-    const shown = defs.filter(d => d.prob > 0.03);
-    shown.push({ key: "matchup", label: "Matchup", prob: b.matchupQuality, alwaysShown: true });
-    return shown;
+    return defs;
   };
   // Sortable headers: state.capSortKey/capSortDir persist across re-renders
   // (survive gw/source switches) so sorting isn't reset by picking a player
@@ -7692,11 +7874,18 @@ function renderCaptaincyTab() {
   // kicks in once the user actually clicks a header.
   const sortKey = state.capSortKey || null;
   const sortDir = state.capSortDir || "desc";
+  // "score" now follows the ACTIVE mode (Balanced/Safe/Explosive) so
+  // clicking the score column header while in Safe/Explosive mode ranks by
+  // that mode's own number, not silently falling back to the Balanced
+  // captaincyScore — this is the "ranking system" the Safe/Explosive
+  // toggle needs (sort by who's most safe/explosive) instead of having to
+  // scan the small sub-score text under each row.
   const sortAccessors = {
-    score: r => r.captaincyScore,
+    score: r => modeScoreAccessor(r),
     proj: r => r.row.proj,
     floor: r => r.breakdown.floorPts,
     routeCoef: r => r.routeCoefficient,
+    playstyle: r => r.boost,
   };
   if (sortKey && sortAccessors[sortKey]) {
     const acc = sortAccessors[sortKey];
@@ -7707,7 +7896,19 @@ function renderCaptaincyTab() {
     const opp = r.fixture.opp;
     const tags = routeLabel(r.breakdown);
     const pinned = isCaptainPinned(r.p.id);
+    // Score cell: the ACTIVE mode's score is the primary bold number (this
+    // is the actual ranking value the list is sorted by), with the
+    // Balanced captaincyScore demoted to reference subtext — inverted from
+    // the old always-Balanced-primary layout so Safe/Explosive mode reads
+    // as a real ranking rather than requiring the user to scan for the
+    // small sub-score.
+    const modeScoreHtml = capMode === "safe"
+      ? `<span style="color:var(--emerald)">${r.safeScore.toFixed(2)}</span><div class="mono" style="font-size:9px;color:var(--ink-faint);font-weight:700" title="Balanced captaincy score (default sort)">⚖️ ${r.captaincyScore.toFixed(1)}</div>`
+      : capMode === "explosive"
+        ? `<span style="color:#ff9f43">${r.explosiveScore.toFixed(2)}</span><div class="mono" style="font-size:9px;color:var(--ink-faint);font-weight:700" title="Balanced captaincy score (default sort)">⚖️ ${r.captaincyScore.toFixed(1)}</div>`
+        : `<span style="color:var(--gold-bright)">${r.captaincyScore.toFixed(1)}</span>`;
     return `<tr class="${pinned ? "cap-pinned-row" : ""}">
+      <td class="mono" style="color:var(--ink-faint);font-weight:700;text-align:center">${i + 1}</td>
       <td class="label-col" style="display:flex;align-items:center;gap:8px">
         <button class="pin-btn ${pinned ? "on" : ""}" data-cap-pin="${r.p.id}" title="${pinned ? "Unpin" : "Pin as reference — stays visible while browsing"}">${pinned ? "\u{1F4CC}" : "\u{1F4CD}"}</button>
         ${i === 0 && !sortKey ? '<span title="Top captaincy pick" style="font-size:14px">🎖️</span>' : ""}
@@ -7719,16 +7920,20 @@ function renderCaptaincyTab() {
           ${captaincyMiniBadgesHtml(r.p, gwId, r)}
         </div>
       </td>
-      <td class="mono" style="font-weight:700;color:var(--gold-bright)">${r.captaincyScore.toFixed(1)}${capMode === "safe" ? `<div class="mono" style="font-size:9px;color:var(--emerald);font-weight:700" title="Safe score — reliability-weighted: floor, route volume/coefficient, proven consistency">🛡️ ${r.safeScore.toFixed(2)}</div>` : capMode === "explosive" ? `<div class="mono" style="font-size:9px;color:#ff9f43;font-weight:700" title="Explosive score — ceiling-weighted: xGI, team goals, fixture ease, playstyle/matchup, with a hidden-gem ownership bump">💥 ${r.explosiveScore.toFixed(2)}</div>` : ""}</td>
+      <td class="mono" style="font-weight:700">${modeScoreHtml}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.row.proj.toFixed(1)}</td>
       <td class="mono" style="color:var(--ink-dim)">${r.breakdown.floorPts.toFixed(1)}</td>
       <td>
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end">
           <span class="mono" style="font-size:10px;color:var(--ink-faint);font-weight:700" title="${r.breakdown.routes} independent route${r.breakdown.routes === 1 ? "" : "s"} to points">${r.breakdown.routes}×</span>
           ${tags.map(t => {
-            const color = routeLikelihoodColor(t.prob);
-            const title = t.alwaysShown ? `Matchup quality ~${Math.round(t.prob * 100)}/100 vs likely direct opponent` : `${t.label} route ~${Math.round(t.prob * 100)}% likelihood`;
-            return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${color};color:#0a0e0c;font-weight:700" title="${title}">${t.label}</span>`;
+            const ineligible = t.eligible === false;
+            const color = ineligible ? "rgba(255,255,255,0.07)" : routeLikelihoodColor(t.prob);
+            const textColor = ineligible ? "var(--ink-faint)" : "#0a0e0c";
+            const title = ineligible
+              ? `${t.label} isn't a scoring route for a ${r.p.position} — not shown as a live route, kept visible for comparison`
+              : (t.alwaysShown ? `Matchup quality ~${Math.round(t.prob * 100)}/100 vs likely direct opponent` : `${t.label} route ~${Math.round(t.prob * 100)}% likelihood`);
+            return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${color};color:${textColor};font-weight:700;${ineligible ? "opacity:0.5" : ""}" title="${title}">${t.label}${ineligible ? " —" : ""}</span>`;
           }).join("")}
         </div>
       </td>
@@ -7739,18 +7944,22 @@ function renderCaptaincyTab() {
   body.innerHTML = `
     ${noTeamLoaded ? `<p class="field-desc" style="margin:0 0 10px;color:var(--gold-bright)">Showing "Any player" — load your team on the My team tab to switch to your own squad only.</p>` : ""}
     ${capMode !== "default" ? `<p class="field-desc" style="margin:0 0 10px;color:${capMode === "safe" ? "var(--emerald)" : "#ff9f43"}">${capMode === "safe" ? "🛡️ Safe mode" : "💥 Explosive mode"} — the list below is re-sorted (and each row shows a small 🛡️/💥 sub-score) by ${capMode === "safe" ? "reliability: floor, route volume/coefficient, and proven consistency, so a player with several realistic routes still ranks well even if no single route is a huge conversion chance" : "ceiling: xGI, team goals, an easy fixture, and playstyle/matchup edge, with a bump for low-owned hidden gems so a smaller-club or overlooked-matchup player can surface above a template pick with a similar underlying case"}. Nobody is filtered out — everyone from the pool below stays visible, just reordered.</p>` : ""}
-    <p class="field-desc" style="margin:0 0 10px">Captaincy score = base projection + a route-diversity bonus (more independent ways to return points) + a playstyle boost (⚡, shown when a quick/mobile player faces a fixture that leans open/counter-attacking). Floor = points that don't need the match to open up (appearance + CS + DefCon), nudged up slightly for players with several independent routes to points (shown as the ×N count next to Routes). Route score = each route's real FPL points value × its probability of hitting, summed — higher means more (and stronger, more likely) routes to points combined, so a player with several realistic routes outranks one with the same route COUNT that are all long shots. Every player shows a Matchup pill (red = tough matchup, green = favourable) even when it isn't a genuine extra route. The small "🎯 Possession vs 🔺 High press"-style line under a player's fixture shows each club's known tactical identity where it's on file. Click a numeric column header to sort. Pin (📍) a player to keep them visible while browsing others. A doubtful/knock (🤕) player's score is discounted 25%; a confirmed-out player (injured/suspended/unavailable, or a real 0% chance of playing) is removed from this list entirely for this gameweek — straight from the FPL API's own status/chance-of-playing fields.</p>
+    <details style="margin:0 0 10px">
+      <summary class="mono" style="cursor:pointer;font-size:11px;color:var(--ink-faint);font-weight:700;user-select:none">ⓘ How captaincy score works</summary>
+      <p class="field-desc" style="margin:6px 0 0;font-size:10.5px;color:var(--ink-faint);line-height:1.4">Captaincy score = base projection + route-diversity bonus + playstyle boost (⚡ for quick players facing an open/counter-attacking fixture). Floor = safe points that don't need the match to open up (appearance + CS + DefCon). Route score = each route's real FPL points value × its likelihood, summed — more (and stronger) routes beat the same route COUNT that are all long shots. Every player now shows all six route pills (CS, DefCon, Goal, Assist, Bonus, Matchup) for comparison: CS only counts for GK/DEF/MID (lower value for MID, since MID clean sheets are worth less), and DefCon excludes goalkeepers — both show as a dimmed "—" pill where they don't apply rather than disappearing. Matchup pill: red = tough, green = favourable. Pin (📍) a player to keep them visible while browsing others. 🤕 doubtful/knock discounts the score 25%; a confirmed-out player is removed from this list entirely. Click any column header to sort — in Safe/Explosive mode, the score column sorts by that mode's own ranking.</p>
+    </details>
     <div class="table-wrap"><table>
       <thead><tr>
+        <th title="Current rank in this sort order">#</th>
         <th class="label-col">Player</th>
-        <th class="sortable-th${sortKey === "score" ? " sorted" : ""}" data-cap-sort="score" style="cursor:pointer" title="Sort by captaincy score">Captaincy score${sortKey === "score" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+        <th class="sortable-th${sortKey === "score" ? " sorted" : ""}" data-cap-sort="score" style="cursor:pointer" title="Sort by ${capMode === "safe" ? "safe score" : capMode === "explosive" ? "explosive score" : "captaincy score"}">${capMode === "safe" ? "Safe score 🛡️" : capMode === "explosive" ? "Explosive score 💥" : "Captaincy score"}${sortKey === "score" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th class="sortable-th${sortKey === "proj" ? " sorted" : ""}" data-cap-sort="proj" style="cursor:pointer" title="Sort by base projection">Base proj${sortKey === "proj" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th class="sortable-th${sortKey === "floor" ? " sorted" : ""}" data-cap-sort="floor" style="cursor:pointer" title="Sort by floor">Floor${sortKey === "floor" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
         <th>Routes</th>
         <th class="sortable-th${sortKey === "routeCoef" ? " sorted" : ""}" data-cap-sort="routeCoef" style="cursor:pointer" title="Sort by route score — each route's points value × its probability, summed">Route score${sortKey === "routeCoef" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-        <th>Playstyle</th>
+        <th class="sortable-th${sortKey === "playstyle" ? " sorted" : ""}" data-cap-sort="playstyle" style="cursor:pointer" title="Sort by playstyle/matchup boost">Playstyle${sortKey === "playstyle" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}</th>
       </tr></thead>
-      <tbody>${rowsHtml || `<tr><td colspan="7" class="foot-note" style="padding:10px">No eligible players for this gameweek/source.</td></tr>`}</tbody>
+      <tbody>${rowsHtml || `<tr><td colspan="8" class="foot-note" style="padding:10px">No eligible players for this gameweek/source.</td></tr>`}</tbody>
     </table></div>
   `;
   body.querySelectorAll("[data-cap-pin]").forEach(btn => {
@@ -8245,9 +8454,23 @@ function getHorizonGws(count) {
 // regardless of what was picked. Free Hit is a one-week-only swap so it
 // doesn't touch the persistent bank (matches real FPL: your squad/bank
 // reverts after an FH week).
+// Free-transfer rollover (item: "start counting free transfers for the
+// team") — real FPL rule (2024/25+): you get 1 free transfer a gameweek,
+// unused ones roll over up to a cap of 5 available at once; Wildcard/Free
+// Hit weeks don't consume or cost a free transfer, they just roll over as
+// if 0 transfers were made. The app has no authenticated way to read your
+// LIVE free-transfer count from the FPL API (that needs a logged-in
+// session), so draft.freeTransfersStart is a user-editable seed — how many
+// you actually have banked right now — and this walks it forward through
+// the planning horizon from there.
+function nextFreeTransfers(available, transfersCount, chip) {
+  if (chip === "WC" || chip === "FH") return Math.min(5, available + 1);
+  return Math.min(5, Math.max(0, available - transfersCount) + 1);
+}
 function getSquadTimeline(draft, horizonGwIds) {
   let persistent = [...draft.squad];
   let persistentBank = draft.bank || 0;
+  let ftAvailable = Number.isFinite(draft.freeTransfersStart) ? draft.freeTransfersStart : 1;
   const timeline = [];
   for (const gwId of horizonGwIds) {
     const log = draft.transfersLog[gwId] || {};
@@ -8264,7 +8487,9 @@ function getSquadTimeline(draft, horizonGwIds) {
       squadThisWeek = persistent;
       bankThisWeek = persistentBank;
     }
-    timeline.push({ gwId, squad: squadThisWeek, chip, captainId: log.captainId, transfersCount: outIds.length, bank: bankThisWeek });
+    const freeTransfersAvailable = ftAvailable;
+    timeline.push({ gwId, squad: squadThisWeek, chip, captainId: log.captainId, transfersCount: outIds.length, bank: bankThisWeek, freeTransfersAvailable });
+    ftAvailable = nextFreeTransfers(ftAvailable, outIds.length, chip);
   }
   return timeline;
 }
@@ -9346,9 +9571,9 @@ function renderGwSimulator(draft) {
   const curIdx = horizon.indexOf(curGwId);
 
   let cumulative = 0;
-  const railRows = timeline.map(({ gwId, squad, chip, captainId, transfersCount }) => {
+  const railRows = timeline.map(({ gwId, squad, chip, captainId, transfersCount, freeTransfersAvailable }) => {
     const result = computeGwResult(squad, gwId, chip, captainId || null);
-    const freeTransfers = (chip === "WC" || chip === "FH") ? Infinity : 1;
+    const freeTransfers = (chip === "WC" || chip === "FH") ? Infinity : freeTransfersAvailable;
     const hit = Math.max(0, transfersCount - freeTransfers) * 4;
     const net = result.total - (Number.isFinite(hit) ? hit : 0);
     cumulative += net;
@@ -9369,10 +9594,14 @@ function renderGwSimulator(draft) {
       <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
         <div class="stat-block"><div class="stat-label">Squad value</div><div class="stat-value mono">${fmtPrice(squadCost(draft.squad))}</div></div>
         <div class="stat-block"><div class="stat-label">In the bank</div><div class="stat-value mono">${fmtPrice(draft.bank || 0)}</div></div>
+        <div class="stat-block">
+          <div class="stat-label" title="The FPL API doesn't expose your live free-transfer count without logging in — set this to match your real team and the planner rolls it forward automatically (max 5 banked, WC/FH weeks don't cost one)">Free transfers now</div>
+          <input type="number" id="freeTransfersStartInput" min="1" max="5" step="1" value="${Number.isFinite(draft.freeTransfersStart) ? draft.freeTransfersStart : 1}" class="mono" style="width:52px;font-weight:700" />
+        </div>
         <button class="dir-btn" id="rebuildSquadBtn" style="margin-left:auto">Edit squad</button>
       </div>
     </div>
-    <p class="foot-note" style="margin-bottom:12px">Projections beyond next gameweek use fixture-difficulty-adjusted form, not a full model — treat as directional, not exact. Assumes 1 free transfer per gameweek (no rollover) outside Wildcard/Free Hit weeks.</p>
+    <p class="foot-note" style="margin-bottom:12px">Projections beyond next gameweek use fixture-difficulty-adjusted form, not a full model — treat as directional, not exact. Free transfers roll over week to week (max 5 banked) from the "Free transfers now" count above — Wildcard/Free Hit weeks don't cost one.</p>
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
       <div style="flex:1;min-width:280px">
         <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px">
@@ -9389,6 +9618,12 @@ function renderGwSimulator(draft) {
     </div>
   `;
 
+  const ftInput = document.getElementById("freeTransfersStartInput");
+  if (ftInput) ftInput.onchange = () => {
+    const v = Math.max(1, Math.min(5, Math.round(Number(ftInput.value) || 1)));
+    draft.freeTransfersStart = v;
+    saveDrafts(); renderPlanner();
+  };
   document.getElementById("rebuildSquadBtn").onclick = () => {
     if (confirm("Editing the squad will clear any planned transfers/chips. Continue?")) {
       // Snapshot what's being cleared so a "Cancel" in the builder can
@@ -9464,46 +9699,15 @@ function wirePlannerPickerFilterBar(prefix, filters, onChange) {
     onChange();
   };
 }
-function plannerPickerRowHtml(p, extra, overBudgetBy) {
-  const team = state.teamsById[p.teamId];
-  const over = overBudgetBy != null && overBudgetBy > 0;
-  return `
-    <div class="builder-row${over ? " over-budget" : ""}" data-player="${p.id}" ${over ? `title="⚠️ ${fmtPrice(overBudgetBy)} over what's currently in the bank for this gameweek"` : ""}>
-      ${playerAvatarHtml(p, 28)}
-      <span class="b-name">${nameWithPosition(p)} <span class="b-sub">${team ? team.short_name : ""}${over ? ` · <span style="color:var(--rose,#e05d5d)">⚠️ over budget</span>` : ""}</span></span>
-      <span class="b-price mono" style="${over ? "color:var(--rose,#e05d5d)" : ""}">${fmtPrice(p.nowCost)}</span>
-      <span class="b-pts mono">${extra != null ? extra : (p.totalPoints ?? 0)}</span>
-      <button class="builder-add-btn" data-action="add" data-player="${p.id}">+</button>
-    </div>
-  `;
-}
-function renderPlannerOutList(draft, gwId, entry, horizon) {
-  const listEl = document.getElementById("plannerOutList");
-  const countEl = document.getElementById("plannerOutCount");
-  if (!listEl) return;
-  const f = state.plannerOutFilters;
-  const q = foldAccents((f.q || "").trim());
-  let pool = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean).filter(p => {
-    if (f.pos !== "ALL" && p.position !== f.pos) return false;
-    if (q && !foldAccents(p.webName).includes(q)) return false;
-    if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
-    if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
-    return true;
-  });
-  countEl.textContent = `${pool.length} players in squad shown`;
-  listEl.innerHTML = pool.length ? pool.map(p => plannerPickerRowHtml(p)).join("") : `<div class="empty-state">No squad players match those filters.</div>`;
-  listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
-    btn.onclick = () => {
-      state.plannerTransferOutId = Number(btn.dataset.player);
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
-    };
-  });
-  listEl.querySelectorAll(".builder-row").forEach(row => {
-    row.onclick = (e) => { if (e.target.closest(".builder-add-btn")) return; row.querySelector(".builder-add-btn").click(); };
-  });
-}
-function renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon) {
+// Single browse list of transfer-IN candidates — no separate OUT step.
+// Rows are draggable (drop onto a same-position pitch slot to complete the
+// transfer — see wirePitchDragAndDrop) and also support a tap-to-pick
+// fallback via the + button for non-drag input (touch/mobile, or simply a
+// user who prefers clicking): either completing an in-flight replacement
+// (state.plannerReplacingId, set from the pitch action modal's "Set up a
+// transfer" button) or, with nothing pre-selected, expanding an inline
+// same-position shortlist of the current squad to choose who's replaced.
+function renderPlannerInBrowseList(draft, gwId, entry, log, horizon) {
   const listEl = document.getElementById("plannerInList");
   const countEl = document.getElementById("plannerInCount");
   if (!listEl) return;
@@ -9511,7 +9715,7 @@ function renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon) {
   const q = foldAccents((f.q || "").trim());
   let pool = state.players.filter(p => {
     if (entry.squad.includes(p.id)) return false;
-    if (f.pos !== "ALL" ? p.position !== f.pos : p.position !== outPlayer.position) return false;
+    if (f.pos !== "ALL" && p.position !== f.pos) return false;
     if (q && !foldAccents(p.webName).includes(q)) return false;
     if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
     if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
@@ -9523,32 +9727,206 @@ function renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon) {
       return f.dir === "asc" ? va - vb : vb - va;
     })
     .slice(0, 60);
-  countEl.textContent = `${pool.length} eligible replacements shown`;
-  // Resulting bank if this swap were made, so an unaffordable pick is
-  // flagged right in the list instead of only surfacing as a vague
-  // "budget violated" state after the fact with no indication of which
-  // transfer caused it.
-  const bankBeforeThisSwap = (entry.bank || 0) + outPlayer.nowCost;
+  countEl.textContent = `${pool.length} eligible players shown`;
   listEl.innerHTML = pool.length
-    ? pool.map(({ p, proj }) => {
-        const resultingBank = bankBeforeThisSwap - p.nowCost;
-        return plannerPickerRowHtml(p, proj.toFixed(1), resultingBank < 0 ? -resultingBank : null);
-      }).join("")
-    : `<div class="empty-state">No eligible replacements match those filters.</div>`;
-  listEl.querySelectorAll(".builder-add-btn").forEach(btn => {
+    ? pool.map(({ p, proj }) => `
+        <div class="builder-row" data-player="${p.id}" draggable="true" data-transfer-candidate="${p.id}" title="Drag onto your pitch to bring them in — replaces a same-position player">
+          ${playerAvatarHtml(p, 28)}
+          <span class="b-name">${nameWithPosition(p)} <span class="b-sub">${state.teamsById[p.teamId] ? state.teamsById[p.teamId].short_name : ""}</span></span>
+          <span class="b-price mono">${fmtPrice(p.nowCost)}</span>
+          <span class="b-pts mono">${proj.toFixed(1)}</span>
+          <button class="builder-add-btn" data-action="pick-replace" data-player="${p.id}" title="Choose who this replaces">+</button>
+        </div>
+        <div class="planner-replace-chooser" id="plannerReplaceChooser-${p.id}" style="display:none;padding:2px 0 10px 34px"></div>
+      `).join("")
+    : `<div class="empty-state">No players match those filters.</div>`;
+
+  const completeTransfer = (targetId, candidateId) => {
+    log.out.push(targetId); log.in.push(candidateId);
+    if (log.chip) draft.chipsUsed[log.chip] = true;
+    state.plannerReplacingId = null;
+    saveDrafts(); renderPlanner();
+    state.plannerExpandedGw = gwId;
+    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+  };
+
+  listEl.querySelectorAll("[data-action='pick-replace']").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const candidateId = Number(btn.dataset.player);
+      const candidate = state.players.find(p => p.id === candidateId);
+      if (!candidate) return;
+      // A specific player was already pre-selected for replacement (via
+      // the pitch action modal) — complete the swap right away as long as
+      // positions still match, rather than making the user pick again.
+      if (state.plannerReplacingId) {
+        const target = state.players.find(p => p.id === state.plannerReplacingId);
+        if (target && target.position === candidate.position && entry.squad.includes(target.id)) {
+          completeTransfer(target.id, candidateId);
+          return;
+        }
+      }
+      const chooser = document.getElementById(`plannerReplaceChooser-${candidateId}`);
+      if (!chooser) return;
+      const willOpen = chooser.style.display === "none";
+      listEl.querySelectorAll(".planner-replace-chooser").forEach(c => c.style.display = "none");
+      if (!willOpen) return;
+      const samePos = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean).filter(p => p.position === candidate.position);
+      chooser.innerHTML = samePos.length
+        ? `<div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:4px">Replace which ${candidate.position}?</div>` +
+          samePos.map(p => `<button class="chip-btn" data-replace-target="${p.id}" style="margin:2px 4px 2px 0">${p.webName} (${fmtPrice(p.nowCost)})</button>`).join("")
+        : `<div style="font-size:10.5px;color:var(--ink-faint)">No ${candidate.position} in your squad to replace.</div>`;
+      chooser.style.display = "block";
+      chooser.querySelectorAll("[data-replace-target]").forEach(tbtn => {
+        tbtn.onclick = () => completeTransfer(Number(tbtn.dataset.replaceTarget), candidateId);
+      });
+    };
+  });
+  listEl.querySelectorAll("[data-transfer-candidate]").forEach(row => {
+    row.ondragstart = (e) => {
+      e.dataTransfer.effectAllowed = "copy";
+      try { e.dataTransfer.setData("text/plain", "in:" + row.dataset.transferCandidate); } catch (err) {}
+      row.classList.add("dragging");
+    };
+    row.ondragend = () => row.classList.remove("dragging");
+  });
+}
+// ---- Recommended Transfers (standalone panel, separate from the manual
+// browse-and-drag list above) ----
+// Three distinct angles, one suggestion shown per category so it reads as
+// an actual recommendation rather than another list to scan:
+//   - "long-term": best projected total over the NEXT 5 GAMEWEEKS (this GW
+//     + 4 more), reusing computeProjectionRow's own multi-fixture summing —
+//     a hold pick, not just a one-week punt.
+//   - "punt": small-sample (under the app's own 450-minute "proven" bar
+//     used elsewhere, e.g. Captaincy's pool filter) but strong underlying
+//     per-90 output (xG90+xA90) — explicitly a risk, not a safe pick.
+//   - "consistent": proven pointsPerGame (large-sample season rate),
+//     weighted down for anyone who hasn't actually banked the minutes to
+//     back that rate up (reliability = minutes played ÷ minutes possible).
+// Each suggestion targets the WEAKEST same-position squad member by that
+// same metric — the swap that helps the squad most — constrained to what
+// the current bank can actually afford (never suggests going over budget).
+// Declining moves that player into a draft-scoped "seen" list (UI-only
+// state, not saved with the draft) so the next render serves a different
+// one instead of repeating itself.
+function recommendedTransferCandidatePool(entry) {
+  return state.players.filter(p => !entry.squad.includes(p.id));
+}
+function bestSwapForCategory(candidates, entry, scoreFn, declinedIds) {
+  const squadByPos = { GK: [], DEF: [], MID: [], FWD: [] };
+  entry.squad.forEach(id => {
+    const p = state.players.find(pl => pl.id === id);
+    if (p) squadByPos[p.position].push(p);
+  });
+  const sorted = candidates
+    .filter(p => !declinedIds.includes(p.id))
+    .map(p => ({ p, score: scoreFn(p) }))
+    .filter(x => Number.isFinite(x.score))
+    .sort((a, b) => b.score - a.score);
+  for (const { p: candidate, score } of sorted) {
+    const samePos = squadByPos[candidate.position] || [];
+    if (!samePos.length) continue;
+    const weakest = samePos
+      .map(sp => ({ sp, spScore: scoreFn(sp) }))
+      .sort((a, b) => (Number.isFinite(a.spScore) ? a.spScore : -Infinity) - (Number.isFinite(b.spScore) ? b.spScore : -Infinity))[0];
+    if (!weakest || weakest.sp.id === candidate.id) continue;
+    if (score <= (Number.isFinite(weakest.spScore) ? weakest.spScore : -Infinity)) continue; // not actually an upgrade on anyone in the squad
+    const resultingBank = (entry.bank || 0) + weakest.sp.nowCost - candidate.nowCost;
+    if (resultingBank < 0) continue; // can't afford it — try the next candidate
+    return { candidate, target: weakest.sp, score, resultingBank };
+  }
+  return null;
+}
+function computeRecommendedTransfers(draft, gwId, entry) {
+  const pool = recommendedTransferCandidatePool(entry);
+  const declined = state.plannerDeclinedRecs[draft.id] || { consistent: [], longTerm: [], punt: [] };
+  const horizonEnd = Math.min(38, gwId + 4);
+  const gwsPlayedSoFar = Math.max(1, state.events.filter(e => e.finished).length || 1);
+
+  const consistentScore = (p) => {
+    if ((p.minutes || 0) < 450) return -Infinity;
+    const reliability = Math.min(1, (p.minutes || 0) / (gwsPlayedSoFar * 75));
+    return (p.pointsPerGame || 0) * reliability;
+  };
+  const longTermScore = (p) => computeProjectionRow(p, gwId, horizonEnd, false, 70, state.projProvenWeight).proj;
+  const puntScore = (p) => {
+    if ((p.minutes || 0) === 0 || (p.minutes || 0) >= 450) return -Infinity;
+    return (p.xg90 || 0) + (p.xa90 || 0);
+  };
+
+  return {
+    consistent: bestSwapForCategory(pool, entry, consistentScore, declined.consistent || []),
+    longTerm: bestSwapForCategory(pool, entry, longTermScore, declined.longTerm || []),
+    punt: bestSwapForCategory(pool, entry, puntScore, declined.punt || []),
+  };
+}
+const REC_CATEGORY_META = {
+  consistent: { label: "Consistent", icon: "📈", color: "var(--emerald)", blurb: "Proven points-per-game, weighted by how reliably they've actually played." },
+  longTerm: { label: "Long-term", icon: "🗓️", color: "var(--gold-bright)", blurb: "Best projected total over the next 5 gameweeks — a hold, not just this week." },
+  punt: { label: "Punt", icon: "🎲", color: "#ff9f43", blurb: "Small sample (under 450 mins this season) but strong underlying per-90 output — real risk, real upside." },
+};
+function renderRecommendedTransfersPanel(draft, gwId, entry, log, horizon) {
+  const el = document.getElementById(`plannerRecs-${gwId}`);
+  if (!el) return;
+  const recs = computeRecommendedTransfers(draft, gwId, entry);
+  const cardHtml = (key) => {
+    const meta = REC_CATEGORY_META[key];
+    const rec = recs[key];
+    if (!rec) {
+      return `<div class="card" style="flex:1;min-width:220px;padding:10px 12px">
+        <div style="font-weight:700;font-size:12.5px;color:${meta.color}">${meta.icon} ${meta.label}</div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:6px">No affordable ${meta.label.toLowerCase()} suggestion right now — nothing in the pool clears your bank against a same-position squad player.</div>
+      </div>`;
+    }
+    const { candidate, target, resultingBank } = rec;
+    return `<div class="card" style="flex:1;min-width:220px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <div style="font-weight:700;font-size:12.5px;color:${meta.color}">${meta.icon} ${meta.label}</div>
+        <div class="mono" style="font-size:10.5px;color:${resultingBank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"}">bank after: ${fmtPrice(resultingBank)}</div>
+      </div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin:3px 0 8px">${meta.blurb}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${playerAvatarHtml(candidate, 30)}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:12.5px">${nameWithPosition(candidate)}</div>
+          <div style="font-size:10.5px;color:var(--ink-faint)">${fmtPrice(candidate.nowCost)} · replaces ${target.webName} (${fmtPrice(target.nowCost)})</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button class="chip-btn active" data-rec-accept="${key}" style="flex:1">✓ Accept</button>
+        <button class="dir-btn" data-rec-decline="${key}" style="flex:1">✕ Show another</button>
+      </div>
+    </div>`;
+  };
+  el.innerHTML = `
+    <div class="detail-block-title">Recommended transfers</div>
+    <p class="field-desc" style="margin:0 0 10px;font-size:10.5px;color:var(--ink-faint)">Three angles on your squad's weakest same-position players — each tagged with why it's suggested. Decline to see another in that category.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">${["consistent", "longTerm", "punt"].map(cardHtml).join("")}</div>
+  `;
+  el.querySelectorAll("[data-rec-accept]").forEach(btn => {
     btn.onclick = () => {
-      const p = state.players.find(pl => pl.id === Number(btn.dataset.player));
-      if (!p) return;
-      log.out.push(outPlayer.id); log.in.push(p.id);
+      const key = btn.dataset.recAccept;
+      const rec = recs[key];
+      if (!rec) return;
+      log.out.push(rec.target.id); log.in.push(rec.candidate.id);
       if (log.chip) draft.chipsUsed[log.chip] = true;
-      state.plannerTransferOutId = null;
       saveDrafts(); renderPlanner();
       state.plannerExpandedGw = gwId;
       renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
     };
   });
-  listEl.querySelectorAll(".builder-row").forEach(row => {
-    row.onclick = (e) => { if (e.target.closest(".builder-add-btn")) return; row.querySelector(".builder-add-btn").click(); };
+  el.querySelectorAll("[data-rec-decline]").forEach(btn => {
+    btn.onclick = () => {
+      const key = btn.dataset.recDecline;
+      const rec = recs[key];
+      if (!rec) return;
+      if (!state.plannerDeclinedRecs[draft.id]) state.plannerDeclinedRecs[draft.id] = { consistent: [], longTerm: [], punt: [] };
+      const bucket = state.plannerDeclinedRecs[draft.id];
+      if (!bucket[key]) bucket[key] = [];
+      bucket[key].push(rec.candidate.id);
+      renderRecommendedTransfersPanel(draft, gwId, entry, log, horizon);
+    };
   });
 }
 function renderGwDetail(draft, gwId, horizon, timeline) {
@@ -9577,11 +9955,15 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   el.innerHTML = `
     <div class="chip-btn-row">${chipRow}</div>
     ${activeChipBanner}
+    <div id="plannerRecs-${gwId}" style="margin-bottom:18px"></div>
     <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:18px;align-items:start">
       <div>
-        <div class="detail-block-title">Transfer out → in</div>
-        <div style="font-size:11.5px;color:${entry.bank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:8px">
+        <div class="detail-block-title">Transfers in</div>
+        <div style="font-size:11.5px;color:${entry.bank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:2px">
           In the bank this gameweek: <span class="mono" style="font-weight:700">${fmtPrice(entry.bank)}</span>${entry.bank < 0 ? " ⚠️ over budget — remove a transfer or pick a cheaper replacement" : ""}
+        </div>
+        <div style="font-size:11.5px;color:${log.chip !== "WC" && log.chip !== "FH" && log.out.length > entry.freeTransfersAvailable ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:8px">
+          Free transfers available: <span class="mono" style="font-weight:700">${entry.freeTransfersAvailable}</span>${log.chip === "WC" || log.chip === "FH" ? "" : log.out.length > entry.freeTransfersAvailable ? ` ⚠️ ${log.out.length - entry.freeTransfersAvailable} hit${log.out.length - entry.freeTransfersAvailable === 1 ? "" : "s"} this gameweek (−${(log.out.length - entry.freeTransfersAvailable) * 4}pts)` : ""}
         </div>
         <div id="transferControls-${gwId}"></div>
       </div>
@@ -9655,37 +10037,42 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   pitchWrap.querySelectorAll(".pitch-slot").forEach(slot => {
     slot.onclick = () => openGwPlayerActionModal(draft, gwId, horizon, Number(slot.dataset.player), result);
   });
-  wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result);
+  wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result, entry);
   const allInSquad = entry.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean);
 
-  // Transfer controls — redesigned to match the Player Stats browser's
-  // filter/list UI (item 6): search-by-name, position filter, sort, price
-  // range, "Reset filters", and rows with photo/name/team/price/points/+.
-  // Reuses the exact same builder-filters/builder-list/builder-row CSS
-  // classes as the squad-builder picker (renderBuilderList) so the
-  // interaction pattern matches across the app.
+  // Transfer controls (item: "should only be transfers that are IN, not
+  // transfer out") — a single browse list of who to bring IN; the OUT side
+  // is chosen by dragging a candidate onto their spot on the pitch (same
+  // position only — see wirePitchDragAndDrop) or by tapping + and picking
+  // who they replace from a same-position shortlist, rather than a
+  // separate up-front "select OUT player" search step. Reuses the same
+  // builder-filters/builder-list/builder-row CSS classes as the
+  // squad-builder picker so the interaction pattern matches across the app.
   const tc = document.getElementById(`transferControls-${gwId}`);
-  const selectedOutId = state.plannerTransferOutId && allInSquad.some(p => p.id === state.plannerTransferOutId)
-    ? state.plannerTransferOutId : null;
-  const outPlayer = selectedOutId ? state.players.find(p => p.id === selectedOutId) : null;
+  const replacingPlayer = state.plannerReplacingId && allInSquad.some(p => p.id === state.plannerReplacingId)
+    ? state.players.find(p => p.id === state.plannerReplacingId) : null;
+  if (state.plannerReplacingId && !replacingPlayer) state.plannerReplacingId = null;
   tc.innerHTML = `
-    <div style="font-size:11px;color:var(--ink-faint);margin-bottom:4px">1. Select player to transfer OUT</div>
-    ${plannerPickerFilterBarHtml("out", state.plannerOutFilters, false)}
-    <div class="builder-count" id="plannerOutCount"></div>
-    <div class="builder-list" id="plannerOutList" style="max-height:${outPlayer ? 320 : 560}px"></div>
-    ${outPlayer ? `
-      <div style="font-size:11px;color:var(--ink-faint);margin:14px 0 4px">2. Pick replacement IN (${outPlayer.position}) — search or sort to browse</div>
-      ${plannerPickerFilterBarHtml("in", state.plannerInFilters, true)}
-      <div class="builder-count" id="plannerInCount"></div>
-      <div class="builder-list" id="plannerInList" style="max-height:400px"></div>
-    ` : `<div style="font-size:11px;color:var(--ink-faint);margin-top:8px">Pick someone to transfer out first.</div>`}
+    <div style="font-size:11px;color:var(--ink-faint);margin-bottom:8px">Drag a player onto their spot on the pitch to bring them in (same position only), or tap + and pick who they replace.</div>
+    ${replacingPlayer ? `
+      <div style="display:flex;align-items:center;gap:8px;background:var(--accent-dim,rgba(255,255,255,0.05));border:1px solid var(--accent,var(--border));border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:12px">
+        Replacing <strong>${nameWithPosition(replacingPlayer)}</strong> — pick who comes in, or drag them onto the pitch
+        <button class="dir-btn" id="plannerCancelReplace" style="margin-left:auto;padding:2px 8px">Cancel</button>
+      </div>
+    ` : ""}
+    ${plannerPickerFilterBarHtml("in", state.plannerInFilters, true)}
+    <div class="builder-count" id="plannerInCount"></div>
+    <div class="builder-list" id="plannerInList" style="max-height:560px"></div>
   `;
-  wirePlannerPickerFilterBar("out", state.plannerOutFilters, () => renderPlannerOutList(draft, gwId, entry, horizon));
-  renderPlannerOutList(draft, gwId, entry, horizon);
-  if (outPlayer) {
-    wirePlannerPickerFilterBar("in", state.plannerInFilters, () => renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon));
-    renderPlannerInList(draft, gwId, entry, outPlayer, log, horizon);
-  }
+  wirePlannerPickerFilterBar("in", state.plannerInFilters, () => renderPlannerInBrowseList(draft, gwId, entry, log, horizon));
+  renderPlannerInBrowseList(draft, gwId, entry, log, horizon);
+  const cancelReplaceBtn = document.getElementById("plannerCancelReplace");
+  if (cancelReplaceBtn) cancelReplaceBtn.onclick = () => {
+    state.plannerReplacingId = null;
+    state.plannerExpandedGw = gwId;
+    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+  };
+  renderRecommendedTransfersPanel(draft, gwId, entry, log, horizon);
 
   if (log.out.length) {
     const list = document.createElement("div");
@@ -9777,7 +10164,10 @@ function swapTwoPlayersInGw(draft, gwId, log, result, idA, idB) {
 // Enables drag-and-drop swapping on the pitch: drag any player slot onto
 // another to swap them (sub between XI/bench, or reorder within the
 // bench). Native HTML5 DnD — no library needed for this simple a case.
-function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result) {
+// `entry` (this gameweek's squad/bank snapshot) is only needed for the
+// external transfer-in drop path below — intra-pitch swaps (starting XI /
+// bench reordering) don't touch the squad list itself so didn't need it.
+function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result, entry) {
   let dragId = null;
   pitchWrap.querySelectorAll(".pitch-slot").forEach(slot => {
     slot.ondragstart = (e) => {
@@ -9787,13 +10177,40 @@ function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result) {
       slot.classList.add("dragging");
     };
     slot.ondragend = () => { slot.classList.remove("dragging"); dragId = null; };
-    slot.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; slot.classList.add("drag-over"); };
+    slot.ondragover = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = dragId != null ? "move" : "copy"; slot.classList.add("drag-over"); };
     slot.ondragleave = () => { slot.classList.remove("drag-over"); };
     slot.ondrop = (e) => {
       e.preventDefault();
       slot.classList.remove("drag-over");
       const targetId = Number(slot.dataset.player);
-      const sourceId = dragId != null ? dragId : Number(e.dataTransfer.getData("text/plain"));
+      const raw = e.dataTransfer.getData("text/plain");
+      // A drop originating from the Transfers-in browse list (item:
+      // "dragging players should swap position — defender for another
+      // defender, ST for ST") — tagged "in:<id>" at the drag source so it's
+      // distinguishable from an intra-pitch drag (which carries a bare
+      // numeric squad-member id). Position-locked: a dragged candidate can
+      // only land on a same-position slot, same rule real FPL transfers
+      // follow (you can't turn a DEF slot into a MID slot mid-transfer).
+      if (raw && raw.startsWith("in:")) {
+        if (!entry) return;
+        const candidateId = Number(raw.slice(3));
+        const candidate = state.players.find(p => p.id === candidateId);
+        const targetPlayer = state.players.find(p => p.id === targetId);
+        if (!candidate || !targetPlayer || !targetId) return;
+        if (entry.squad.includes(candidateId)) { alert(`${candidate.webName} is already in your squad.`); return; }
+        if (candidate.position !== targetPlayer.position) {
+          alert(`Can't replace a ${targetPlayer.position} with a ${candidate.position} — transfers must be the same position.`);
+          return;
+        }
+        log.out.push(targetId); log.in.push(candidateId);
+        if (log.chip) draft.chipsUsed[log.chip] = true;
+        state.plannerReplacingId = null;
+        saveDrafts(); renderPlanner();
+        state.plannerExpandedGw = gwId;
+        renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+        return;
+      }
+      const sourceId = dragId != null ? dragId : Number(raw);
       if (!sourceId || !targetId || sourceId === targetId) return;
       const ok = swapTwoPlayersInGw(draft, gwId, log, result, sourceId, targetId);
       if (!ok) { alert("Can't make that swap — it would break the lineup rules (1 GK, 3-5 DEF, 2-5 MID, 1-3 FWD)."); return; }
@@ -9830,7 +10247,7 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
         ${isStarter ? `<button class="chip-btn" id="gwModalCaptain">👑 ${log.captainId === playerId ? "Remove as captain" : "Make captain"}</button>` : ""}
         ${isStarter ? `<button class="chip-btn" id="gwModalVice">🅥 ${log.viceCaptainId === playerId ? "Remove as vice-captain" : "Make vice-captain"}</button>` : ""}
         <button class="chip-btn" id="gwModalSub">🔁 ${isStarter ? "Sub — choose who comes on" : "Sub — choose who to swap with"}</button>
-        <button class="chip-btn" id="gwModalTransfer">↔️ Set up a transfer out</button>
+        <button class="chip-btn" id="gwModalTransfer">↔️ Transfer out — pick who comes in</button>
         <button class="chip-btn" id="gwModalCancel">Cancel</button>
       </div>
       <div id="gwModalSwapPicker" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
@@ -9900,15 +10317,14 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
   };
   document.getElementById("gwModalTransfer").onclick = () => {
     closePitchModal();
-    // Jump straight into the transfer-out → in flow with this player
-    // pre-selected as the outgoing player, and the out-list filtered to
-    // his position so the picker isn't cluttered with the rest of the
-    // squad. (Previously looked for a `.swap-out-select` element that no
-    // longer exists in the current builder-row-based transfer UI — this
-    // now drives the same state the out-list rows themselves set.)
+    // Pre-select this player as who's being replaced, and narrow the
+    // browse list to his position so the picker isn't cluttered with the
+    // rest of the pool — the actual OUT choice no longer needs its own
+    // search step (item: "should only be transfers that are in, not
+    // transfer out"), it's driven by state.plannerReplacingId, which the
+    // IN browse list's + button and pitch drag-drop both read.
     const outP = state.players.find(pl => pl.id === playerId);
-    state.plannerTransferOutId = playerId;
-    if (outP && state.plannerOutFilters) state.plannerOutFilters.pos = outP.position;
+    state.plannerReplacingId = playerId;
     if (outP && state.plannerInFilters) state.plannerInFilters.pos = outP.position;
     state.plannerExpandedGw = gwId;
     renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
@@ -11741,7 +12157,8 @@ function renderFixtureRunFinder() {
     `;
   });
   suggestionEl.innerHTML = `<div class="scout-card-grid">${suggestionCards.join("")}</div>`;
-  renderFdrFunFacts(list);
+  // Fun facts moved to the Insights tab (see renderInsightsTab) — this
+  // fixture-run computation no longer feeds a fun-facts card here.
 }
 
 // ---------- Fun facts: auto-generated highlights from the same real +
@@ -11798,7 +12215,7 @@ function computeTeamFunFacts(t, xgInOrder, csInOrder) {
   return facts;
 }
 function renderFdrFunFacts(list) {
-  const el = document.getElementById("fdrFunFacts");
+  const el = document.getElementById("insightsFunFacts");
   if (!el) return;
   const allFacts = [];
   list.forEach(({ t, xgInOrder, csInOrder }) => {
@@ -12143,13 +12560,24 @@ function setupPriceWatchControls() {
 // technically reads "a" in some edge cases FPL exposes).
 const STATUS_LABELS = { a: "Available", d: "Doubtful", i: "Injured", s: "Suspended", u: "Unavailable", n: "Not in squad" };
 const STATUS_SEVERITY = { i: 0, s: 1, u: 2, d: 3, a: 4, n: 4 }; // lower = shown first among non-shortlisted, when chance% ties
+// Scope (item: "too long, so many players I cannot even digest it") —
+// league-wide, this list can easily run to 40-60+ players at once, which
+// reads as noise rather than something decision-relevant. Default scope is
+// now "mine" (your loaded squad + shortlist only, via state.myTeamSquadIds
+// and state.shortlist) — the players whose fitness actually changes a
+// decision you're making — with an explicit toggle to "All players" for
+// when you genuinely want the full league view (e.g. scouting a rival's
+// bench, or checking a punt before a transfer).
 function computeSquadNews() {
   const shortlistIds = new Set((state.shortlist || []).map(s => s.id));
+  const myTeamIds = new Set(state.myTeamSquadIds || []);
+  const scopeToMine = (state.squadNewsScope || "mine") === "mine";
   return state.players
     .filter(p => p.status !== "a" || (p.chanceOfPlaying !== null && p.chanceOfPlaying < 100))
+    .filter(p => !scopeToMine || myTeamIds.has(p.id) || shortlistIds.has(p.id))
     .map(p => {
       const chance = p.chanceOfPlaying !== null && p.chanceOfPlaying !== undefined ? p.chanceOfPlaying : (p.chanceOfPlayingThisRound ?? null);
-      return { p, chance, isShortlisted: shortlistIds.has(p.id) };
+      return { p, chance, isShortlisted: shortlistIds.has(p.id), isMyTeam: myTeamIds.has(p.id) };
     })
     .sort((a, b) => {
       if (a.isShortlisted !== b.isShortlisted) return a.isShortlisted ? -1 : 1;
@@ -12162,20 +12590,32 @@ function computeSquadNews() {
 function renderSquadNewsPanel() {
   const grid = document.getElementById("squadNewsGrid");
   if (!grid || !state.players.length) return;
+  const scopeToMine = (state.squadNewsScope || "mine") === "mine";
+  const hasMineToShow = (state.myTeamSquadIds && state.myTeamSquadIds.length) || (state.shortlist && state.shortlist.length);
+  const segEl = document.getElementById("squadNewsScopeSeg");
+  if (segEl) {
+    segEl.innerHTML = [["mine", "My squad + shortlist"], ["all", "All players"]].map(([val, label]) =>
+      `<button class="${(state.squadNewsScope || "mine") === val ? "active" : ""}" data-squad-news-scope="${val}">${label}</button>`).join("");
+    segEl.querySelectorAll("[data-squad-news-scope]").forEach(btn => {
+      btn.onclick = () => { state.squadNewsScope = btn.dataset.squadNewsScope; renderSquadNewsPanel(); };
+    });
+  }
   const rows = computeSquadNews();
   const titleEl = document.getElementById("squadNewsTitle");
   if (titleEl) titleEl.innerHTML = `🩹 Squad news — injuries, doubts, suspensions <span style="font-size:11px;font-weight:500;color:var(--ink-faint)">(${rows.length})</span>`;
   if (!rows.length) {
-    grid.innerHTML = `<div class="empty-state">No fitness/availability doubts right now — everyone's fully fit per the FPL API.</div>`;
+    grid.innerHTML = scopeToMine && !hasMineToShow
+      ? `<div class="empty-state">No team loaded and nothing shortlisted yet — load your team on the My team tab, add players to your shortlist, or switch to "All players" above.</div>`
+      : `<div class="empty-state">No fitness/availability doubts right now${scopeToMine ? " for your squad/shortlist" : ""} — everyone's fully fit per the FPL API.</div>`;
     return;
   }
-  grid.innerHTML = `<div class="insight-card-grid" style="--insight-accent:var(--red,#ff5468)">${rows.map(({ p, chance, isShortlisted }) => {
+  grid.innerHTML = `<div class="insight-card-grid" style="--insight-accent:var(--red,#ff5468)">${rows.map(({ p, chance, isShortlisted, isMyTeam }) => {
     const team = state.teamsById[p.teamId];
     const statusColor = p.status === "i" || p.status === "s" || p.status === "u" ? "var(--red,#ff5468)" : p.status === "d" ? "var(--gold-bright)" : "var(--ink-dim)";
     return `
     <div class="insight-card">
       <div class="insight-card-top">
-        <div><div class="insight-card-name">${isShortlisted ? "★ " : ""}${nameWithPosition(p)}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · ${p.position}</div></div>
+        <div><div class="insight-card-name">${isMyTeam ? "⚽ " : ""}${isShortlisted ? "★ " : ""}${nameWithPosition(p)}</div><div class="insight-card-sub">${team ? team.short_name : "—"} · ${p.position}</div></div>
         <div class="insight-pill" style="color:${statusColor};font-weight:700">${STATUS_LABELS[p.status] || p.status}</div>
       </div>
       <div class="insight-card-headline" style="font-size:14px">${chance !== null ? chance + "% chance next GW" : "Chance unknown"}</div>
@@ -12358,6 +12798,7 @@ function renderProjAccuracyPanel() {
 // ---- Insights tab orchestrator ----
 function renderInsightsTab() {
   if (!state.teams.length) return;
+  renderFdrFunFacts(computeFixtureRunFullSeasonData().list); // fun facts live here now, not on the Fixtures tab
   setupDifferentialsControls();
   renderDifferentialsPanel();
   setupPriceWatchControls();
@@ -12446,6 +12887,28 @@ async function loadH2hSaved() {
 }
 function saveH2hSaved() { persistSet("h2hSaved", JSON.stringify(state.h2hSaved)); }
 
+// "Done" checkmark on the Fixtures overview (item: "have a checkmark if
+// h2h has been done or not") — an explicit, user-set flag per pairing
+// rather than inferred from whether any data exists for it (inferring
+// would be unreliable: adding one quick matchup shouldn't silently mark a
+// whole review as "done"). Keyed the same way every other per-pairing H2H
+// state is (h2hMatchupKey), so it survives a team-order flip.
+async function loadH2hDoneMap() {
+  try {
+    const raw = await persistGet("h2hDoneMap");
+    if (raw) state.h2hDoneMap = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hDoneMap() { persistSet("h2hDoneMap", JSON.stringify(state.h2hDoneMap)); }
+
+async function loadH2hFlashcard() {
+  try {
+    const raw = await persistGet("h2hFlashcard");
+    if (raw) state.h2hFlashcard = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+}
+function saveH2hFlashcard() { persistSet("h2hFlashcard", JSON.stringify(state.h2hFlashcard)); }
+
 const FORMATIONS_H2H = {
   "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
   "3-5-2": { DEF: 3, MID: 5, FWD: 2 }, "3-4-3": { DEF: 3, MID: 4, FWD: 3 },
@@ -12485,6 +12948,33 @@ function h2hPitchHtml(picksByPos, teamA, opts) {
 }
 function h2hFormationSelectHtml(id, current) {
   return `<select id="${id}">${Object.keys(FORMATIONS_H2H).map(f => `<option value="${f}"${f === current ? " selected" : ""}>${f}</option>`).join("")}</select>`;
+}
+// Item: "make the formation highest points, since different formations can
+// showcase different points" — tries every formation shape (same pool/
+// greedy-by-points fill autoFillByPoints already uses) and keeps whichever
+// produces the highest combined total, instead of always building within
+// whatever formation happens to be selected. Pure/non-mutating so it can
+// be tried without committing to it.
+function h2hBestFormationByPoints(teamA, teamB) {
+  let best = null;
+  Object.keys(FORMATIONS_H2H).forEach(fKey => {
+    const formation = FORMATIONS_H2H[fKey];
+    const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
+    const used = new Set();
+    const picks = { GK: [], DEF: [], MID: [], FWD: [] };
+    let total = 0;
+    ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+      const pool = h2hEligiblePlayers(pos)(teamA).concat(h2hEligiblePlayers(pos)(teamB))
+        .filter((p, i, arr) => arr.indexOf(p) === i && !used.has(p.id))
+        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      for (let i = 0; i < need[pos]; i++) {
+        const p = pool.find(x => !used.has(x.id));
+        if (p) { used.add(p.id); picks[pos].push(p.id); total += p.totalPoints || 0; } else picks[pos].push(null);
+      }
+    });
+    if (!best || total > best.total) best = { formationKey: fKey, picks, total };
+  });
+  return best;
 }
 
 // Best XI drawn from both clubs' combined player pool (ranked by real
@@ -12599,6 +13089,7 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
         <span style="font-size:12px;color:var(--ink-dim)">Formation</span>
         ${h2hFormationSelectHtml(formationSelectId, saved.formation)}
         <button class="chip-btn" id="${resetBtnId}">${resetLabel}</button>
+        ${isCombined ? `<button class="chip-btn" id="h2hBestFormationBtn" title="Tries every formation shape and keeps whichever produces the highest combined total — different shapes fit different squads' depth differently.">🏆 Best formation (highest points)</button>` : ""}
       </div>
       <p class="foot-note" style="margin-bottom:10px">${intro}</p>
       ${h2hPitchHtml(picksByPos, teamA, { editPos, editSlot })}
@@ -12622,6 +13113,18 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
   document.getElementById(resetBtnId).onclick = () => {
     if (isCombined) { autoFillByPoints(); }
     else { saved.picks = { GK: [], DEF: [], MID: [], FWD: [] }; }
+    state[posStateKey] = "GK"; state[slotStateKey] = 0;
+    saveFn();
+    renderH2H();
+  };
+  const bestFormationBtn = document.getElementById("h2hBestFormationBtn");
+  if (bestFormationBtn) bestFormationBtn.onclick = () => {
+    const best = h2hBestFormationByPoints(teamA, teamB);
+    if (!best) return;
+    saved.formation = best.formationKey;
+    saved.picks = best.picks;
+    saved.autoFilled = true;
+    state.h2hFormation = saved.formation;
     state[posStateKey] = "GK"; state[slotStateKey] = 0;
     saveFn();
     renderH2H();
@@ -12686,7 +13189,251 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
   });
 }
 function renderH2hCombinedXi(body, teamA, teamB) { renderH2hXiBuilder(body, teamA, teamB, "combined"); }
-function renderH2hDraftXi(body, teamA, teamB) { renderH2hXiBuilder(body, teamA, teamB, "draft"); }
+function renderH2hDraftXi(body, teamA, teamB) {
+  // Two ways to build the Ability draft XI (item: Tinder-style flashcard
+  // face-off) — "classic" is the existing click-through picker
+  // (renderH2hXiBuilder), "flashcard" is the new swipe interface below.
+  // Both write into the SAME saved.picks/formation for this pairing (see
+  // h2hFlashcardCommitToDraft), so switching modes never loses work — a
+  // classic pick stays until a flashcard decision overwrites that slot, and
+  // vice versa.
+  const modeRow = `<div class="chip-btn-row" style="margin-bottom:12px">
+    <button class="chip-btn${state.h2hDraftMode !== "flashcard" ? " active" : ""}" data-h2h-draft-mode="classic">📋 Classic picker</button>
+    <button class="chip-btn${state.h2hDraftMode === "flashcard" ? " active" : ""}" data-h2h-draft-mode="flashcard">🔥 Flashcard draft</button>
+  </div>`;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = modeRow;
+  body.innerHTML = "";
+  body.appendChild(wrap.firstElementChild);
+  const inner = document.createElement("div");
+  body.appendChild(inner);
+  if (state.h2hDraftMode === "flashcard") renderH2hFlashcardDraft(inner, teamA, teamB);
+  else renderH2hXiBuilder(inner, teamA, teamB, "draft");
+  body.querySelectorAll("[data-h2h-draft-mode]").forEach(btn => {
+    btn.onclick = () => { state.h2hDraftMode = btn.dataset.h2hDraftMode; renderH2H(); };
+  });
+}
+// ---- Ability draft: Tinder-style flashcard face-off ----
+// Position-vs-position (not matchup-vs-matchup): the best player per role
+// slot in a fixed 4-3-3 template (same "assume 4-3-3" convention as the
+// Auto matchups preset), so it genuinely compares GK to GK, LB to LB, etc.
+// rather than whatever each club's real formation happens to be. Swipe (or
+// tap Pick) to choose who starts for that slot; each side also has a
+// "↻ swap" dropdown to substitute in a different same-position squad
+// player (item: "with the option to swap out in case of injury or
+// selection news") without losing your other decisions.
+const FLASHCARD_ROLES = ["GK", "RB", "CB", "CB", "LB", "CDM", "CM", "CAM", "RW", "ST", "LW"];
+const FLASHCARD_BROAD_POS = { GK: "GK", RB: "DEF", CB: "DEF", LB: "DEF", LWB: "DEF", RWB: "DEF", CDM: "MID", CM: "MID", CAM: "MID", LM: "MID", RM: "MID", LW: "MID", RW: "MID", ST: "FWD", CF: "FWD" };
+// 4-3-3 pitch-slot mapping for h2hPitchHtml: role order above maps 1:1
+// onto { GK:[0], DEF:[0,1,2,3], MID:[0,1,2], FWD:[0,1,2] } slot indices.
+const FLASHCARD_SLOT_MAP = [
+  ["GK", 0], ["DEF", 0], ["DEF", 1], ["DEF", 2], ["DEF", 3],
+  ["MID", 0], ["MID", 1], ["MID", 2], ["FWD", 0], ["FWD", 1], ["FWD", 2],
+];
+function h2hBestPlayerForRole(team, role, usedIds) {
+  const broad = FLASHCARD_BROAD_POS[role] || "MID";
+  const squad = state.players.filter(p => p.teamId === team.id && !usedIds.has(p.id));
+  const exact = squad.filter(p => getSpecificPosition(p.id) === role).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  if (exact.length) return exact[0];
+  const inBroad = squad.filter(p => p.position === broad).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  return inBroad[0] || null;
+}
+function h2hFlashcardAlternates(team, role, currentId, usedIds) {
+  const broad = FLASHCARD_BROAD_POS[role] || "MID";
+  return state.players.filter(p => p.teamId === team.id && p.position === broad && p.id !== currentId && !usedIds.has(p.id))
+    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+}
+function h2hFlashcardPairs(teamA, teamB, fc) {
+  const usedA = new Set(), usedB = new Set();
+  const overridesA = (fc.overrides && fc.overrides.A) || {}, overridesB = (fc.overrides && fc.overrides.B) || {};
+  return FLASHCARD_ROLES.map((role, i) => {
+    const overrideAId = overridesA[i], overrideBId = overridesB[i];
+    const pa = overrideAId ? state.players.find(p => p.id === overrideAId) : h2hBestPlayerForRole(teamA, role, usedA);
+    const pb = overrideBId ? state.players.find(p => p.id === overrideBId) : h2hBestPlayerForRole(teamB, role, usedB);
+    if (pa) usedA.add(pa.id);
+    if (pb) usedB.add(pb.id);
+    return { role, slotIdx: i, pa, pb };
+  });
+}
+const FLASHCARD_CORE_ATTRS = ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"];
+function h2hFlashcardMiniAttrs(p) {
+  if (!p) return "";
+  const attrs = computeFcAttributes(p).filter(a => FLASHCARD_CORE_ATTRS.includes(a.label));
+  return attrs.map(a => `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+      <span style="width:62px;font-size:9.5px;color:var(--ink-faint)">${a.label}</span>
+      <div style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden">
+        <div style="width:${a.value}%;height:100%;background:${a.value >= 70 ? "#3cd25a" : a.value >= 40 ? "#e0a94f" : "#e0529a"}"></div>
+      </div>
+      <span class="mono" style="width:20px;font-size:9.5px;text-align:right">${a.value}</span>
+    </div>
+  `).join("");
+}
+// Writes the flashcard's current decisions into the SAME saved.picks store
+// the classic picker uses, forcing formation to 4-3-3 (the flashcard's own
+// fixed template) — so "done swiping" produces a real, usable Ability
+// draft XI on the pitch, not just a standalone results screen.
+function h2hFlashcardCommitToDraft(teamA, teamB, pairs) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const saved = state.h2hDraft[key] || (state.h2hDraft[key] = { formation: "4-3-3", picks: { GK: [], DEF: [], MID: [], FWD: [] }, autoFilled: false });
+  saved.formation = "4-3-3";
+  saved.picks = { GK: [null], DEF: [null, null, null, null], MID: [null, null, null], FWD: [null, null, null] };
+  pairs.forEach((pair, i) => {
+    const decision = pair.decision;
+    const winner = decision === "A" ? pair.pa : decision === "B" ? pair.pb : null;
+    if (!winner) return;
+    const [pos, slotIdx] = FLASHCARD_SLOT_MAP[i];
+    saved.picks[pos][slotIdx] = winner.id;
+  });
+  saved.autoFilled = false;
+  saveH2hDraft();
+}
+function renderH2hFlashcardDraft(body, teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const fc = state.h2hFlashcard[key] || (state.h2hFlashcard[key] = { cardIdx: 0, decisions: {}, overrides: { A: {}, B: {} } });
+  const pairs = h2hFlashcardPairs(teamA, teamB, fc).map((pair, i) => ({ ...pair, decision: fc.decisions[i] || null }));
+  const total = pairs.length;
+  const decidedCount = pairs.filter(p => p.decision).length;
+  const idx = Math.max(0, Math.min(total - 1, fc.cardIdx || 0));
+  const allDone = decidedCount === total;
+
+  const commitAndRerender = () => { saveH2hFlashcard(); renderH2H(); };
+
+  if (allDone) {
+    const winners = { A: 0, B: 0 };
+    pairs.forEach(p => { if (p.decision === "A") winners.A++; else if (p.decision === "B") winners.B++; });
+    const resultPicksByPos = { GK: [], DEF: [], MID: [], FWD: [] };
+    pairs.forEach((pair, i) => {
+      const winner = pair.decision === "A" ? pair.pa : pair.decision === "B" ? pair.pb : null;
+      const [pos] = FLASHCARD_SLOT_MAP[i];
+      resultPicksByPos[pos].push(winner ? { p: winner } : null);
+    });
+    body.innerHTML = `
+      <div class="card" style="margin-bottom:16px;text-align:center">
+        <div class="detail-block-title" style="margin-bottom:6px">🏁 Draft complete</div>
+        <div class="mono" style="font-size:22px;font-weight:800">${teamA.short_name} ${winners.A} – ${winners.B} ${teamB.short_name}</div>
+        <p class="foot-note" style="margin-top:6px">${winners.A === winners.B ? "Split right down the middle." : `${winners.A > winners.B ? teamA.name : teamB.name} won more individual position battles.`}</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;flex-wrap:wrap">
+          <button class="btn" id="fcSaveToDraft">💾 Save to Ability draft XI</button>
+          <button class="chip-btn" id="fcRestart">↻ Restart draft</button>
+        </div>
+      </div>
+      <div class="card">${h2hPitchHtml(resultPicksByPos, teamA, null)}</div>
+    `;
+    document.getElementById("fcSaveToDraft").onclick = () => {
+      h2hFlashcardCommitToDraft(teamA, teamB, pairs);
+      state.h2hDraftMode = "classic";
+      renderH2H();
+    };
+    document.getElementById("fcRestart").onclick = () => {
+      state.h2hFlashcard[key] = { cardIdx: 0, decisions: {}, overrides: { A: {}, B: {} } };
+      commitAndRerender();
+    };
+    return;
+  }
+
+  const pair = pairs[idx];
+  const swapRow = (side, p, opponentUsed) => {
+    if (!p) return `<div class="foot-note">No eligible ${pair.role} on file for this club.</div>`;
+    const alternates = h2hFlashcardAlternates(side === "A" ? teamA : teamB, pair.role, p.id, new Set());
+    if (!alternates.length) return "";
+    return `<select data-fc-swap="${side}" data-fc-slot="${idx}" style="font-size:10.5px;margin-top:4px;width:100%">
+      <option value="">↻ Swap out (injury/news)…</option>
+      ${alternates.map(a => `<option value="${a.id}">${a.webName} (${a.totalPoints ?? 0}pts)</option>`).join("")}
+    </select>`;
+  };
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:12px;text-align:center">
+      <div style="font-size:11px;color:var(--ink-faint)">Card ${idx + 1} of ${total} · ${decidedCount} decided</div>
+      <div style="height:5px;border-radius:3px;background:rgba(255,255,255,0.08);margin-top:6px;overflow:hidden">
+        <div style="width:${(decidedCount / total) * 100}%;height:100%;background:var(--gold-bright)"></div>
+      </div>
+    </div>
+    <div class="card" id="fcCard" style="margin-bottom:14px;user-select:none;touch-action:pan-y">
+      <div class="detail-block-title" style="text-align:center;margin-bottom:10px">${pair.role} <span style="color:var(--ink-faint);font-weight:400">— who starts?</span></div>
+      <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;justify-content:center">
+        <div style="flex:1;min-width:200px;max-width:260px;padding:10px;border-radius:12px;border:2px solid var(--gold-bright);background:rgba(255,182,72,0.06)${pair.decision === "A" ? ";box-shadow:0 0 0 2px var(--gold-bright)" : ""}">
+          <div style="text-align:center;margin-bottom:8px">${pair.pa ? playerAvatarHtml(pair.pa, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pa ? nameWithPosition(pair.pa) : "— none —"}</div><div class="foot-note">${teamA.short_name}${pair.pa ? ` · ${pair.pa.totalPoints ?? 0}pts · form ${(pair.pa.form ?? 0).toFixed(1)}` : ""}</div></div>
+          ${h2hFlashcardMiniAttrs(pair.pa)}
+          ${swapRow("A", pair.pa)}
+          <button class="chip-btn active" style="width:100%;margin-top:8px" data-fc-pick="A">✓ Pick ${pair.pa ? pair.pa.webName : teamA.short_name}</button>
+        </div>
+        <div style="align-self:center;font-weight:800;color:var(--ink-faint);font-size:18px">VS</div>
+        <div style="flex:1;min-width:200px;max-width:260px;padding:10px;border-radius:12px;border:2px solid var(--blue,#4a9eff);background:rgba(74,158,255,0.06)${pair.decision === "B" ? ";box-shadow:0 0 0 2px var(--blue,#4a9eff)" : ""}">
+          <div style="text-align:center;margin-bottom:8px">${pair.pb ? playerAvatarHtml(pair.pb, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pb ? nameWithPosition(pair.pb) : "— none —"}</div><div class="foot-note">${teamB.short_name}${pair.pb ? ` · ${pair.pb.totalPoints ?? 0}pts · form ${(pair.pb.form ?? 0).toFixed(1)}` : ""}</div></div>
+          ${h2hFlashcardMiniAttrs(pair.pb)}
+          ${swapRow("B", pair.pb)}
+          <button class="chip-btn active" style="width:100%;margin-top:8px" data-fc-pick="B">✓ Pick ${pair.pb ? pair.pb.webName : teamB.short_name}</button>
+        </div>
+      </div>
+      <p class="foot-note" style="text-align:center;margin-top:10px">Drag the card left/right to decide, or tap a Pick button. FM-style attributes are percentile ranks vs. same-position players (see Player stats tab).</p>
+    </div>
+    <div style="display:flex;justify-content:center;gap:8px">
+      <button class="dir-btn" id="fcPrevBtn" ${idx === 0 ? "disabled" : ""}>‹ Back</button>
+      <button class="dir-btn" id="fcSkipBtn">Skip for now ›</button>
+    </div>
+  `;
+  document.querySelectorAll("[data-fc-pick]").forEach(btn => {
+    btn.onclick = () => {
+      fc.decisions[idx] = btn.dataset.fcPick;
+      fc.cardIdx = Math.min(total - 1, idx + 1);
+      commitAndRerender();
+    };
+  });
+  const prevBtn = document.getElementById("fcPrevBtn");
+  if (prevBtn) prevBtn.onclick = () => { fc.cardIdx = Math.max(0, idx - 1); commitAndRerender(); };
+  const skipBtn = document.getElementById("fcSkipBtn");
+  if (skipBtn) skipBtn.onclick = () => { fc.cardIdx = Math.min(total - 1, idx + 1); commitAndRerender(); };
+  document.querySelectorAll("[data-fc-swap]").forEach(sel => {
+    sel.onchange = () => {
+      const side = sel.dataset.fcSwap, slot = Number(sel.dataset.fcSlot);
+      if (!sel.value) return;
+      if (!fc.overrides) fc.overrides = { A: {}, B: {} };
+      fc.overrides[side][slot] = Number(sel.value);
+      commitAndRerender();
+    };
+  });
+  // Swipe gesture: drag the card left (Pick B) / right (Pick A) — a real
+  // pointer-driven Tinder-style interaction, not just a decorative CSS
+  // effect. Falls back gracefully to the buttons above on any input that
+  // doesn't support pointer events cleanly.
+  const cardEl = document.getElementById("fcCard");
+  if (cardEl) {
+    let startX = null, dragging = false;
+    const threshold = 90;
+    cardEl.onpointerdown = (e) => {
+      if (e.target.closest("select") || e.target.closest("button")) return;
+      startX = e.clientX; dragging = true;
+      cardEl.style.transition = "none";
+      try { cardEl.setPointerCapture(e.pointerId); } catch (err) {}
+    };
+    cardEl.onpointermove = (e) => {
+      if (!dragging || startX === null) return;
+      const dx = e.clientX - startX;
+      cardEl.style.transform = `translateX(${dx}px) rotate(${dx / 20}deg)`;
+      cardEl.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 400));
+    };
+    const endDrag = (e) => {
+      if (!dragging || startX === null) return;
+      const dx = e.clientX - startX;
+      dragging = false; startX = null;
+      cardEl.style.transition = "transform 0.2s ease, opacity 0.2s ease";
+      if (dx > threshold) {
+        cardEl.style.transform = `translateX(600px) rotate(20deg)`; cardEl.style.opacity = "0";
+        fc.decisions[idx] = "A"; fc.cardIdx = Math.min(total - 1, idx + 1);
+        setTimeout(commitAndRerender, 150);
+      } else if (dx < -threshold) {
+        cardEl.style.transform = `translateX(-600px) rotate(-20deg)`; cardEl.style.opacity = "0";
+        fc.decisions[idx] = "B"; fc.cardIdx = Math.min(total - 1, idx + 1);
+        setTimeout(commitAndRerender, 150);
+      } else {
+        cardEl.style.transform = "translateX(0) rotate(0)"; cardEl.style.opacity = "1";
+      }
+    };
+    cardEl.onpointerup = endDrag;
+    cardEl.onpointercancel = endDrag;
+  }
+}
 
 // Manual player-vs-player matchup tool. FPL's own data only distinguishes
 // GK/DEF/MID/FWD — it has no "LW" or "RB" sub-roles — so rather than fake a
@@ -12698,7 +13445,17 @@ function renderH2hDraftXi(body, teamA, teamB) { renderH2hXiBuilder(body, teamA, 
 // with a coloured connector between any pair the user has actually
 // recorded a winner for in state.h2hMatchups.
 function h2hAutoDraftXi(team) {
-  const need = { GK: 1, DEF: 4, MID: 4, FWD: 2 };
+  // 4-3-3 (item: "auto matchups should assume 4-3-3 formations") — this is
+  // the default XI fed into the Tactical board / Auto matchups preset
+  // whenever there's no manually-drafted Ability draft XI saved for this
+  // pairing yet (h2hTeamXiForBoard falls back here). Was previously 4-4-2
+  // (DEF 4 / MID 4 / FWD 2), which meant the role-pairing rules in
+  // tacticalAutoPresetMatchups (LW vs RB, CDM vs CDM, striker vs every CB,
+  // etc.) were being fed a shape they weren't really designed for — a
+  // fixed 4-3-3 on both sides gives every wide/central role a clean,
+  // consistent counter-position to pair against regardless of either
+  // club's real current formation.
+  const need = { GK: 1, DEF: 4, MID: 3, FWD: 3 };
   const out = { GK: [], DEF: [], MID: [], FWD: [] };
   const used = new Set(); // guards against the same player ever appearing
   // twice across position rows (was possible if a player's data briefly
@@ -13360,6 +14117,157 @@ function h2hXiAutoWinner(mode, teamA, teamB) {
   if (!a && !b) return { winner: null, a, b };
   return { winner: a === b ? "DRAW" : (a > b ? "A" : "B"), a, b };
 }
+// Non-mutating scoreboard tally (item: "showcase scores from scoreboard"
+// on the Fixtures overview) — same category logic renderH2hScoreboard
+// uses, but reads state.h2hScoreboard directly instead of writing into it,
+// since this gets called once per fixture card on a whole-gameweek list
+// and must not have render-time side effects on saved data.
+function computeH2hScoreboardTotal(teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const saved = state.h2hScoreboard[key];
+  const categories = ((saved && saved.categories) || []).filter(c => c.id !== "c1" && c.id !== "c2");
+  const auto = h2hMatchupsAutoWinner(teamA, teamB);
+  const autoCombined = h2hXiAutoWinner("combined", teamA, teamB);
+  const autoDraft = h2hXiAutoWinner("draft", teamA, teamB);
+  let scoreA = 0, scoreB = 0;
+  const tally = (winner) => {
+    if (winner === "A") scoreA += 1;
+    else if (winner === "B") scoreB += 1;
+    else if (winner === "DRAW") { scoreA += 0.5; scoreB += 0.5; }
+  };
+  categories.forEach(c => tally(c.winner));
+  [auto, autoCombined, autoDraft].forEach(res => tally(res.winner));
+  return { scoreA, scoreB };
+}
+// Disparity score (item: "a disparity score is done by the gap — e.g. if
+// there is an ability draft but the team has 11 players that means every
+// single player is better and disparity [is total]... this is emphasised
+// in player matchups since it has values") — reads the Player Matchups
+// board for this pairing (whatever's pinned, or the 4-3-3 auto-preset if
+// nothing's pinned yet) and combines two signals into one 0-100 "how
+// one-sided is this on paper" number: how many of the individual position
+// matchups one side sweeps (a literal "every player is better" count), and
+// the average magnitude of matchupAttributeEdge's own pctA/pctB spread
+// across them (a 9-2 sweep of close 52/48 edges reads as less lopsided
+// than a 9-2 sweep of 80/20 blowouts, even though the win COUNT is the
+// same). Returns null when there's nothing to compare yet — the Fixtures
+// card falls back to "no matchups set" rather than a fabricated 0.
+function computeH2hDisparity(teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  let list = state.h2hMatchups[key];
+  if (!list || !list.length) {
+    const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
+    const pairs = tacticalAutoPresetMatchups(teamA, teamB, xiA, xiB);
+    list = pairs.map(([pa, pb]) => ({ playerAId: pa.id, playerBId: pb.id, winner: null, edge: matchupAttributeEdge(pa, pb) }));
+  }
+  if (!list.length) return null;
+  let aWins = 0, bWins = 0, evens = 0, magSum = 0, magN = 0;
+  list.forEach(m => {
+    const pa = state.players.find(p => p.id === m.playerAId), pb = state.players.find(p => p.id === m.playerBId);
+    const edge = m.edge || (pa && pb ? matchupAttributeEdge(pa, pb) : null);
+    const winner = m.winner || (edge ? edge.favoured : null);
+    if (winner === "A") aWins++; else if (winner === "B") bWins++; else evens++;
+    if (edge && edge.favoured !== "EVEN") {
+      const pct = edge.favoured === "A" ? edge.pctA : edge.pctB;
+      magSum += (pct - 50) * (edge.favoured === "A" ? 1 : -1);
+      magN++;
+    }
+  });
+  const total = list.length;
+  const netWins = aWins - bWins;
+  const avgMagnitude = magN ? magSum / magN : 0; // +ve favours A, -ve favours B
+  const disparityPct = Math.max(0, Math.min(100, Math.round((Math.abs(netWins) / total) * 60 + Math.min(40, Math.abs(avgMagnitude) * 0.8))));
+  const favoured = netWins !== 0 ? (netWins > 0 ? "A" : "B") : (avgMagnitude !== 0 ? (avgMagnitude > 0 ? "A" : "B") : null);
+  return { aWins, bWins, evens, total, netWins, avgMagnitude, disparityPct, favoured };
+}
+// ---- Fixtures overview (item: "overview of gameweek fixtures... make
+// each fixture clickable that then takes me to this current overview
+// view... checkmark if h2h has been done or not... showcase scores from
+// scoreboard... disparity score") — the gameweek-wide entry point into the
+// existing pair-specific H2H views. Clicking a fixture sets teamA/teamB to
+// that fixture's home/away clubs (consistently home=A, away=B, so the
+// meaning of "A"/"B" doesn't depend on click order) and jumps straight to
+// the Overview tab, same destination every saved-pairing chip already
+// jumps to.
+function renderH2hFixturesOverview(body) {
+  const events = state.events || [];
+  if (!events.length) { body.innerHTML = `<div class="empty-state">No gameweek data yet.</div>`; return; }
+  if (!state.h2hFixturesGw || !events.some(e => e.id === state.h2hFixturesGw)) {
+    state.h2hFixturesGw = currentEventId() || (events.find(e => !e.finished) || events[0]).id;
+  }
+  const gwId = state.h2hFixturesGw;
+  const gwIdx = events.findIndex(e => e.id === gwId);
+  const fixtures = (state.allFixtures || [])
+    .filter(f => f.event === gwId && state.teamsById[f.team_h] && state.teamsById[f.team_a])
+    .sort((a, b) => new Date(a.kickoff_time || 0) - new Date(b.kickoff_time || 0));
+
+  const rowHtml = (f) => {
+    const home = state.teamsById[f.team_h], away = state.teamsById[f.team_a];
+    const key = h2hMatchupKey(home.id, away.id);
+    const played = f.finished && f.team_h_score != null;
+    const done = !!state.h2hDoneMap[key];
+    const { scoreA, scoreB } = computeH2hScoreboardTotal(home, away); // A = home, B = away for this card
+    const disparity = computeH2hDisparity(home, away);
+    const disparityHtml = disparity
+      ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
+          <div style="flex:1;height:6px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08)">
+            <div style="width:${disparity.disparityPct}%;height:100%;background:${disparity.favoured === "A" ? "var(--gold-bright)" : disparity.favoured === "B" ? "var(--pink)" : "var(--ink-faint)"}"></div>
+          </div>
+          <span class="mono" style="font-size:10px;color:var(--ink-faint);white-space:nowrap">${disparity.disparityPct}/100 gap${disparity.favoured ? ` → ${disparity.favoured === "A" ? home.short_name : away.short_name}` : ""}</span>
+        </div>`
+      : `<div style="font-size:10px;color:var(--ink-faint);margin-top:6px">No player matchups set yet — disparity fills in once you visit Player matchups for this fixture.</div>`;
+    return `
+      <div class="card h2h-fixture-row" data-h2h-fixture="${home.id}-${away.id}" style="margin-bottom:10px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer" title="Mark this fixture's H2H as reviewed" onclick="event.stopPropagation()">
+            <input type="checkbox" data-h2h-done-toggle="${key}" ${done ? "checked" : ""} />
+          </label>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;justify-content:center">
+            <div style="text-align:right;flex:1;display:flex;align-items:center;gap:8px;justify-content:flex-end">${done ? "✅ " : ""}<span style="font-weight:700">${home.name}</span>${kitSvg(home.id, 22)}</div>
+            <div class="mono" style="font-weight:800;font-size:15px;min-width:70px;text-align:center">${played ? `${f.team_h_score} – ${f.team_a_score}` : "vs"}</div>
+            <div style="text-align:left;flex:1;display:flex;align-items:center;gap:8px">${kitSvg(away.id, 22)}<span style="font-weight:700">${away.name}</span></div>
+          </div>
+          <div style="text-align:center;min-width:110px">
+            <div style="font-size:10px;color:var(--ink-faint)">Scoreboard</div>
+            <div class="mono" style="font-weight:700;font-size:13px">${scoreA} – ${scoreB}</div>
+          </div>
+        </div>
+        <div style="max-width:420px;margin:8px auto 0">${disparityHtml}</div>
+        <div style="text-align:center;font-size:10px;color:var(--ink-faint);margin-top:2px">${played ? "Final" : (f.kickoff_time ? new Date(f.kickoff_time).toLocaleString() : "Date TBC")}</div>
+      </div>
+    `;
+  };
+
+  body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:14px;align-items:center">
+      <button class="dir-btn" id="h2hFixturesGwPrev" ${gwIdx <= 0 ? "disabled" : ""}>‹</button>
+      <span style="font-size:15px;font-weight:700;min-width:110px;text-align:center">${fmtGwName(gwId)}</span>
+      <button class="dir-btn" id="h2hFixturesGwNext" ${gwIdx >= events.length - 1 ? "disabled" : ""}>›</button>
+      <span style="margin-left:auto;font-size:11px;color:var(--ink-faint)">${fixtures.filter(f => state.h2hDoneMap[h2hMatchupKey(f.team_h, f.team_a)]).length}/${fixtures.length} reviewed</span>
+    </div>
+    <p class="foot-note" style="margin-bottom:12px">Click a fixture to open its full head-to-head. Disparity score: how one-sided the Player matchups board looks position-by-position — 100 means one side wins (or clearly edges) every single role; 0 means it's even throughout. Falls back to the 4-3-3 auto-preset if you haven't pinned real matchups for that pairing yet.</p>
+    ${fixtures.length ? fixtures.map(rowHtml).join("") : `<div class="empty-state">No fixtures found for this gameweek.</div>`}
+  `;
+
+  const prevBtn = document.getElementById("h2hFixturesGwPrev"), nextBtn = document.getElementById("h2hFixturesGwNext");
+  if (prevBtn) prevBtn.onclick = () => { if (gwIdx > 0) { state.h2hFixturesGw = events[gwIdx - 1].id; renderH2H(); } };
+  if (nextBtn) nextBtn.onclick = () => { if (gwIdx < events.length - 1) { state.h2hFixturesGw = events[gwIdx + 1].id; renderH2H(); } };
+  body.querySelectorAll("[data-h2h-done-toggle]").forEach(cb => {
+    cb.onchange = () => {
+      state.h2hDoneMap[cb.dataset.h2hDoneToggle] = cb.checked;
+      saveH2hDoneMap();
+      renderH2H();
+    };
+  });
+  body.querySelectorAll("[data-h2h-fixture]").forEach(row => {
+    row.onclick = () => {
+      const [homeId, awayId] = row.dataset.h2hFixture.split("-").map(Number);
+      state.h2h.teamA = homeId; state.h2h.teamB = awayId;
+      state.h2hViewMode = "overview";
+      renderH2H();
+    };
+  });
+}
 function renderH2hScoreboard(body, teamA, teamB) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
   const saved = state.h2hScoreboard[key] || (state.h2hScoreboard[key] = { categories: [] });
@@ -13843,6 +14751,11 @@ function renderH2H() {
     btn.classList.toggle("active", btn.dataset.h2hView === state.h2hViewMode);
   });
   const body = document.getElementById("h2hBody");
+  // Fixtures overview doesn't need a team pair pre-selected — it's the
+  // gameweek-wide entry point that picks the pair FOR you when you click a
+  // fixture — so it must render before the "!teamA || !teamB" empty-state
+  // guard below, which every other (pair-specific) view still needs.
+  if (state.h2hViewMode === "fixtures") { renderH2hFixturesOverview(body); return; }
   if (!teamA || !teamB) { body.innerHTML = ""; return; }
 
   if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
@@ -15597,6 +16510,7 @@ scanForTableScrollArrows();
 
 buildToolbarStatics();
 setupTabs();
+setupThemeSwitch();
 setupProjectionsControls();
 document.getElementById("statsHeatmapToggle").onchange = (e) => {
   state.statsHeatmap = e.target.checked;
