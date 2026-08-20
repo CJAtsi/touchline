@@ -47,6 +47,9 @@
     --header-bg: rgba(14,15,20,0.6);
     --body-glow-1: rgba(255,255,255,0.035);
     --body-glow-2: rgba(255,255,255,0.025);
+    --gold-ink: #12100a;
+    --panel-solid: rgba(20,22,31,0.92);
+    --select-opt-bg: #14161f;
     color-scheme: dark;
   }
   /* Theme switcher (General item): light / mid / dark — every rule above
@@ -59,19 +62,19 @@
      above) become a deep violet in both light themes, since white-on-white
      would be invisible. */
   :root[data-theme="mid"] {
-    --bg-0: #c7c8d1;
-    --bg-1: #d6d7de;
-    --panel: rgba(245,245,248,0.55);
-    --panel-2: rgba(245,245,248,0.7);
-    --panel-3: rgba(245,245,248,0.85);
-    --border: rgba(20,20,35,0.14);
-    --border-strong: rgba(20,20,35,0.4);
-    --ink: #1c1c24;
-    --ink-dim: #4a4a55;
-    --ink-faint: #74747f;
-    --gold: #5b21b6;
-    --gold-bright: #6d28d9;
-    --gold-soft: rgba(109,40,217,0.14);
+    --bg-0: #96979f;
+    --bg-1: #a6a7af;
+    --panel: rgba(255,255,255,0.28);
+    --panel-2: rgba(255,255,255,0.42);
+    --panel-3: rgba(255,255,255,0.6);
+    --border: rgba(15,15,25,0.22);
+    --border-strong: rgba(15,15,25,0.48);
+    --ink: #17171d;
+    --ink-dim: #2c2c33;
+    --ink-faint: #48484f;
+    --gold: #34343d;
+    --gold-bright: #17171d;
+    --gold-soft: rgba(23,23,29,0.16);
     --emerald: #047857;
     --emerald-dim: rgba(4,120,87,0.16);
     --red: #b91c1c;
@@ -80,29 +83,32 @@
     --amber-soft: rgba(146,64,14,0.15);
     --blue: #1d4ed8;
     --pink: #a21caf;
-    --purple: #5b21b6;
-    --glow-soft: 0 0 12px rgba(109,40,217,0.2);
-    --glow-strong: 0 0 20px rgba(109,40,217,0.32);
-    --shadow: 0 1px 1px rgba(0,0,0,0.08), 0 22px 44px -18px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.05);
-    --header-bg: rgba(210,210,220,0.55);
-    --body-glow-1: rgba(255,255,255,0.5);
-    --body-glow-2: rgba(120,80,220,0.06);
+    --purple: #34343d;
+    --glow-soft: 0 0 12px rgba(0,0,0,0.22);
+    --glow-strong: 0 0 20px rgba(0,0,0,0.34);
+    --shadow: 0 1px 1px rgba(0,0,0,0.12), 0 22px 44px -18px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.08);
+    --header-bg: rgba(200,201,208,0.55);
+    --body-glow-1: rgba(255,255,255,0.3);
+    --body-glow-2: rgba(0,0,0,0.05);
+    --gold-ink: #ffffff;
+    --panel-solid: rgba(210,211,218,0.94);
+    --select-opt-bg: #d2d3da;
     color-scheme: light;
   }
   :root[data-theme="light"] {
-    --bg-0: #f2f2f5;
+    --bg-0: #f4f4f6;
     --bg-1: #ffffff;
-    --panel: rgba(255,255,255,0.45);
-    --panel-2: rgba(255,255,255,0.62);
-    --panel-3: rgba(255,255,255,0.8);
-    --border: rgba(30,30,45,0.12);
-    --border-strong: rgba(30,30,45,0.38);
+    --panel: rgba(255,255,255,0.55);
+    --panel-2: rgba(255,255,255,0.72);
+    --panel-3: rgba(255,255,255,0.88);
+    --border: rgba(20,20,30,0.1);
+    --border-strong: rgba(20,20,30,0.32);
     --ink: #16161d;
     --ink-dim: #55555f;
     --ink-faint: #86869a;
-    --gold: #6d28d9;
-    --gold-bright: #7c3aed;
-    --gold-soft: rgba(124,58,237,0.12);
+    --gold: #2c2c34;
+    --gold-bright: #14141a;
+    --gold-soft: rgba(20,20,26,0.08);
     --emerald: #059669;
     --emerald-dim: rgba(5,150,105,0.14);
     --red: #dc2626;
@@ -111,13 +117,16 @@
     --amber-soft: rgba(180,83,9,0.14);
     --blue: #2563eb;
     --pink: #c026d3;
-    --purple: #6d28d9;
-    --glow-soft: 0 0 12px rgba(124,58,237,0.18);
-    --glow-strong: 0 0 20px rgba(124,58,237,0.3);
+    --purple: #2c2c34;
+    --glow-soft: 0 0 12px rgba(20,20,26,0.14);
+    --glow-strong: 0 0 20px rgba(20,20,26,0.24);
     --shadow: 0 1px 1px rgba(0,0,0,0.06), 0 22px 44px -18px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.03);
     --header-bg: rgba(255,255,255,0.5);
     --body-glow-1: rgba(255,255,255,0.7);
-    --body-glow-2: rgba(124,58,237,0.05);
+    --body-glow-2: rgba(0,0,0,0.03);
+    --gold-ink: #ffffff;
+    --panel-solid: rgba(255,255,255,0.92);
+    --select-opt-bg: #ffffff;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -188,8 +197,8 @@
     width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
     font-size: 15px; transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   }
-  .theme-switch button:hover:not(.active) { background: rgba(255,255,255,0.1); color: var(--ink-dim); }
-  .theme-switch button.active { background: var(--gold-soft); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+  .theme-switch button:hover:not(.active) { background: var(--panel-2); color: var(--ink-dim); }
+  .theme-switch button.active { background: var(--gold-soft); color: var(--gold-bright); box-shadow: inset 0 0 0 1px var(--border-strong); }
   .theme-switch button:active { transform: scale(0.92); }
   nav { display: flex; gap: 3px; font-size: 14px; background: rgba(255,255,255,0.04); padding: 4px; border-radius: 999px; border: 1px solid var(--border); }
   nav button {
@@ -216,7 +225,7 @@
   #tabs.side-toolbar:hover { width: 216px; box-shadow: 8px 8px 40px -8px rgba(0,0,0,0.5), 0 0 0 1px var(--border); }
   #tabs.side-toolbar .tb-group-label {
     font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em;
-    color: var(--ink-faint); padding: 8px 9px 3px; white-space: nowrap;
+    color: rgba(255,255,255,0.4); padding: 8px 9px 3px; white-space: nowrap;
     opacity: 0; transition: opacity 0.15s ease;
   }
   #tabs.side-toolbar .tb-group-label:first-of-type { padding-top: 2px; }
@@ -225,12 +234,13 @@
     display: flex; align-items: center; gap: 12px;
     padding: 8px 9px; border-radius: 12px; white-space: nowrap;
     justify-content: flex-start; width: 100%; text-align: left;
+    color: rgba(255,255,255,0.82); /* dock chrome is always dark glass, independent of theme */
   }
-  #tabs.side-toolbar button.active { background: var(--gold-soft); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25), var(--glow-soft); }
+  #tabs.side-toolbar button.active { background: rgba(255,255,255,0.14); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25), 0 0 14px rgba(255,255,255,0.22); }
   #tabs.side-toolbar button { transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease; }
-  #tabs.side-toolbar button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
-  #tabs.side-toolbar button .tb-icon { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-dim); }
-  #tabs.side-toolbar button.active .tb-icon { color: var(--gold-bright); }
+  #tabs.side-toolbar button:hover:not(.active) { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.95); }
+  #tabs.side-toolbar button .tb-icon { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.6); }
+  #tabs.side-toolbar button.active .tb-icon { color: #fff; }
   #tabs.side-toolbar button .tb-label { opacity: 0; transition: opacity 0.15s ease; }
   #tabs.side-toolbar:hover button .tb-label { opacity: 1; }
   body { padding-left: 90px; }
@@ -251,7 +261,7 @@
   #sidebarToggleBtn {
     display: none; position: fixed; left: 14px; top: 14px; z-index: 51;
     width: 34px; height: 34px; border-radius: 10px; align-items: center; justify-content: center;
-    background: rgba(17,18,24,0.85); border: 1px solid var(--border); color: var(--ink-dim);
+    background: rgba(17,18,24,0.85); border: 1px solid var(--border); color: rgba(255,255,255,0.8);
     backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
     cursor: pointer;
   }
@@ -321,7 +331,7 @@
   .tac-pitch-wrap { padding-bottom: 22px; }
   .tac-drag-pitch {
     position: relative; width: 100%; aspect-ratio: 3 / 4; max-width: 480px; margin: 0 auto;
-    background: linear-gradient(180deg, #1e3d24, #234a2b); border: 2px solid rgba(255,255,255,0.25); border-radius: 10px;
+    background: linear-gradient(180deg, #3a3a40, #2c2c31); border: 2px solid rgba(255,255,255,0.25); border-radius: 10px;
     overflow: hidden; touch-action: none;
     box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
@@ -346,7 +356,7 @@
   .tac-goal-box.bottom { bottom: 0; border-bottom: none; }
   /* Horizontal orientation: same coordinate space, stretched into a
      landscape box with goal ends on left/right instead of top/bottom. */
-  .tac-drag-pitch.horiz { aspect-ratio: 4 / 3; max-width: 640px; background: linear-gradient(90deg, #1e3d24, #234a2b); }
+  .tac-drag-pitch.horiz { aspect-ratio: 4 / 3; max-width: 640px; background: linear-gradient(90deg, #3a3a40, #2c2c31); }
   .tac-drag-pitch.horiz::before { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 10%, rgba(255,255,255,0.0) 10% 20%); }
   .tac-drag-pitch.horiz .tac-halfway { left: 50%; right: auto; top: 4%; bottom: 4%; height: auto; width: 0; border-top: none; border-left: 2px solid rgba(255,255,255,0.35); }
   .tac-drag-pitch.horiz .tac-goal-box { left: auto; top: 30%; width: 10%; height: 40%; }
@@ -360,19 +370,14 @@
     transition: box-shadow 0.12s ease;
   }
   .tac-token:active { cursor: grabbing; z-index: 5; box-shadow: 0 0 0 3px var(--gold-bright); }
-  .tac-token.team-a { background: var(--gold-bright); color: #1a1206; }
+  .tac-token.team-a { background: var(--gold-bright); color: var(--gold-ink); }
   .tac-token.team-b { background: #3ba7ff; color: #06121f; }
   .tac-token.drag-over-target { box-shadow: 0 0 0 3px #3cd25a; }
   .tac-token-label {
     position: absolute; top: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap;
     font-size: 9.5px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); margin-top: 2px; pointer-events: none;
   }
-  /* Horizontal orientation: labels sit beside the token rather than below
-     it — a landscape pitch is short on vertical room per row, so a label
-     stacked underneath would collide with the row beneath it. */
-  .tac-drag-pitch.horiz .tac-token-label {
-    top: 50%; left: 100%; transform: translateY(-50%); margin-top: 0; margin-left: 4px;
-  }
+
   .chip-btn.small { padding: 3px 8px; font-size: 10.5px; }
   .dir-btn.small { padding: 3px 7px; font-size: 10.5px; }
   .scout-theme-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -423,37 +428,69 @@
   .shortlist-toolbar {
     display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap;
   }
-  .shortlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  /* Compact grid (item: "the cards are so big and they don't really have
+     the best look/aesthetic") — roughly half the footprint of the old
+     card: smaller avatar, tighter padding, stats condensed onto one
+     line instead of a spread-out row, no card-level gradient/blur (kept
+     for the EXPANDED state only, where the extra visual weight is earned
+     by actually having more content to show). */
+  .shortlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
   .sl-card {
     --pc: var(--gold-bright);
-    position: relative; border: 1px solid var(--border); border-radius: 16px; padding: 14px 14px 12px;
-    background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
-    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
-    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
-    cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 8px 8px 7px;
+    background: var(--panel-solid);
+    cursor: pointer; transition: transform 0.12s ease, border-color 0.12s ease;
     overflow: hidden;
   }
   .sl-card::before {
     content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pc);
     opacity: 0.85;
   }
-  .sl-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
-  .sl-card.expanded { grid-column: 1 / -1; }
-  .sl-card-top { display: flex; align-items: center; gap: 10px; }
-  .sl-card-name { font-size: 14px; font-weight: 700; line-height: 1.25; }
-  .sl-card-sub { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
-  .sl-card-stats { display: flex; gap: 14px; margin-top: 10px; }
-  .sl-card-stat { display: flex; flex-direction: column; gap: 1px; }
-  .sl-card-stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
-  .sl-card-stat-val { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700; color: var(--ink); }
-  .sl-card-actions { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; }
-  .sl-star-btn {
-    background: none; border: none; color: var(--gold-bright); font-size: 16px; cursor: pointer; line-height: 1;
-    padding: 2px; border-radius: 6px; transition: background 0.12s ease;
+  .sl-card:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+  .sl-card.expanded {
+    grid-column: 1 / -1; padding: 12px 14px 12px; border-radius: 14px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
+  .sl-card-top { display: flex; align-items: center; gap: 7px; }
+  .sl-card.expanded .sl-card-top { gap: 10px; }
+  .sl-card-name { font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl-card.expanded .sl-card-name { font-size: 14px; white-space: normal; }
+  .sl-card-sub { font-size: 9.5px; color: var(--ink-faint); margin-top: 0; }
+  .sl-card.expanded .sl-card-sub { font-size: 11px; margin-top: 1px; }
+  .sl-card-stats { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .sl-card.expanded .sl-card-stats { gap: 14px; margin-top: 10px; }
+  .sl-card-stat { display: flex; flex-direction: column; gap: 0; }
+  .sl-card-stat-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-faint); }
+  .sl-card.expanded .sl-card-stat-label { font-size: 9px; }
+  .sl-card-stat-val { font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 700; color: var(--ink); }
+  .sl-card.expanded .sl-card-stat-val { font-size: 13px; }
+  .sl-card-actions { position: absolute; top: 5px; right: 5px; display: flex; align-items: center; gap: 3px; }
+  .sl-card.expanded .sl-card-actions { top: 10px; right: 10px; gap: 6px; }
+  .sl-star-btn {
+    background: none; border: none; color: var(--gold-bright); font-size: 13px; cursor: pointer; line-height: 1;
+    padding: 1px; border-radius: 5px; transition: background 0.12s ease;
+  }
+  .sl-card.expanded .sl-star-btn { font-size: 16px; padding: 2px; }
   .sl-star-btn:hover { background: rgba(255,182,72,0.15); }
-  .sl-card-chevron { font-size: 10px; color: var(--ink-faint); }
+  .sl-card-chevron { font-size: 9px; color: var(--ink-faint); display: none; }
+  .sl-card.expanded .sl-card-chevron { display: inline; font-size: 10px; }
   .sl-card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+  /* Tier list view */
+  .sl-tier-list { display: flex; flex-direction: column; gap: 6px; }
+  .sl-tier-row { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel-solid); min-height: 52px; }
+  .sl-tier-label { flex: 0 0 44px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #12141a; }
+  .sl-tier-chips { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; align-items: center; }
+  .sl-tier-chip {
+    display: flex; align-items: center; gap: 5px; padding: 3px 8px 3px 3px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .sl-tier-chip:hover { background: rgba(255,255,255,0.09); border-color: var(--border-strong); }
+  .sl-tier-chip-name { font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .sl-tier-chip-score { font-size: 10px; color: var(--ink-faint); }
+  .sl-tier-empty { font-size: 11px; color: var(--ink-faint); padding: 4px 8px; }
   .top-tabs-row {
     display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
     margin: 0 auto; padding: 6px; border-radius: 16px; max-width: 100%;
@@ -532,18 +569,18 @@
     padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
     transition: all 0.15s ease;
   }
-  .seg button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
-  .seg button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+  .seg button:hover:not(.active) { background: var(--panel-2); color: var(--ink-dim); }
+  .seg button.active { background: var(--panel-3); color: var(--gold-bright); box-shadow: inset 0 0 0 1px var(--border-strong); }
 
   select, input[type=text], input[type=number] {
-    background: var(--panel); border: 1px solid var(--border); color: var(--ink);
+    background: var(--panel); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); border: 1px solid var(--border); color: var(--ink);
     border-radius: 999px; padding: 8px 13px; font-size: 13px; font-family: inherit; outline: none;
     transition: border-color 0.15s ease, background 0.15s ease;
     color-scheme: inherit; box-sizing: border-box;
   }
   input[type=number] { padding: 8px 6px 8px 12px; min-width: 58px; text-align: left; }
-  select option { background: #14161f; color: var(--ink); }
-  select:focus, input:focus { border-color: var(--border-strong); background: rgba(255,255,255,0.08); }
+  select option { background: var(--select-opt-bg); color: var(--ink); }
+  select:focus, input:focus { border-color: var(--border-strong); background: var(--panel-2); }
   .price-range { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
   .price-range input { width: 62px; }
   .search-input { flex: 1; min-width: 150px; max-width: 240px; }
@@ -578,7 +615,7 @@
     width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
     font-size: 13px; flex-shrink: 0;
   }
-  .mode-btn.active { color: #fff; border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
+  .mode-btn.active { background: var(--mode-glow, var(--gold-soft)); color: var(--gold-ink); border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
   .mode-btn.active .mode-btn-icon { background: rgba(255,255,255,0.22); }
 
   /* border-collapse:collapse + position:sticky on <th> is a known
@@ -600,7 +637,7 @@
   table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: auto; }
   thead th {
     text-align: right; padding: 10px 8px; color: var(--ink-dim); font-weight: 600;
-    background: #14161fee; white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
+    background: var(--panel-solid); backdrop-filter: blur(var(--glass-blur)) saturate(150%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%); white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
     font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em;
     border-bottom: 1px solid var(--border-strong); line-height: 1.25;
     transition: background 0.12s ease, color 0.12s ease;
@@ -610,7 +647,6 @@
        recently, badly squashed/vertically-wrapped header text in the live
        app. Removed outright per explicit instruction: headers now scroll
        normally with the table, no position:sticky anywhere in this file. */
-    background: #14161f;
   }
   thead th:hover { color: var(--gold-bright); }
   thead th.label-col { text-align: left; font-family: "Inter"; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; color: var(--ink-dim); }
@@ -624,11 +660,34 @@
   #fdrGrid thead th.gw-col { text-align: center; }
   /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at */
   .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child {
-    position: sticky; left: 0; z-index: 3; background: #14161f;
+    position: sticky; left: 0; z-index: 3; background: var(--panel-solid); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
     box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
   }
-  .table-wrap table tbody td.label-col:first-child { background: #1a1a22; }
-  .table-wrap table tbody tr:nth-child(even) td.label-col:first-child { background: #1e1e26; }
+  .table-wrap table tbody td.label-col:first-child { background: var(--panel-solid); }
+  .table-wrap table tbody tr:nth-child(even) td.label-col:first-child { background: color-mix(in srgb, var(--panel-solid) 92%, var(--ink) 6%); }
+  /* Bottom-of-page FDR reference block (site-wide footer, sits outside
+     <main> so it stays visible under every tab, not just the FDR tab
+     itself) — a compact version of the full FDR grid: all 20 clubs, badge
+     + short name, colour-coded fixture pills. Column COUNT is picked at
+     render time in JS based on available width (see renderFdrFooterBlock)
+     rather than fixed here, per "fills the space it has... aesthetically
+     pleasing in spacing more than a desired amount" — this CSS only
+     handles the fixed layout shell, not how many GW columns show. */
+  .fdr-footer { border-top: 1px solid var(--border); margin-top: 32px; padding: 20px 0 28px; background: var(--panel-solid); }
+  .fdr-footer-inner { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+  .fdr-footer-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; }
+  .fdr-footer-grid-wrap { overflow-x: auto; }
+  .fdr-footer-table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .fdr-footer-table th, .fdr-footer-table td { padding: 3px 4px; text-align: center; font-size: 11px; }
+  .fdr-footer-table th.fdr-footer-club-col, .fdr-footer-table td.fdr-footer-club-col {
+    text-align: left; width: 128px; position: sticky; left: 0; z-index: 2;
+    background: var(--panel-solid); box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
+  }
+  .fdr-footer-table td.fdr-footer-club-col { display: flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+  .fdr-footer-table th { color: var(--ink-faint); font-weight: 600; font-size: 10.5px; }
+  .fdr-footer-pill { display: inline-block; width: 100%; border-radius: 5px; padding: 3px 0; font-size: 10px; font-weight: 700; color: #12141a; }
+  .fdr-footer-pill.blank { color: var(--ink-faint); background: transparent !important; font-weight: 400; }
+
   /* Corner cell (sticky top AND left at once) needs to sit above every
      other sticky-top header cell it overlaps while scrolling both ways. */
   .table-wrap table thead th.label-col:first-child { z-index: 6; }
@@ -672,7 +731,7 @@
        on top of the attribute sliders), regardless of what's on screen. */
     position: absolute; transform: translateY(-50%); z-index: 8;
     width: 34px; height: 34px; border-radius: 50%; display: none; align-items: center; justify-content: center;
-    background: rgba(10,14,12,0.85); border: 1px solid var(--border-strong); color: var(--gold-bright);
+    background: var(--panel-solid); border: 1px solid var(--border-strong); color: var(--gold-bright);
     font-size: 16px; cursor: pointer; box-shadow: var(--shadow); backdrop-filter: blur(8px);
     transition: background 0.12s ease;
   }
@@ -776,7 +835,7 @@
   .team-form { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
   .team-form input { width: 170px; }
   .btn {
-    background: linear-gradient(135deg, var(--gold-bright), var(--gold)); border: none; color: #12100a;
+    background: linear-gradient(135deg, var(--gold-bright), var(--gold)); border: none; color: var(--gold-ink);
     padding: 9px 16px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; font-family: inherit;
     transition: filter 0.15s ease, transform 0.1s ease;
     box-shadow: 0 6px 18px -6px rgba(255,182,72,0.45);
@@ -799,7 +858,7 @@
   .squad-card.captain { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-soft); }
   .cap-badge {
     position: absolute; top: 9px; right: 9px; font-size: 10px; font-weight: 800;
-    color: #12100a; background: var(--gold-bright); border-radius: 4px; padding: 1px 6px;
+    color: var(--gold-ink); background: var(--gold-bright); border-radius: 4px; padding: 1px 6px;
   }
   .empty-state {
     text-align: center; padding: 46px 20px; color: var(--ink-faint); font-size: 13px;
@@ -916,7 +975,7 @@
   }
   .builder-pos-head {
     position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
-    background: rgba(20,24,38,0.9); padding: 7px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    background: var(--panel-solid); padding: 7px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.04em; color: var(--ink-dim); border-bottom: 1px solid var(--border); border-top: 1px solid var(--border);
     backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
   }
@@ -951,7 +1010,7 @@
   .builder-pill.over { background: var(--red-soft); color: var(--red); }
   .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-left: auto; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
   .view-toggle button { background: transparent; border: none; padding: 6px 14px; border-radius: 999px; font-size: 12.5px; cursor: pointer; color: var(--ink-dim); font-family: inherit; }
-  .view-toggle button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); font-weight: 700; }
+  .view-toggle button.active { background: var(--panel-3); color: var(--gold-bright); font-weight: 700; }
   .builder-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .builder-actions .btn-secondary {
     background: rgba(255,255,255,0.06); border: 1px solid var(--border-strong); color: var(--ink); padding: 9px 16px;
@@ -962,7 +1021,7 @@
 
   /* pitch formation view */
   .pitch {
-    background-color: #2f7d4f;
+    background-color: #3a3a40;
     background-image:
       repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 40px, transparent 40px, transparent 80px),
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 340' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2'%3E%3Crect x='8' y='8' width='384' height='324'/%3E%3Ccircle cx='200' cy='332' r='55'/%3E%3Crect x='90' y='8' width='220' height='95'/%3E%3Crect x='150' y='8' width='100' height='35'/%3E%3Cpath d='M 150 103 A 55 55 0 0 0 250 103' /%3E%3C/g%3E%3C/svg%3E");
@@ -1001,7 +1060,7 @@
        instead of being a flex child that pushes the player down. */
     position: absolute; top: -4px; left: 50%; transform: translateX(-50%); z-index: 2;
     font-size: 10px; font-weight: 800; line-height: 1;
-    background: var(--gold-bright); color: #12100a; border-radius: 3px; padding: 2px 5px;
+    background: var(--gold-bright); color: var(--gold-ink); border-radius: 3px; padding: 2px 5px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
   }
   .pitch-slot.placeholder-slot { opacity: 0.55; }
@@ -1064,7 +1123,7 @@
     background: transparent; border: none; color: var(--ink-faint); padding: 8px 16px; border-radius: 999px; font-size: 13px;
     font-weight: 600; cursor: pointer; font-family: inherit; flex: 1;
   }
-  .theme-seg button.active { background: rgba(255,255,255,0.14); color: var(--gold-bright); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1); }
+  .theme-seg button.active { background: var(--panel-3); color: var(--gold-bright); box-shadow: inset 0 0 0 1px var(--border-strong); }
 
   /* ---------- Mobile ---------- */
   @media (max-width: 640px) {
@@ -1614,6 +1673,7 @@
       <button class="chip-btn" data-h2h-view="combinedxi">Combined XI (by points)</button>
       <button class="chip-btn" data-h2h-view="draftxi">Ability draft XI</button>
       <button class="chip-btn" data-h2h-view="matchups">Player matchups</button>
+      <button class="chip-btn" data-h2h-view="benchstrength" style="opacity:0.72;font-size:0.92em" title="Lighter-weight than the other tabs — bench depth matters far less than your starting XI">🪑 Bench strength</button>
       <button class="chip-btn" data-h2h-view="scoreboard">Scoreboard</button>
     </div>
 
@@ -1727,6 +1787,13 @@
     </div>
   </section>
 </main>
+
+<footer id="fdrFooterBlock" class="fdr-footer">
+  <div class="fdr-footer-inner">
+    <div class="fdr-footer-title">FDR at a glance</div>
+    <div id="fdrFooterGrid" class="fdr-footer-grid-wrap"></div>
+  </div>
+</footer>
 
 <script>
 const FPL_BASE = "https://fantasy.premierleague.com/api";
@@ -1974,7 +2041,7 @@ function searchablePlayerPickerHtml(id, pool, selectedPlayer, placeholder, opts)
       <input type="text" class="player-search-input" autocomplete="off"
         placeholder="${placeholder || "Search player..."}" value="${sel.replace(/"/g, "&quot;")}"
         style="width:100%;padding:6px 10px;background:var(--panel-2);border:1px solid var(--border-strong);border-radius:6px;color:var(--ink);font-size:12.5px" />
-      <div class="player-search-results" style="display:none;position:absolute;z-index:40;top:calc(100% + 2px);left:0;right:0;max-height:260px;overflow-y:auto;background:var(--panel-2);border:1px solid var(--border-strong);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4)"></div>
+      <div class="player-search-results" style="display:none;position:absolute;z-index:40;top:calc(100% + 2px);left:0;right:0;max-height:260px;overflow-y:auto;background:var(--panel-solid);backdrop-filter:blur(var(--glass-blur)) saturate(180%);-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(180%);border:1px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow)"></div>
     </div>`;
 }
 // Wires up a searchable player picker rendered by searchablePlayerPickerHtml.
@@ -2244,6 +2311,33 @@ function percentileRank(value, pool) {
   const below = pool.filter(v => v < value).length;
   return Math.round((below / pool.length) * 99) + 1;
 }
+// Axis -> FM attribute key(s) used as a fallback when the FPL-derived
+// percentile for that axis has no real sample to work from (item: "for
+// the attribute profile let it also use fm stats in places where there
+// is no stats"). Some axes blend two FM keys (averaged) where one FM
+// attribute alone doesn't quite cover it.
+const FC_AXIS_FM_FALLBACK = {
+  Pace: ["pace", "acceleration"],
+  Shooting: ["shooting"],
+  Passing: ["passing"],
+  Dribbling: ["technique"],
+  Defending: ["positioning"],
+  Physical: ["strength"],
+  Finishing: ["shooting"],
+  "Decision making": ["iq"],
+  "Work rate": ["workRate"],
+};
+// If this player has a REAL FM value (manual entry or CSV import, not the
+// generic estimate) for the given axis, return it rescaled to 1-99 —
+// otherwise null so the caller keeps its own FPL-derived percentile.
+function fcAxisFmFallback(playerId, label) {
+  const keys = FC_AXIS_FM_FALLBACK[label];
+  if (!keys) return null;
+  const real = keys.filter(k => hasRealFmAttribute(playerId, k));
+  if (!real.length) return null;
+  const avg = real.reduce((s, k) => s + getFmAttributeValue(playerId, k), 0) / real.length;
+  return fmToRadarScale(avg);
+}
 function computeFcAttributes(p) {
   // Percentile pool requires >=450 mins (~5 full games), not just 90 —
   // a player with one or two fluky appearances (e.g. a single goal in 90
@@ -2253,17 +2347,27 @@ function computeFcAttributes(p) {
   // the bar means the percentile scale itself is set by players with an
   // established sample, which is also what keeps individual attribute
   // numbers closer to what a real scout/FM rating would reflect.
+  //
+  // FM fallback: when this player has fewer than 90 real Prem minutes —
+  // genuinely "no stats" territory, where every percentile below is
+  // computed from a 0/0 per-90 rate and reads as bottom-percentile
+  // regardless of the player's actual ability — a REAL FM attribute
+  // (manual entry or CSV import) is used instead, per axis, wherever one
+  // exists. This does NOT touch players with an established FPL sample;
+  // their numbers are unchanged.
+  const useFmFallback = (p.minutes || 0) < 90;
   const posPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 450);
   const fallbackPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
   const pool = posPool.length >= 5 ? posPool : fallbackPool;
   const pick = (key) => pool.map(x => x[key] || 0);
   const per90 = (p, key) => p.minutes > 0 ? (p[key] || 0) / (p.minutes / 90) : 0;
-  const pace = percentileRank(per90(p, "threat"), pool.map(x => per90(x, "threat")));
-  const shooting = percentileRank((p.xg90 || 0) + (p.goalsScored || 0) * 0.01, pool.map(x => (x.xg90 || 0) + (x.goalsScored || 0) * 0.01));
-  const passing = percentileRank(per90(p, "creativity"), pool.map(x => per90(x, "creativity")));
-  const dribbling = percentileRank((p.xa90 || 0), pool.map(x => x.xa90 || 0));
-  const defending = percentileRank(p.defensiveContributionPer90 || 0, pool.map(x => x.defensiveContributionPer90 || 0));
-  const physical = percentileRank(per90(p, "influence"), pool.map(x => per90(x, "influence")));
+  const fmOr = (label, fplValue) => (useFmFallback && fcAxisFmFallback(p.id, label) != null) ? fcAxisFmFallback(p.id, label) : fplValue;
+  const pace = fmOr("Pace", percentileRank(per90(p, "threat"), pool.map(x => per90(x, "threat"))));
+  const shooting = fmOr("Shooting", percentileRank((p.xg90 || 0) + (p.goalsScored || 0) * 0.01, pool.map(x => (x.xg90 || 0) + (x.goalsScored || 0) * 0.01)));
+  const passing = fmOr("Passing", percentileRank(per90(p, "creativity"), pool.map(x => per90(x, "creativity"))));
+  const dribbling = fmOr("Dribbling", percentileRank((p.xa90 || 0), pool.map(x => x.xa90 || 0)));
+  const defending = fmOr("Defending", percentileRank(p.defensiveContributionPer90 || 0, pool.map(x => x.defensiveContributionPer90 || 0)));
+  const physical = fmOr("Physical", percentileRank(per90(p, "influence"), pool.map(x => per90(x, "influence"))));
   // Extra FM-style attributes, same percentile-vs-own-position-pool
   // approach as the six above, so every player always gets a 1-99 number
   // (nothing left blank) even though these aren't real FPL fields:
@@ -2275,15 +2379,15 @@ function computeFcAttributes(p) {
   //    for "does the right thing with the ball" absent real decision data.
   //  - Work rate: defensive actions/90 blended with minutes reliability
   //    (starts a bigger share of available minutes = graft/fitness proxy).
-  const finishing = percentileRank(
+  const finishing = fmOr("Finishing", percentileRank(
     (p.goalsScored || 0) / Math.max(0.5, p.expectedGoals || 0.5),
     pool.map(x => (x.goalsScored || 0) / Math.max(0.5, x.expectedGoals || 0.5))
-  );
-  const decisionMaking = percentileRank(per90(p, "bps"), pool.map(x => per90(x, "bps")));
-  const workRate = percentileRank(
+  ));
+  const decisionMaking = fmOr("Decision making", percentileRank(per90(p, "bps"), pool.map(x => per90(x, "bps"))));
+  const workRate = fmOr("Work rate", percentileRank(
     (p.defensiveContributionPer90 || 0) + (p.minsPerStart ? Math.min(1, p.minsPerStart / 90) * 20 : 0),
     pool.map(x => (x.defensiveContributionPer90 || 0) + (x.minsPerStart ? Math.min(1, x.minsPerStart / 90) * 20 : 0))
-  );
+  ));
   return [
     { label: "Pace", value: pace },
     { label: "Shooting", value: shooting },
@@ -2476,6 +2580,152 @@ function getFmAttributeValue(playerId, key) {
   if (manual && manual[key] != null) return manual[key];
   const est = getFm12Estimate(playerId);
   return est[key] != null ? est[key] : 10;
+}
+// True only when a REAL FM value exists for this player+key — a manual
+// entry or CSV import (state.playerAttributes) — as opposed to the
+// generic computeFmAttributes12Estimate fallback, which is itself just
+// another percentile-ranked derivation of the SAME thin FPL data and so
+// isn't actually new information for a low-minutes player. Used by
+// computeFcAttributes below to decide when it's worth falling back to FM
+// at all — falling back to "the estimate" would be circular for exactly
+// the players who need a real fallback most.
+function hasRealFmAttribute(playerId, key) {
+  const manual = state.playerAttributes[playerId];
+  return !!(manual && manual[key] != null);
+}
+// Rescales an FM 1-20 attribute value onto the radar's 1-99 percentile
+// scale, so a real FM stat can stand in directly for a percentile-ranked
+// axis without the two scales visibly clashing.
+function fmToRadarScale(fmValue) {
+  return Math.max(1, Math.min(99, Math.round(fmValue * 4.95)));
+}
+// ---------- Goalkeeper stats system (item: "add stats for keepers") ----------
+// FM12_ATTR_DEFS above is an outfield-flavoured 21-attribute set (Pace,
+// Dribbling, Off the ball, ...) that doesn't map onto what actually makes
+// one keeper better than another — none of those attributes describe shot-
+// stopping, command of area, or distribution. This is a SEPARATE, GK-only
+// attribute set (1-20 scale, same slider UX as the outfield editor) that
+// only ever applies to p.position === "GK", stored in its own
+// state.gkAttributes map (never mixed into playerAttributes, since a GK's
+// "acceleration" or "dribbling" genuinely isn't tracked here — a keeper
+// only ever gets these 8 keeper-specific numbers). No free/live data source
+// exists for real keeper scout ratings (same constraint as the outfield
+// set), so this is manual-entry-only — no data-driven estimate to fall back
+// to, unlike computeFmAttributes12Estimate. An unset attribute defaults to
+// a neutral 10 (see getGkAttributeValue) rather than silently reading as 0.
+const GK_ATTR_DEFS = [
+  { key: "reflexes", label: "Reflexes" },
+  { key: "handling", label: "Handling" },
+  { key: "oneOnOnes", label: "One on ones" },
+  { key: "commandOfArea", label: "Command of area" },
+  { key: "aerialReach", label: "Aerial reach" },
+  { key: "communication", label: "Communication" },
+  { key: "kicking", label: "Kicking / distribution" },
+  { key: "throwing", label: "Throwing" },
+  { key: "rushingOut", label: "Rushing out (tendency)" },
+  { key: "eccentricity", label: "Eccentricity" },
+];
+function getGkAttributes(playerId) { return (state.gkAttributes || {})[playerId] || {}; }
+function saveGkAttributes() { persistSet("gkAttributes", JSON.stringify(state.gkAttributes || {})); }
+function setGkAttribute(playerId, key, value) {
+  if (!state.gkAttributes) state.gkAttributes = {};
+  if (!state.gkAttributes[playerId]) state.gkAttributes[playerId] = {};
+  const v = Math.max(1, Math.min(20, Math.round(Number(value) || 1)));
+  state.gkAttributes[playerId][key] = v;
+  saveGkAttributes();
+}
+function resetGkAttribute(playerId, key) {
+  if (!state.gkAttributes || !state.gkAttributes[playerId]) return;
+  if (key) delete state.gkAttributes[playerId][key];
+  else delete state.gkAttributes[playerId];
+  saveGkAttributes();
+}
+// Neutral default of 10 (midpoint of the 1-20 scale) for any attribute the
+// user hasn't entered yet — matches getFmAttributeValue's own "never
+// silently read as 0/blank" contract.
+function getGkAttributeValue(playerId, key) {
+  const manual = getGkAttributes(playerId);
+  return manual[key] != null ? manual[key] : 10;
+}
+function hasAnyGkAttributes(playerId) {
+  const manual = getGkAttributes(playerId);
+  return Object.keys(manual).length > 0;
+}
+// Shot-stopping ability index (1-20 scale, matches the attribute inputs) —
+// the subset of the 10 keeper attributes that most directly affect whether
+// shots on target actually get saved: Reflexes (raw stopping), Handling
+// (parries into danger vs secure catches — indirectly limits rebounds/second
+// chances), One on ones, and Command of area (claiming crosses reduces the
+// defence's exposure). Aerial reach folded in at a lower implicit weight via
+// the average since it overlaps with commandOfArea. Kept as its own function
+// (rather than inlined at each call site) so every consumer — the CS/saves
+// projection below and the radar profile — reads the exact same definition
+// of "shot-stopping quality" and can't drift apart.
+function gkShotStoppingIndex(playerId) {
+  const keys = ["reflexes", "handling", "oneOnOnes", "commandOfArea"];
+  return keys.reduce((s, k) => s + getGkAttributeValue(playerId, k), 0) / keys.length;
+}
+// Converts the 1-20 shot-stopping index into a multiplier centred on 1.0 at
+// the neutral default (10/20) — a maxed-out (20/20) elite shot-stopper gets
+// up to +25% on the saves/CS-modulating terms that use this, a weak (1/20)
+// one down to -25%, scaled linearly in between. Deliberately modest: real
+// clean sheets are still driven mostly by the TEAM's defensive quality
+// (csPct from FDR_MODES.cleansheet, already in the projection) — individual
+// keeper ability is a real but secondary factor, not the dominant one.
+function gkAbilityMultiplier(playerId) {
+  const idx = gkShotStoppingIndex(playerId);
+  return 1 + Math.max(-0.25, Math.min(0.25, (idx - 10) / 10 * 0.25));
+}
+function gkAttributeEditorHtml(playerId) {
+  const manual = getGkAttributes(playerId);
+  const rows = GK_ATTR_DEFS.map(a => {
+    const isManual = manual[a.key] != null;
+    const val = isManual ? manual[a.key] : 10;
+    return `
+    <div class="attr-row" style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      <span style="flex:1;font-size:12px;color:var(--ink-dim)">${a.label}${isManual ? ' <span title="Manually entered" style="color:var(--gold-bright)">●</span>' : ''}</span>
+      <input type="range" min="1" max="20" step="1" value="${val}" data-gkattr-slider="${a.key}" data-gkattr-player="${playerId}" style="width:110px" />
+      <input type="number" min="1" max="20" step="1" value="${val}" data-gkattr-num="${a.key}" data-gkattr-player="${playerId}" class="mono" style="width:60px" />
+      ${isManual ? `<button type="button" data-gkattr-reset="${a.key}" title="Clear this entry (back to neutral 10)" style="background:transparent;border:none;color:var(--ink-faint);cursor:pointer;font-size:12px;padding:2px">↺</button>` : `<span style="width:20px"></span>`}
+    </div>
+  `;
+  }).join("");
+  const idx = gkShotStoppingIndex(playerId);
+  const mult = gkAbilityMultiplier(playerId);
+  return `
+    <div class="attr-editor gk-attr-editor">
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">1-20 scale, keeper-specific attributes — no free live scout-data source exists for these (same constraint as the outfield attribute set), so enter them manually from what you know/track. Unset attributes default to a neutral 10. Reflexes, Handling, One on ones and Command of area feed a shot-stopping index that modestly nudges this keeper's clean sheet and saves projections (±25% max) — everything else here is informational for now.</div>
+      <div class="attr-editor-grid">${rows}</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle);font-size:11px;color:var(--ink-dim)">Shot-stopping index: <b class="mono">${idx.toFixed(1)}/20</b> → projection multiplier <b class="mono">${mult >= 1 ? "+" : ""}${((mult - 1) * 100).toFixed(0)}%</b></div>
+    </div>
+  `;
+}
+function wireGkAttributeEditor(container, playerId) {
+  const refresh = () => {
+    container.innerHTML = gkAttributeEditorHtml(playerId);
+    wireGkAttributeEditor(container, playerId);
+  };
+  container.querySelectorAll("[data-gkattr-slider]").forEach(el => {
+    el.oninput = () => {
+      const key = el.dataset.gkattrSlider;
+      container.querySelector(`[data-gkattr-num="${key}"][data-gkattr-player="${playerId}"]`).value = el.value;
+      setGkAttribute(playerId, key, el.value);
+    };
+    el.onchange = refresh;
+  });
+  container.querySelectorAll("[data-gkattr-num]").forEach(el => {
+    el.onchange = () => {
+      const key = el.dataset.gkattrNum;
+      const v = Math.max(1, Math.min(20, Math.round(Number(el.value) || 1)));
+      el.value = v;
+      container.querySelector(`[data-gkattr-slider="${key}"][data-gkattr-player="${playerId}"]`).value = v;
+      setGkAttribute(playerId, key, v);
+      refresh();
+    };
+  });
+  container.querySelectorAll("[data-gkattr-reset]").forEach(el => {
+    el.onclick = () => { resetGkAttribute(playerId, el.dataset.gkattrReset); refresh(); };
+  });
 }
 // ---------- real FM26 CSV import (optional, replaces estimates with real data) ----------
 // Accepts a CSV exported via the free "FM26 Player Export" in-game plugin
@@ -2851,7 +3101,7 @@ function openPlayerProfileCompare(ids) {
   const colMinWidth = n <= 5 ? 0 : 130;
   function renderModal(activeTab) {
     modal.innerHTML = `
-      <div style="max-width:${modalMaxWidth}px;width:100%;max-height:calc(100vh - 60px);overflow-y:auto;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%)">
+      <div style="max-width:${modalMaxWidth}px;width:100%;max-height:calc(100vh - 60px);overflow-y:auto;padding:22px;border-radius:20px;background:var(--panel-solid);border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="margin:0">Player profile comparison</h2>
           <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
@@ -3094,8 +3344,23 @@ function applyPriorLeagueOverrides(playerId) {
   for (const pid of targets) {
     const p = state.players && state.players.find(pl => pl.id === pid);
     if (!p) continue;
-    const isUnproven = (p.minutes || 0) === 0 && (p.starts || 0) === 0;
-    const est = isUnproven ? estimatePriorLeagueProjection(pid) : null;
+    // Bug fix (item: "I want to edit Tzolis' stats... the numbers I put
+    // did not show in the table" + "because they play less games his
+    // minutes seem as if he is not a nailed starter"): this used to gate
+    // on isUnproven (real minutes === 0 AND starts === 0), so the moment a
+    // converted player picked up ANY real Prem minutes at all — even one
+    // substitute cameo — the override silently stopped being applied on
+    // every future load, even though the user's saved prior-league data
+    // was untouched and still sitting in state.priorLeagueStats. The app
+    // then fell back to the player's real (still sparse, since they're a
+    // fresh signing settling in) minutes/starts, which is exactly what
+    // made a genuinely-nailed player read as a rotation risk. The correct
+    // gate is "has the user actually saved an override for this player",
+    // not "does FPL currently show zero minutes" — a manual override
+    // should stay in effect until the user clears it themselves,
+    // regardless of how many real minutes accumulate afterward.
+    const hasOverride = !!getPriorLeagueStats(pid);
+    const est = hasOverride ? estimatePriorLeagueProjection(pid) : null;
     if (est) {
       p.xg90 = est.xg90;
       p.xa90 = est.xa90;
@@ -3152,21 +3417,50 @@ function applyPriorLeagueOverrides(playerId) {
       p.ppm90 = priceM > 0 ? est.pointsPerGame / priceM : 0; // pointsPerGame IS already a per-~90-min-equivalent rate from this estimate
       p.ppmPerApp = priceM > 0 && p.starts > 0 ? p.totalPoints / priceM / p.starts : 0;
     } else if (p.priorLeagueApplied) {
-      // Override cleared (or no longer eligible, e.g. player has since
-      // started a Prem game) — a zero-minutes player's real FPL-derived
-      // xg90/xa90/pointsPerGame are genuinely 0 anyway (that's the whole
-      // reason the estimate existed), so clearing just means dropping the
-      // estimate back to the same 0s transformPlayer would have set.
-      p.xg90 = 0; p.xa90 = 0; p.xgi90 = 0; p.expectedGoalInvolvements = 0;
-      p.pointsPerGame = 0; p.pointsPer90 = 0;
+      // Override cleared. Bug fix: this USED to just hard-zero every
+      // field, on the assumption that a player reaching this branch always
+      // had zero real minutes anyway (true under the old isUnproven gate,
+      // since that was the same condition that let the override apply in
+      // the first place). That assumption breaks now that overrides can
+      // stay active while real minutes accumulate — clearing an override
+      // for a player who's since played real Prem minutes must restore
+      // their REAL FPL values, not zero them out. Re-running the actual
+      // player object through transformPlayer() (via the raw API element
+      // stashed as _rawFplElement at load time) is the authoritative
+      // source of truth for "what would this player's real values be with
+      // no override applied" — avoids hand-duplicating that derivation a
+      // second time here, which is exactly the kind of drift that caused
+      // several of this feature's earlier bugs (Rounds 6-11).
+      if (p._rawFplElement && typeof transformPlayer === "function") {
+        const real = transformPlayer(p._rawFplElement);
+        // Only restore the fields prior-league overrides actually touch —
+        // preserve everything else already on p (teamId overrides,
+        // specific position tags, club-override flags, etc), same as
+        // before.
+        const fieldsToRestore = [
+          "xg90", "xa90", "xgi90", "expectedGoalInvolvements", "pointsPerGame", "pointsPer90",
+          "goalsScored", "assists", "cleanSheets", "bonus", "bps", "goalsPer90", "assistsPer90", "gaPer90",
+          "minutes", "starts", "minsPerStart", "totalPoints", "ppm", "ppm90", "ppmPerApp",
+          "defensiveContributionPer90",
+        ];
+        fieldsToRestore.forEach(f => { p[f] = real[f]; });
+      } else {
+        // Fallback if the raw element somehow wasn't captured (shouldn't
+        // happen for any player loaded through the normal boot path) —
+        // zero is still better than leaving stale projected numbers in
+        // place after the user explicitly cleared the override.
+        p.xg90 = 0; p.xa90 = 0; p.xgi90 = 0; p.expectedGoalInvolvements = 0;
+        p.pointsPerGame = 0; p.pointsPer90 = 0;
+        p.goalsScored = 0; p.assists = 0; p.cleanSheets = 0; p.bonus = 0; p.bps = 0;
+        p.goalsPer90 = 0; p.assistsPer90 = 0; p.gaPer90 = 0;
+        p.minutes = 0; p.starts = 0; p.minsPerStart = 0;
+        p.totalPoints = 0; p.ppm = 0; p.ppm90 = 0; p.ppmPerApp = 0;
+        p.defensiveContributionPer90 = 0;
+      }
       p.priorLeagueApplied = false;
       p.priorLeagueConvertedGoals = undefined; p.priorLeagueConvertedAssists = undefined;
-      if (p.priorLeagueDefcon90 != null) { p.defensiveContributionPer90 = 0; p.priorLeagueDefcon90 = undefined; }
-      p.priorLeagueCsPct = undefined; p.bpsPer90 = 0; p.priorLeagueSimulatedBps = undefined;
-      p.goalsScored = 0; p.assists = 0; p.cleanSheets = 0; p.bonus = 0; p.bps = 0;
-      p.goalsPer90 = 0; p.assistsPer90 = 0; p.gaPer90 = 0;
-      p.minutes = 0; p.starts = 0; p.minsPerStart = 0;
-      p.totalPoints = 0; p.ppm = 0; p.ppm90 = 0; p.ppmPerApp = 0;
+      if (p.priorLeagueDefcon90 != null) p.priorLeagueDefcon90 = undefined;
+      p.priorLeagueCsPct = undefined; p.priorLeagueSimulatedBps = undefined;
     }
     if (modelNextEvent && typeof projectPoints === "function" && typeof state.fixturesByTeam !== "undefined" && state.fixturesByTeam) {
       p.epNext = projectPoints(p, modelNextEvent.id);
@@ -3455,7 +3749,7 @@ let state = {
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
   clubStatsByTeamId: {},
   expandedShortlistId: null,
-  shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false,
+  shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false, shortlistViewMode: "list", // "list" | "tier" — interchangeable views over the same shortlist (item: "Shortlist change to list and tier list interchangeable")
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
   showSelectedStats: false, showSelectedShortlist: false, shortlistShowSelectedOnly: false, shortlistShowCompareTable: false, scoutTheme: "base", scoutFixtureHorizon: 4,
   statsHeatmap: false, teamsHeatmap: false,
@@ -3471,6 +3765,12 @@ let state = {
   // estimate rather than showing blank/10.
   attributeDefs: FM12_ATTR_DEFS,
   playerAttributes: {},
+  // Goalkeeper-specific attributes (Reflexes, Handling, One on ones,
+  // Command of area, etc — see GK_ATTR_DEFS) — a completely separate map
+  // from playerAttributes since these are a different, GK-only attribute
+  // set with no outfield equivalent. Manual-entry only (no free live scout
+  // data source), keyed by player id -> { attrKey: 1-20 value }.
+  gkAttributes: {},
   priorLeagueStats: {},
   playerClubOverrides: {},
   playerPositions: {},
@@ -3952,6 +4252,13 @@ function transformPlayer(e) {
     creativityPer90: e.minutes > 0 ? (num(e.creativity) / Math.max(e.minutes, 180)) * 90 : 0,
     threatPer90: e.minutes > 0 ? (num(e.threat) / Math.max(e.minutes, 180)) * 90 : 0,
     ictPer90: e.minutes > 0 ? (num(e.ict_index) / Math.max(e.minutes, 180)) * 90 : 0,
+    // Stashed so applyPriorLeagueOverrides can restore a player's REAL
+    // FPL-derived values authoritatively on Clear override (by re-running
+    // this exact function), instead of hand-duplicating this whole
+    // derivation a second time in a separate "clear" code path — which is
+    // exactly the kind of drift that caused several of this feature's
+    // earlier bugs (Rounds 6-11) in the first place.
+    _rawFplElement: e,
   };
 }
 
@@ -4013,6 +4320,13 @@ async function loadData() {
     if (modelNextEvent) {
       state.players.forEach(p => { p.epNext = projectPoints(p, modelNextEvent.id); });
     }
+    // Warm the Captaincy tab's score cache in idle-time chunks right away
+    // (item: "captaincy takes a second to load first time") — fire-and-forget,
+    // does not block the rest of loadData(); by the time the user actually
+    // clicks the tab (always at least a little after boot) most/all of the
+    // eligible pool is already cached, so the tab opens instantly with
+    // every feature computing exactly the same as before.
+    if (typeof warmCaptaincyScoreCache === "function") warmCaptaincyScoreCache();
 
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
@@ -4045,6 +4359,7 @@ async function loadData() {
     renderFdrGrid();
     renderRankings();
     renderH2H();
+    renderFdrFooterBlock();
   } catch (err) {
     setBanner(
       `Couldn't reach the FPL API through any available route (${err.message}). Free CORS proxies are occasionally down or rate-limited — this is a known limitation of the browser-only version.`,
@@ -5272,9 +5587,9 @@ function renderStats() {
                 <div class="detail-block-title">Main position</div>
                 <div id="position-stats-${p.id}">${positionEditorHtml(p.id)}</div>
               </div>
-              ${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? `
+              ${((p.minutes || 0) === 0 && (p.starts || 0) === 0) || getPriorLeagueStats(p.id) ? `
               <div>
-                <div class="detail-block-title">Prior-league projection (no Prem data yet)</div>
+                <div class="detail-block-title">Prior-league projection${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? " (no Prem data yet)" : " (override active — real Prem minutes have started coming in, but your saved projection is still applied until you clear it)"}</div>
                 <div id="priorleague-stats-${p.id}">${priorLeagueEditorHtml(p.id)}</div>
               </div>
               ` : ""}
@@ -5284,14 +5599,15 @@ function renderStats() {
               </div>
             </div>
             <div class="detail-panel-wide">
-              <div class="detail-block-title">Player attributes (1-20, FM-style)</div>
-              <div id="attrs-stats-${p.id}">${attributeEditorHtml(p.id)}</div>
+              <div class="detail-block-title">${p.position === "GK" ? "Goalkeeper attributes (1-20)" : "Player attributes (1-20, FM-style)"}</div>
+              <div id="attrs-stats-${p.id}">${p.position === "GK" ? gkAttributeEditorHtml(p.id) : attributeEditorHtml(p.id)}</div>
             </div>
           </div>
         `;
         dtr.appendChild(td);
         body.appendChild(dtr);
-        wireAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id);
+        if (p.position === "GK") { wireGkAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id); }
+        else { wireAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id); }
         const posContainer = document.getElementById(`position-stats-${p.id}`);
         if (posContainer) wirePositionEditor(posContainer, p.id);
         const plContainer = document.getElementById(`priorleague-stats-${p.id}`);
@@ -5386,6 +5702,96 @@ function slDecisionStats(p) {
     floor: scored ? scored.breakdown.floorPts.toFixed(1) : "–",
   };
 }
+// ---- Tier list view (item: "Shortlist change to list and tier list
+// interchangeable... it's just the cards are so big and they don't
+// really have the best look/aesthetic") ----
+// Tiers are auto-computed from the same captaincy score every shortlist
+// card already shows (slDecisionStats' capScore) — per user's explicit
+// choice, not manual drag-and-drop — so this updates automatically as
+// form/fixtures change rather than needing upkeep. Banded by PERCENTILE
+// within the current shortlist (not a fixed score threshold), so the
+// tiers stay meaningful whether your shortlist is 5 players or 50 —
+// S = top ~10%, A = next ~20%, B = next ~30%, C = next ~25%, D = bottom
+// ~15%. A player with no computable score (blank gameweek, injured-out)
+// falls into an "Unranked" bucket rather than being silently dropped or
+// mis-banded into D.
+const SHORTLIST_TIER_DEFS = [
+  { key: "S", label: "S", color: "#e0529a" },
+  { key: "A", label: "A", color: "#ff9f43" },
+  { key: "B", label: "B", color: "#e0c94f" },
+  { key: "C", label: "C", color: "#3ba7ff" },
+  { key: "D", label: "D", color: "#8a8f9c" },
+];
+function computeShortlistTiers(items) {
+  const withScore = [];
+  const unranked = [];
+  items.forEach(item => {
+    const p = state.players.find(pl => pl.id === item.playerId);
+    if (!p) return;
+    const gwId = currentEventId();
+    const scored = gwId ? captaincyScoreForGw(p, gwId) : null;
+    if (scored) withScore.push({ item, p, score: scored.captaincyScore });
+    else unranked.push({ item, p, score: null });
+  });
+  withScore.sort((a, b) => b.score - a.score);
+  const n = withScore.length;
+  const tiers = { S: [], A: [], B: [], C: [], D: [] };
+  withScore.forEach((row, i) => {
+    const pctFromTop = n > 1 ? i / (n - 1) : 0; // 0 = best, 1 = worst
+    const key = pctFromTop <= 0.10 ? "S" : pctFromTop <= 0.30 ? "A" : pctFromTop <= 0.60 ? "B" : pctFromTop <= 0.85 ? "C" : "D";
+    tiers[key].push(row);
+  });
+  return { tiers, unranked };
+}
+function renderShortlistTierList(el, items) {
+  const { tiers, unranked } = computeShortlistTiers(items);
+  const rowHtml = (def) => {
+    const rows = tiers[def.key];
+    return `
+      <div class="sl-tier-row">
+        <div class="sl-tier-label" style="background:${def.color}">${def.label}</div>
+        <div class="sl-tier-chips">
+          ${rows.length ? rows.map(({ p, score }) => `
+            <div class="sl-tier-chip" data-toggle="${p.id}" title="${nameWithPosition(p)} — captaincy score ${score.toFixed(1)}">
+              ${playerAvatarHtml(p, 30)}
+              <span class="sl-tier-chip-name">${p.webName}</span>
+              <span class="sl-tier-chip-score mono">${score.toFixed(1)}</span>
+            </div>
+          `).join("") : `<div class="sl-tier-empty">—</div>`}
+        </div>
+      </div>
+    `;
+  };
+  el.innerHTML = `
+    <p class="foot-note" style="margin-bottom:12px">Tiers are auto-computed from each player's current captaincy score, banded by percentile within your shortlist — S is your strongest ~10%, D your weakest. Updates automatically as form and fixtures change.</p>
+    <div class="sl-tier-list">
+      ${SHORTLIST_TIER_DEFS.map(rowHtml).join("")}
+      ${unranked.length ? `
+        <div class="sl-tier-row">
+          <div class="sl-tier-label" style="background:var(--ink-faint)">?</div>
+          <div class="sl-tier-chips">
+            ${unranked.map(({ p }) => `
+              <div class="sl-tier-chip" data-toggle="${p.id}" title="${nameWithPosition(p)} — no score available (blank gameweek or unavailable)">
+                ${playerAvatarHtml(p, 30)}
+                <span class="sl-tier-chip-name">${p.webName}</span>
+                <span class="sl-tier-chip-score mono">—</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+  el.querySelectorAll("[data-toggle]").forEach(chip => {
+    chip.onclick = () => {
+      const id = Number(chip.dataset.toggle);
+      state.expandedShortlistId = state.expandedShortlistId === id ? null : id;
+      state.shortlistViewMode = "list"; // clicking a tier chip drops into the list view to see/expand that player's full card
+      renderShortlist();
+    };
+  });
+}
+
 
 function renderShortlistGroupTabs() {
   const el = document.getElementById("shortlistGroupTabs");
@@ -5471,7 +5877,12 @@ function renderShortlist() {
   // Toolbar: show-selected toggle (+ rename/delete when viewing a custom group)
   const toolbar = document.createElement("div");
   toolbar.className = "shortlist-toolbar";
+  const viewMode = state.shortlistViewMode || "list";
   toolbar.innerHTML = `
+    <div class="chip-btn-row" style="margin-right:6px">
+      <button class="chip-btn${viewMode === "list" ? " active" : ""}" data-sl-view="list">☰ List</button>
+      <button class="chip-btn${viewMode === "tier" ? " active" : ""}" data-sl-view="tier">🏆 Tier list</button>
+    </div>
     <button class="dir-btn" id="showSelectedShortlistBtn">Show selected (0)</button>
     <button class="dir-btn" id="deselectAllShortlistBtn">Deselect all</button>
     <button class="dir-btn" id="compareProfilesShortlistBtn">📊 Compare selected</button>
@@ -5480,6 +5891,9 @@ function renderShortlist() {
   `;
   el.innerHTML = "";
   el.appendChild(toolbar);
+  toolbar.querySelectorAll("[data-sl-view]").forEach(btn => {
+    btn.onclick = () => { state.shortlistViewMode = btn.dataset.slView; renderShortlist(); };
+  });
   document.getElementById("showSelectedShortlistBtn").onclick = () => {
     if (!state.shortlistShowSelectedOnly && state.compareSelectionShortlist.size === 0) return;
     state.shortlistShowSelectedOnly = !state.shortlistShowSelectedOnly;
@@ -5508,6 +5922,17 @@ function renderShortlist() {
   }
   if (items.length === 0) {
     el.appendChild(Object.assign(document.createElement("div"), { className: "empty-state", textContent: "No selected players in this group." }));
+    return;
+  }
+  // Tier list view (item: "list and tier list interchangeable") — a
+  // completely separate render path over the SAME `items`/filters/groups
+  // above (show-selected, active group tab all still apply), swapping in
+  // for the card grid + compare table below rather than living alongside
+  // them.
+  if (viewMode === "tier") {
+    const tierWrap = document.createElement("div");
+    renderShortlistTierList(tierWrap, items);
+    el.appendChild(tierWrap);
     return;
   }
   // Simple side-by-side compare table for whichever players are checked —
@@ -5915,6 +6340,21 @@ function underlyingAttackPts(p, fdrScore, minsFactor, startProb) {
   return ((p.xg90 || 0) * goalPts + (p.xa90 || 0) * 3) * minsFactor * fixtureMult * startProb;
 }
 const CS_PTS = { GK: 4, DEF: 4, MID: 1, FWD: 0 };
+// GK-only saves points (1pt per 3 saves in classic FPL scoring) — was
+// entirely absent from the projection model before (underlyingProj summed
+// appearance/attack/CS/defCon/bonus but never saves), meaning a busy keeper
+// at a leaky-but-not-hopeless side had no way to project above a low CS%
+// outfield-style number. Uses the player's own real saves90 rate (season-
+// long, large-sample) scaled by expected minutes, then nudged by this
+// keeper's manually-entered shot-stopping index (gkAbilityMultiplier) —
+// same modest ±25% ceiling as the CS nudge below, and a genuine no-op
+// (multiplier exactly 1) for any keeper with no GK attributes entered yet.
+function gkSavesPts(p, minsFactor) {
+  if (p.position !== "GK") return 0;
+  const saves90 = p.saves90 || 0;
+  const rawSavesPts = (saves90 / 3) * minsFactor;
+  return rawSavesPts * gkAbilityMultiplier(p.id);
+}
 // provenAbilityWeight: how much weight goes on the player's own season-long
 // scoring rate (pointsPerGame — a large-sample, "proven ability" number)
 // vs the per-fixture underlying model (xG/xA/DefCon/bonus scaled to THIS
@@ -5936,7 +6376,13 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
   // use it in place of both the zeroed xg90/xa90/pointsPerGame AND the
   // hard 0 minutes/start floor, since "no Prem data" isn't the same as
   // "not going to play" for a fresh signing your club actually bought.
-  const priorLeague = (p.minutes || 0) === 0 && (p.starts || 0) === 0 ? estimatePriorLeagueProjection(p.id) : null;
+  // Same fix as applyPriorLeagueOverrides: gate on "has the user saved an
+  // override" rather than "currently zero real minutes", so a converted
+  // player who's picked up a few real (still sparse, still settling in)
+  // Prem minutes doesn't lose their nailed-on start-probability floor and
+  // suddenly read as a rotation risk purely because real minutes now
+  // technically exist.
+  const priorLeague = getPriorLeagueStats(p.id) ? estimatePriorLeagueProjection(p.id) : null;
   const effP = priorLeague ? { ...p, xg90: priorLeague.xg90, xa90: priorLeague.xa90, pointsPerGame: priorLeague.pointsPerGame } : p;
   const startProb = priorLeague ? Math.max(projStartProb(p, assume90, rotationThreshold), assume90 ? 1 : 0.6) : projStartProb(p, assume90, rotationThreshold);
   const minsFactor = priorLeague ? Math.max(projMinsFactor(p, assume90, rotationThreshold), assume90 ? 1 : 0.55) : projMinsFactor(p, assume90, rotationThreshold);
@@ -5953,11 +6399,17 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     const provenProj = assume90 ? Math.max(provenAbility, p.pointsPer90 || 0) * fixtureMult : provenAbility * fixtureMult * startProb;
     const appearancePts = projAppearancePts(startProb, minsFactor);
     const attackPts = underlyingAttackPts(effP, fdrScore, minsFactor, startProb);
-    const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
+    // GK clean-sheet points get a modest nudge from this keeper's own
+    // manually-entered shot-stopping index (no-op multiplier of 1 for any
+    // keeper with no GK attributes entered — see gkAbilityMultiplier);
+    // DEF/MID clean-sheet points are unaffected (multiplier only applies
+    // for p.position === "GK").
+    const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
+    const savesPts = gkSavesPts(p, minsFactor);
     const defConProb = defConProbability(p, minsFactor, fdrScore);
     const defConPts = defConProb * 2;
     const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
-    const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
+    const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
     let finalProj = provenProj * provenW + underlyingProj * (1 - provenW);
     // Matchup boost: who this player is actually likely to face this
     // fixture (pinned Tactical board matchup if set, else same-role
@@ -6032,11 +6484,12 @@ function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAb
       const attackPts = underlyingAttackPts(p, fdrScore, minsFactor, startProb);
       const est = estimateScoreline(p.teamId, fx.oppId, fx.isHome);
       const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
-      const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100);
+      const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
+      const savesPts = gkSavesPts(p, minsFactor);
       const defConProb = defConProbability(p, minsFactor, fdrScore);
       const defConPts = defConProb * 2;
       const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
-      const underlyingProj = appearancePts + attackPts + csPts + defConPts + bonusPts;
+      const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
       total += provenProj * provenW + underlyingProj * (1 - provenW);
     });
     byGw[g] = total;
@@ -7527,6 +7980,40 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
 // called to drop stale entries.
 const _capScoreCache = new Map();
 function invalidateCaptaincyScoreCache() { _capScoreCache.clear(); invalidateCaptaincyBestCache(); }
+// Shared idle-callback chunk scheduler (item: "captaincy takes a second
+// to load first time, keep all features the same") — same pattern
+// already used by renderCapBestChart's own chunked warm-up below, pulled
+// up here as a single top-level helper so warmCaptaincyScoreCache() (see
+// loadData(), where this is called once at boot) can reuse it instead of
+// duplicating the requestIdleCallback/setTimeout fallback logic.
+const scheduleIdleChunk = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16));
+// Pre-warms _capScoreCache for the default Captaincy pool (450+ mins,
+// non-GK, same filter renderCaptaincyTab itself uses) and the gameweek
+// it opens on by default, in small idle-time chunks, so the FIRST time
+// the user actually clicks the Captaincy tab the cache is already warm
+// and renderCaptaincyTab's own captaincyScoreForGw() calls are cache
+// hits instead of the full cold computeProjectionRow → routeBreakdown →
+// playstyleMatchupBoost → routeCoefficient → explosive/safe pipeline
+// running synchronously for every eligible player on click. Every
+// feature/score is identical either way — this only changes WHEN the
+// same work happens, never what it computes (nothing here is a
+// shortcut/approximation of the real per-player score).
+function warmCaptaincyScoreCache() {
+  const upcoming = state.events && state.events.filter(e => !e.finished).sort((a, b) => a.id - b.id);
+  const gwId = upcoming && upcoming.length ? upcoming[0].id : null;
+  if (!gwId) return;
+  const pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
+  const CHUNK_SIZE = 20;
+  let i = 0;
+  const runChunk = () => {
+    const slice = pool.slice(i, i + CHUNK_SIZE);
+    if (!slice.length) return;
+    slice.forEach(p => captaincyScoreForGw(p, gwId));
+    i += CHUNK_SIZE;
+    if (i < pool.length) scheduleIdleChunk(runChunk);
+  };
+  scheduleIdleChunk(runChunk);
+}
 // ---- Fitness/knock status for captaincy (real FPL data, no estimate) ----
 // Uses the exact same status/chance_of_playing fields the Squad news panel
 // (STATUS_LABEL/STATUS_SEVERITY, ~line 1669/11921) already surfaces —
@@ -7612,9 +8099,15 @@ function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   // rate (a defensively leaky side caps a defender's explosive upside even
   // if the fixture looks easy on paper).
   const isDefensive = p.position === "DEF" || p.position === "GK";
-  const csUpside = isDefensive ? Math.max(0, Math.min(1, (row.csPct || 0) / 60)) : 0;
+  // GK-only nudge: this keeper's own manually-entered shot-stopping index
+  // (gkAbilityMultiplier, ±25% ceiling, no-op 1.0 for anyone with no GK
+  // attributes entered) applies to both upside terms — a strong shot-
+  // stopper's clean sheet AND "kept it tight despite pressure" upside both
+  // read a little higher for the same underlying team-level numbers.
+  const gkMult = p.position === "GK" ? gkAbilityMultiplier(p.id) : 1;
+  const csUpside = isDefensive ? Math.max(0, Math.min(1, (row.csPct || 0) / 60)) * gkMult : 0;
   const gcRate = p.goalsConcededPer90 != null ? p.goalsConcededPer90 : 1.3; // league-ish average fallback
-  const defenceUpside = isDefensive ? Math.max(0, Math.min(1, (2 - gcRate) / 2)) : 0;
+  const defenceUpside = isDefensive ? Math.max(0, Math.min(1, (2 - gcRate) / 2)) * gkMult : 0;
   // Ceiling points from the route breakdown (row.proj minus the floor) —
   // the model's own read of "how much of this projection is contingent
   // upside" rather than a guaranteed baseline.
@@ -8171,7 +8664,9 @@ function renderCapBestChart() {
   renderCaptaincyLineChart(el, results.map(b => ({ gwId: b.gwId, player: b.player, pts: b.proj })));
   if (!remainingIds.length) return;
 
-  const scheduleChunk = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16));
+  // Reuses the shared scheduleIdleChunk helper (see _capScoreCache section
+  // above) instead of its own local copy of the same requestIdleCallback
+  // fallback logic.
   let i = 0;
   const runChunk = () => {
     if (myToken !== _capBestChartToken) return; // superseded by a newer render
@@ -8183,9 +8678,9 @@ function renderCapBestChart() {
     if (myToken === _capBestChartToken) {
       renderCaptaincyLineChart(el, results.map(b => ({ gwId: b.gwId, player: b.player, pts: b.proj })));
     }
-    if (i < remainingIds.length) scheduleChunk(runChunk);
+    if (i < remainingIds.length) scheduleIdleChunk(runChunk);
   };
-  scheduleChunk(runChunk);
+  scheduleIdleChunk(runChunk);
 }
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
@@ -9955,7 +10450,6 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   el.innerHTML = `
     <div class="chip-btn-row">${chipRow}</div>
     ${activeChipBanner}
-    <div id="plannerRecs-${gwId}" style="margin-bottom:18px"></div>
     <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:18px;align-items:start">
       <div>
         <div class="detail-block-title">Transfers in</div>
@@ -9982,6 +10476,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
         <div id="plannerCapBestChart-${gwId}"></div>
       </div>
     </div>
+    <div id="plannerRecs-${gwId}" style="margin-top:24px"></div>
   `;
 
   // chip buttons
@@ -10438,6 +10933,10 @@ async function loadFormulasFromStorage() {
   try {
     const raw = await persistGet("playerAttributes");
     if (raw) state.playerAttributes = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("gkAttributes");
+    if (raw) state.gkAttributes = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   try {
     const raw = await persistGet("myTeamId");
@@ -11964,6 +12463,80 @@ function renderFdrGrid() {
   renderFixtureRunFinder();
   renderFdrSwingPanel();
 }
+// ---- Bottom-of-page FDR reference block (site-wide footer) ----
+// Item: "at the very bottom have a small fdr block to see fixtures like
+// image attached" — a compact, always-visible version of the full FDR
+// grid (all 20 clubs, badge + short name, colour-coded pills), living in
+// the <footer> outside <main> so it's visible under every tab, not just
+// the FDR tab. Reuses the SAME scoring (customFdr) and colour function
+// (fdrGradientColor) the main FDR grid uses, so its numbers/colours are
+// always consistent with the full table — this is a smaller view onto
+// the same real data, not a separate approximation.
+let _fdrFooterResizeWired = false;
+function fdrFooterColumnCount() {
+  const wrap = document.getElementById("fdrFooterGrid");
+  const width = (wrap && wrap.clientWidth) || (window.innerWidth ? window.innerWidth - 80 : 900);
+  // Club column ~128px + each GW pill column needs ~34px to look
+  // uncramped (matches the reference image's pill proportions) — solve
+  // for how many GW columns actually fit that width, clamped to a
+  // sensible range so it never shows just 1-2 (useless) or 20+ (cramped
+  // on a normal screen even if the arithmetic says they'd technically fit).
+  const perGw = 34;
+  const clubCol = 128;
+  const fitCount = Math.floor((width - clubCol) / perGw);
+  // No fixed ceiling beyond the real season length (38 GWs) — "fills the
+  // space it has... aesthetically pleasing in spacing more than a desired
+  // amount" means a very wide monitor should genuinely show more weeks,
+  // not hit an arbitrary cap early. Still floored at 4 so a narrow/mobile
+  // view never collapses to something useless.
+  return Math.max(4, Math.min(38, fitCount || 6));
+}
+function renderFdrFooterBlock() {
+  const wrap = document.getElementById("fdrFooterGrid");
+  if (!wrap || !state.teams.length) return;
+  const curId = currentEventId();
+  const startId = curId || (state.events.find(e => !e.finished) || {}).id || 1;
+  const allGwIds = state.events.map(e => e.id).filter(id => id >= startId);
+  const gwCount = fdrFooterColumnCount();
+  const gwIds = allGwIds.slice(0, gwCount);
+  if (!gwIds.length) { wrap.innerHTML = `<p class="foot-note">No upcoming fixtures to show.</p>`; return; }
+
+  const teamsSorted = state.teams.slice().sort((a, b) => (a.short_name || "").localeCompare(b.short_name || ""));
+  const head = `<tr><th class="fdr-footer-club-col">Club</th>${gwIds.map(id => `<th${id === curId ? ' style="color:var(--gold-bright)"' : ""}>GW${id}</th>`).join("")}</tr>`;
+  const rows = teamsSorted.map(t => {
+    const byGw = {};
+    for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
+    const cells = gwIds.map(gwId => {
+      const fixtures = byGw[gwId] || [];
+      if (!fixtures.length) return `<td><span class="fdr-footer-pill blank">–</span></td>`;
+      // Same "average across a blank/double gameweek's multiple fixtures"
+      // handling the main FDR grid uses, kept simple here (colour only,
+      // no scoreline modal — this is a glance-and-go block).
+      const avgScore = fixtures.reduce((s, f) => s + customFdr(t.id, f.oppId, f.isHome), 0) / fixtures.length;
+      // Reference image convention: home fixtures shown UPPERCASE, away
+      // fixtures lowercase (e.g. "COV" home vs "avl" away) — matches the
+      // full FDR tab's own existing pill styling.
+      const label = fixtures.map(f => {
+        const short = (state.teamsById[f.oppId]?.short_name || "?").slice(0, 3);
+        return f.isHome ? short.toUpperCase() : short.toLowerCase();
+      }).join("+");
+      const bg = fdrGradientColor(avgScore);
+      return `<td><span class="fdr-footer-pill" style="background:${bg}" title="${fixtures.map(f => `${f.isHome ? "vs" : "@"} ${state.teamsById[f.oppId]?.name || "?"}`).join(", ")}">${label}</span></td>`;
+    });
+    return `<tr><td class="fdr-footer-club-col">${kitSvg(t.id, 16)}<span>${t.short_name}</span></td>${cells.join("")}</tr>`;
+  }).join("");
+
+  wrap.innerHTML = `<table class="fdr-footer-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+
+  if (!_fdrFooterResizeWired) {
+    _fdrFooterResizeWired = true;
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(renderFdrFooterBlock, 200);
+    });
+  }
+}
 // Fixture run finder always scans the FULL season, independent of whatever
 // GW range / sort / mode / view is currently set on the primary FDR table
 // above — it answers "when's this team's best run all season", not "within
@@ -13239,20 +13812,48 @@ function h2hBestPlayerForRole(team, role, usedIds) {
   return inBroad[0] || null;
 }
 function h2hFlashcardAlternates(team, role, currentId, usedIds) {
+  // Bug fix (item: "flash cards in h2h are not correct in positions
+  // still"): this previously filtered candidates by BROAD position only
+  // (any DEF for an "RB" card, any MID for a "CDM" card), so swapping to
+  // an "alternate" could silently hand you a CB, LB, or winger under a
+  // role label that stayed unchanged — the actual root cause, since
+  // h2hBestPlayerForRole (the initial auto-pick) already preferred an
+  // exact specific-position match first. Now mirrors that same
+  // exact-first, broad-fallback logic: real specific-position matches
+  // (state.playerPositions, via getSpecificPosition) are offered first,
+  // and only when NONE exist for this club/role does it fall back to the
+  // broader position pool — so a thin squad with no tagged alternates
+  // still gets a usable, if less precise, swap list instead of an empty
+  // dropdown.
   const broad = FLASHCARD_BROAD_POS[role] || "MID";
-  return state.players.filter(p => p.teamId === team.id && p.position === broad && p.id !== currentId && !usedIds.has(p.id))
+  const squad = state.players.filter(p => p.teamId === team.id && p.id !== currentId && !usedIds.has(p.id));
+  const exact = squad.filter(p => getSpecificPosition(p.id) === role)
+    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  if (exact.length) return exact;
+  return squad.filter(p => p.position === broad)
     .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
 }
 function h2hFlashcardPairs(teamA, teamB, fc) {
   const usedA = new Set(), usedB = new Set();
   const overridesA = (fc.overrides && fc.overrides.A) || {}, overridesB = (fc.overrides && fc.overrides.B) || {};
+  // exactMatch: true only when the shown player's REAL tagged specific
+  // position (state.playerPositions) equals this card's role — false
+  // means they're a broad-position fallback (e.g. a CB shown on an "RB"
+  // card because no tagged right-back exists on file for this club).
+  // Surfaced as a small badge in the card UI so a broad-position
+  // approximation is never silently presented as a confirmed match —
+  // most squads are still sparsely tagged (positions are fully manual,
+  // see known limitations), so this will show up often until the
+  // position-assignment coverage pass fills more of it in.
   return FLASHCARD_ROLES.map((role, i) => {
     const overrideAId = overridesA[i], overrideBId = overridesB[i];
     const pa = overrideAId ? state.players.find(p => p.id === overrideAId) : h2hBestPlayerForRole(teamA, role, usedA);
     const pb = overrideBId ? state.players.find(p => p.id === overrideBId) : h2hBestPlayerForRole(teamB, role, usedB);
     if (pa) usedA.add(pa.id);
     if (pb) usedB.add(pb.id);
-    return { role, slotIdx: i, pa, pb };
+    const exactA = !!(pa && getSpecificPosition(pa.id) === role);
+    const exactB = !!(pb && getSpecificPosition(pb.id) === role);
+    return { role, slotIdx: i, pa, pb, exactA, exactB };
   });
 }
 const FLASHCARD_CORE_ATTRS = ["Pace", "Shooting", "Passing", "Dribbling", "Defending", "Physical"];
@@ -13353,14 +13954,14 @@ function renderH2hFlashcardDraft(body, teamA, teamB) {
       <div class="detail-block-title" style="text-align:center;margin-bottom:10px">${pair.role} <span style="color:var(--ink-faint);font-weight:400">— who starts?</span></div>
       <div style="display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;justify-content:center">
         <div style="flex:1;min-width:200px;max-width:260px;padding:10px;border-radius:12px;border:2px solid var(--gold-bright);background:rgba(255,182,72,0.06)${pair.decision === "A" ? ";box-shadow:0 0 0 2px var(--gold-bright)" : ""}">
-          <div style="text-align:center;margin-bottom:8px">${pair.pa ? playerAvatarHtml(pair.pa, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pa ? nameWithPosition(pair.pa) : "— none —"}</div><div class="foot-note">${teamA.short_name}${pair.pa ? ` · ${pair.pa.totalPoints ?? 0}pts · form ${(pair.pa.form ?? 0).toFixed(1)}` : ""}</div></div>
+          <div style="text-align:center;margin-bottom:8px">${pair.pa ? playerAvatarHtml(pair.pa, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pa ? nameWithPosition(pair.pa) : "— none —"}</div><div class="foot-note">${teamA.short_name}${pair.pa ? ` · ${pair.pa.totalPoints ?? 0}pts · form ${(pair.pa.form ?? 0).toFixed(1)}` : ""}</div>${pair.pa && !pair.exactA ? `<div class="foot-note" style="color:var(--gold-bright)" title="No player tagged with the specific position ${pair.role} for this club — showing the best available ${FLASHCARD_BROAD_POS[pair.role] || "MID"} instead.">≈ approximate position</div>` : ""}</div>
           ${h2hFlashcardMiniAttrs(pair.pa)}
           ${swapRow("A", pair.pa)}
           <button class="chip-btn active" style="width:100%;margin-top:8px" data-fc-pick="A">✓ Pick ${pair.pa ? pair.pa.webName : teamA.short_name}</button>
         </div>
         <div style="align-self:center;font-weight:800;color:var(--ink-faint);font-size:18px">VS</div>
         <div style="flex:1;min-width:200px;max-width:260px;padding:10px;border-radius:12px;border:2px solid var(--blue,#4a9eff);background:rgba(74,158,255,0.06)${pair.decision === "B" ? ";box-shadow:0 0 0 2px var(--blue,#4a9eff)" : ""}">
-          <div style="text-align:center;margin-bottom:8px">${pair.pb ? playerAvatarHtml(pair.pb, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pb ? nameWithPosition(pair.pb) : "— none —"}</div><div class="foot-note">${teamB.short_name}${pair.pb ? ` · ${pair.pb.totalPoints ?? 0}pts · form ${(pair.pb.form ?? 0).toFixed(1)}` : ""}</div></div>
+          <div style="text-align:center;margin-bottom:8px">${pair.pb ? playerAvatarHtml(pair.pb, 44) : ""}<div style="font-weight:700;margin-top:4px">${pair.pb ? nameWithPosition(pair.pb) : "— none —"}</div><div class="foot-note">${teamB.short_name}${pair.pb ? ` · ${pair.pb.totalPoints ?? 0}pts · form ${(pair.pb.form ?? 0).toFixed(1)}` : ""}</div>${pair.pb && !pair.exactB ? `<div class="foot-note" style="color:var(--gold-bright)" title="No player tagged with the specific position ${pair.role} for this club — showing the best available ${FLASHCARD_BROAD_POS[pair.role] || "MID"} instead.">≈ approximate position</div>` : ""}</div>
           ${h2hFlashcardMiniAttrs(pair.pb)}
           ${swapRow("B", pair.pb)}
           <button class="chip-btn active" style="width:100%;margin-top:8px" data-fc-pick="B">✓ Pick ${pair.pb ? pair.pb.webName : teamB.short_name}</button>
@@ -13480,6 +14081,37 @@ function h2hTeamXiForBoard(team, key) {
     if (Object.values(out).some(arr => arr.length)) return out;
   }
   return h2hAutoDraftXi(team);
+}
+// ---- Bench strength (new sub-tab: "who has the stronger bench") ----
+// Per user: bench = whatever's left of the squad AFTER the starting XI is
+// settled — reuses h2hTeamXiForBoard (the exact same 11-a-side source the
+// Player matchups auto-preset already draws from, either a manually-saved
+// draft/matchup-derived XI or the 4-3-3 auto-fill fallback), NOT a
+// separate bench-picking system of its own. If neither club has a
+// settled XI yet (auto-fill still applies by default, so this only
+// happens on a team with an almost-empty pool), the comparison still
+// works — h2hAutoDraftXi always returns its best-effort XI.
+function h2hBenchPlayers(team, key) {
+  const xi = h2hTeamXiForBoard(team, key);
+  const xiIds = new Set(["GK", "DEF", "MID", "FWD"].flatMap(pos => (xi[pos] || []).map(p => p.id)));
+  return state.players.filter(p => p.teamId === team.id && !xiIds.has(p.id));
+}
+// A single per-player "bench value" score — reuses totalPoints (proven
+// season output, the same primary sort key every other H2H list already
+// uses for "who's better") blended with form (recent output), so an out-
+// of-form big name doesn't automatically outscore a bench player who's
+// actually playing well right now. Deliberately simple/transparent
+// (unlike Captaincy's fixture-aware score) since this is a lower-priority,
+// lighter-weight comparison per the user's own framing.
+function h2hBenchPlayerValue(p) {
+  return (p.totalPoints || 0) * 0.7 + (p.form || 0) * 10 * 0.3;
+}
+function h2hBenchStrength(teamA, teamB, key) {
+  const benchA = h2hBenchPlayers(teamA, key).sort((a, b) => h2hBenchPlayerValue(b) - h2hBenchPlayerValue(a));
+  const benchB = h2hBenchPlayers(teamB, key).sort((a, b) => h2hBenchPlayerValue(b) - h2hBenchPlayerValue(a));
+  const scoreA = benchA.reduce((s, p) => s + h2hBenchPlayerValue(p), 0);
+  const scoreB = benchB.reduce((s, p) => s + h2hBenchPlayerValue(p), 0);
+  return { benchA, benchB, scoreA, scoreB };
 }
 function renderH2hTacticalBoard(teamA, teamB, matchups) {
   const key = h2hMatchupKey(teamA.id, teamB.id);
@@ -14178,7 +14810,20 @@ function computeH2hDisparity(teamA, teamB) {
   const avgMagnitude = magN ? magSum / magN : 0; // +ve favours A, -ve favours B
   const disparityPct = Math.max(0, Math.min(100, Math.round((Math.abs(netWins) / total) * 60 + Math.min(40, Math.abs(avgMagnitude) * 0.8))));
   const favoured = netWins !== 0 ? (netWins > 0 ? "A" : "B") : (avgMagnitude !== 0 ? (avgMagnitude > 0 ? "A" : "B") : null);
-  return { aWins, bWins, evens, total, netWins, avgMagnitude, disparityPct, favoured };
+  // 50/50-split representation of the same disparityPct/favoured pair
+  // (item: "make it a 50/50 bar and split it down the middle... when a
+  // team has more than the other team like 80/20 the split moves
+  // accordingly rather than a whole uniform bar" — clarified this is the
+  // H2H Disparity gauge specifically). disparityPct/favoured are kept
+  // exactly as before (0 = perfectly even, 100 = total blowout, one
+  // side's colour) for anything else that reads them — pctA/pctB are a
+  // NEW derived pair expressing the identical number as a split around a
+  // 50/50 centre: even (disparityPct=0) is 50/50, and a full 100 blowout
+  // in A's favour is 100/0, so the midpoint genuinely moves proportionally
+  // rather than a single bar just filling more from one end.
+  const pctA = favoured === "A" ? 50 + disparityPct / 2 : favoured === "B" ? 50 - disparityPct / 2 : 50;
+  const pctB = 100 - pctA;
+  return { aWins, bWins, evens, total, netWins, avgMagnitude, disparityPct, favoured, pctA, pctB };
 }
 // ---- Fixtures overview (item: "overview of gameweek fixtures... make
 // each fixture clickable that then takes me to this current overview
@@ -14208,12 +14853,25 @@ function renderH2hFixturesOverview(body) {
     const done = !!state.h2hDoneMap[key];
     const { scoreA, scoreB } = computeH2hScoreboardTotal(home, away); // A = home, B = away for this card
     const disparity = computeH2hDisparity(home, away);
+    // 50/50-split bar (item: "make it a 50/50 bar and split it down the
+    // middle... when a team has more than the other team like 80/20 the
+    // split moves accordingly rather than a whole uniform bar") — two
+    // colours meeting at a midline that itself SHIFTS left/right based on
+    // pctA/pctB, instead of one bar filling uniformly from one end. An
+    // even matchup (disparityPct=0) shows the midline dead-centre at 50/50;
+    // a full 100 blowout pushes it all the way to one edge (100/0).
     const disparityHtml = disparity
-      ? `<div style="display:flex;align-items:center;gap:6px;margin-top:6px" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
-          <div style="flex:1;height:6px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08)">
-            <div style="width:${disparity.disparityPct}%;height:100%;background:${disparity.favoured === "A" ? "var(--gold-bright)" : disparity.favoured === "B" ? "var(--pink)" : "var(--ink-faint)"}"></div>
+      ? `<div style="margin-top:6px" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
+          <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08);position:relative">
+            <div style="width:${disparity.pctA}%;height:100%;background:var(--gold-bright);transition:width 0.2s"></div>
+            <div style="width:${disparity.pctB}%;height:100%;background:var(--pink);transition:width 0.2s"></div>
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.35)"></div>
           </div>
-          <span class="mono" style="font-size:10px;color:var(--ink-faint);white-space:nowrap">${disparity.disparityPct}/100 gap${disparity.favoured ? ` → ${disparity.favoured === "A" ? home.short_name : away.short_name}` : ""}</span>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-faint);margin-top:2px">
+            <span class="mono">${home.short_name} ${Math.round(disparity.pctA)}%</span>
+            <span class="mono">${disparity.disparityPct}/100 gap${disparity.favoured ? ` → ${disparity.favoured === "A" ? home.short_name : away.short_name}` : " · even"}</span>
+            <span class="mono">${away.short_name} ${Math.round(disparity.pctB)}%</span>
+          </div>
         </div>`
       : `<div style="font-size:10px;color:var(--ink-faint);margin-top:6px">No player matchups set yet — disparity fills in once you visit Player matchups for this fixture.</div>`;
     return `
@@ -14367,6 +15025,50 @@ function renderH2hScoreboard(body, teamA, teamB) {
   };
 }
 
+function renderH2hBenchStrength(body, teamA, teamB) {
+  const key = h2hMatchupKey(teamA.id, teamB.id);
+  const { benchA, benchB, scoreA, scoreB } = h2hBenchStrength(teamA, teamB, key);
+  const total = scoreA + scoreB;
+  const pctA = total > 0 ? Math.round((scoreA / total) * 100) : 50;
+  const pctB = 100 - pctA;
+  const leader = scoreA === scoreB ? null : (scoreA > scoreB ? teamA : teamB);
+  const rowsHtml = (bench) => bench.length
+    ? bench.map(p => `
+        <div class="builder-row">
+          ${playerAvatarHtml(p, 26)}
+          <span class="b-name">${nameWithPosition(p)} <span class="b-sub">${p.position}</span></span>
+          <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
+          <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
+        </div>
+      `).join("")
+    : `<p class="foot-note">No bench players found — this club's whole tracked squad is in the starting XI.</p>`;
+  body.innerHTML = `
+    <div class="card" style="margin-bottom:14px;background:rgba(255,255,255,0.02)">
+      <p class="foot-note" style="margin:0">🪑 Bench strength compares whichever players are LEFT OVER after each club's starting XI is settled on the Player matchups tab (manually adjusted there, or the 4-3-3 auto-fill if you haven't touched it yet) — set your matchups/XI first for this to reflect your actual picks, not just each club's deepest reserves by default. This is a lighter-weight signal than the other tabs — a good bench matters far less than a good starting XI.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title" style="text-align:center;margin-bottom:8px">${teamA.short_name} ${scoreA.toFixed(0)} — ${scoreB.toFixed(0)} ${teamB.short_name}${leader ? ` · ${leader.short_name} has the stronger bench` : " · Bench strength is even"}</div>
+      <div style="display:flex;height:14px;border-radius:7px;overflow:hidden;background:rgba(255,255,255,0.06)">
+        <div style="width:${pctA}%;background:var(--gold-bright);transition:width 0.2s"></div>
+        <div style="width:${pctB}%;background:var(--blue,#4a9eff);transition:width 0.2s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-faint);margin-top:4px">
+        <span>${teamA.short_name} ${pctA}%</span>
+        <span>${teamB.short_name} ${pctB}%</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <div class="detail-block-title" style="margin-bottom:8px">${teamA.name} bench (${benchA.length})</div>
+        ${rowsHtml(benchA)}
+      </div>
+      <div class="card">
+        <div class="detail-block-title" style="margin-bottom:8px">${teamB.name} bench (${benchB.length})</div>
+        ${rowsHtml(benchB)}
+      </div>
+    </div>
+  `;
+}
 function populateH2hSelects() {
   const selA = document.getElementById("h2hTeamA"), selB = document.getElementById("h2hTeamB");
   if (selA.options.length) return;
@@ -14761,6 +15463,7 @@ function renderH2H() {
   if (state.h2hViewMode === "combinedxi") { renderH2hCombinedXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "draftxi") { renderH2hDraftXi(body, teamA, teamB); return; }
   if (state.h2hViewMode === "matchups") { activeBoardRerender = renderH2H; renderH2hMatchups(body, teamA, teamB); return; }
+  if (state.h2hViewMode === "benchstrength") { renderH2hBenchStrength(body, teamA, teamB); return; }
   if (state.h2hViewMode === "scoreboard") { renderH2hScoreboard(body, teamA, teamB); return; }
   // --- real data: this season's meetings between the two clubs ---
   const meetings = (state.allFixtures || []).filter(f =>
@@ -14954,7 +15657,7 @@ function setupRankingsControls() {
 // actually covers.
 const SETTINGS_EXPORT_KEYS = [
   "fdrFormula", "rankFormula", "modelWeights", "rankingsPresets",
-  "playerAttributes", "attributeDefs", "priorLeagueStats",
+  "playerAttributes", "attributeDefs", "gkAttributes", "priorLeagueStats",
   "playerClubOverrides", "playerPositions", "teamOverrides",
   "fixtureRunTiers", "shortlist", "shortlistGroups",
 ];
