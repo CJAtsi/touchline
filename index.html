@@ -21,8 +21,8 @@
     --panel: rgba(160,160,185,0.065);
     --panel-2: rgba(160,160,185,0.10);
     --panel-3: rgba(160,160,185,0.15);
-    --border: rgba(200,200,225,0.12);
-    --border-strong: rgba(230,230,235,0.4);
+    --border: rgba(200,200,225,0.16);
+    --border-strong: rgba(230,230,235,0.5);
     --ink: #f1f1f5;
     --ink-dim: #a7a7ba;
     --ink-faint: #75758a;
@@ -40,10 +40,10 @@
     --purple: #d4d4d9;
     --glow-soft: 0 0 12px rgba(255,255,255,0.18);
     --glow-strong: 0 0 20px rgba(255,255,255,0.3);
-    --glass-blur: 10px;
-    --glass-blur-strong: 22px;
+    --glass-blur: 16px;
+    --glass-blur-strong: 30px;
     --radius-lg: 16px;
-    --shadow: 0 1px 1px rgba(0,0,0,0.35), 0 16px 34px -16px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+    --shadow: 0 1px 1px rgba(0,0,0,0.4), 0 22px 44px -18px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.045);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -85,10 +85,10 @@
   header {
     position: sticky; top: 0; z-index: 30;
     border-bottom: 1px solid var(--border);
-    background: rgba(14,15,20,0.6);
-    backdrop-filter: blur(var(--glass-blur-strong)) saturate(160%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(160%);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.08), 0 12px 30px -12px rgba(0,0,0,0.6);
+    background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0) 65%), rgba(14,15,20,0.6);
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.1), 0 12px 30px -12px rgba(0,0,0,0.6);
   }
   .header-inner {
     max-width: 1540px; margin: 0 auto; padding: 0 24px;
@@ -110,11 +110,11 @@
     position: fixed; left: 14px; top: 14px; bottom: 14px; z-index: 50;
     display: flex; flex-direction: column; gap: 2px;
     width: 58px; padding: 16px 8px 16px; border-radius: 20px;
-    background: rgba(17,18,24,0.72);
-    backdrop-filter: blur(var(--glass-blur-strong)) saturate(160%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(160%);
+    background: linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 55%), rgba(17,18,24,0.72);
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(175%);
     border: 1px solid var(--border);
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08);
     overflow-y: auto; overflow-x: hidden; transition: width 0.18s ease, box-shadow 0.18s ease;
   }
   #tabs.side-toolbar::-webkit-scrollbar { width: 0; }
@@ -131,7 +131,9 @@
     padding: 8px 9px; border-radius: 12px; white-space: nowrap;
     justify-content: flex-start; width: 100%; text-align: left;
   }
-  #tabs.side-toolbar button.active { background: var(--gold-soft); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+  #tabs.side-toolbar button.active { background: var(--gold-soft); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25), var(--glow-soft); }
+  #tabs.side-toolbar button { transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease; }
+  #tabs.side-toolbar button:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--ink-dim); }
   #tabs.side-toolbar button .tb-icon { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-dim); }
   #tabs.side-toolbar button.active .tb-icon { color: var(--gold-bright); }
   #tabs.side-toolbar button .tb-label { opacity: 0; transition: opacity 0.15s ease; }
@@ -151,13 +153,53 @@
     #tabs.side-toolbar button.active .tb-label { opacity: 1; }
     body { padding-left: 0; }
   }
+  #sidebarToggleBtn {
+    display: none; position: fixed; left: 14px; top: 14px; z-index: 51;
+    width: 34px; height: 34px; border-radius: 10px; align-items: center; justify-content: center;
+    background: rgba(17,18,24,0.85); border: 1px solid var(--border); color: var(--ink-dim);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    cursor: pointer;
+  }
+  #sidebarBackdrop {
+    display: none; position: fixed; inset: 0; z-index: 49;
+    background: rgba(0,0,0,0.35); backdrop-filter: blur(2px);
+  }
+  /* Tablet range (iPad portrait AND landscape, plus similar Android
+     tablets) — below this, the desktop "hover to expand" rail doesn't
+     work at all on a touch screen (no real :hover state, so it either
+     never expands or gets stuck expanded after a tap). Replaced with an
+     explicit tap-to-open overlay: collapsed icon rail by default, a ☰
+     toggle button opens it as a full panel over a dimmed backdrop, and
+     tapping the backdrop or any nav button (see setupSidebarToggle)
+     closes it again. Upper bound of 1180px covers iPad landscape (1024px
+     CSS width) with room to spare, without also swallowing most small
+     laptop/desktop windows where a real mouse hover is available (iPad
+     Pro 12.9" landscape, at 1194px CSS width, falls just outside this and
+     back onto the desktop hover behavior — accepted trade-off since a
+     wider bracket starts catching real laptop windows instead). Below
+     640px this is overridden back to the always-visible horizontal strip
+     above, which doesn't need an open/close state since every tab is
+     already reachable without expanding anything. NOTE: these rules must
+     come AFTER the unconditional #sidebarToggleBtn/#sidebarBackdrop
+     display:none rules above — same specificity, so source order decides,
+     and a media query placed before its base rule gets silently
+     overridden. */
+  @media (min-width: 641px) and (max-width: 1180px) {
+    #tabs.side-toolbar:hover { width: 58px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08); }
+    #tabs.side-toolbar:hover .tb-group-label, #tabs.side-toolbar:hover button .tb-label { opacity: 0; }
+    #tabs.side-toolbar.sidebar-open { width: 216px; box-shadow: 8px 8px 40px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border); }
+    #tabs.side-toolbar.sidebar-open .tb-group-label, #tabs.side-toolbar.sidebar-open button .tb-label { opacity: 1; }
+    #sidebarToggleBtn { display: flex; }
+    #sidebarBackdrop.sidebar-open { display: block; }
+    body { padding-left: 90px; }
+  }
 
   main { max-width: 1540px; margin: 0 auto; padding: 32px 24px 70px; }
   .tac-board {
     border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px;
     background: linear-gradient(180deg, rgba(60,210,90,0.06), rgba(224,82,154,0.06)), var(--panel);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
   .tac-board-heads { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 15px; margin-bottom: 12px; }
   .tac-line { margin-bottom: 10px; }
@@ -172,7 +214,7 @@
   .matchup-card {
     display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
     border: 1px solid var(--border); border-radius: 14px; padding: 10px; background: var(--panel);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
   }
   .matchup-side { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; text-align: center; }
   .matchup-mid { display: flex; flex-direction: column; align-items: center; gap: 6px; }
@@ -186,7 +228,7 @@
     position: relative; width: 100%; aspect-ratio: 3 / 4; max-width: 480px; margin: 0 auto;
     background: linear-gradient(180deg, #1e3d24, #234a2b); border: 2px solid rgba(255,255,255,0.25); border-radius: 10px;
     overflow: hidden; touch-action: none;
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
   .tac-drag-pitch::before {
     content: ""; position: absolute; inset: 0;
@@ -254,8 +296,8 @@
   .scout-card-grid-dim { opacity: 0.72; }
   .scout-card {
     border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: var(--panel);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
     transition: transform 0.15s ease, border-color 0.15s ease;
   }
   .scout-card:hover { transform: translateY(-2px); border-color: var(--border-strong); }
@@ -291,8 +333,8 @@
     --pc: var(--gold-bright);
     position: relative; border: 1px solid var(--border); border-radius: 16px; padding: 14px 14px 12px;
     background: linear-gradient(160deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015));
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
     cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     overflow: hidden;
   }
@@ -338,7 +380,9 @@
   .top-tabs-row {
     display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
     margin: 0 auto; padding: 6px; border-radius: 16px; max-width: 100%;
-    background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(0,0,0,0.24); border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
   }
   /* Deliberately different visual language from the floating glass side
      nav (icon-only pill, gold glow, left edge). This is a distinct piece
@@ -353,7 +397,7 @@
   }
   .top-tabs-row button .tt-icon { display: flex; line-height: 1; }
   .top-tabs-row button .tt-label { white-space: nowrap; }
-  .top-tabs-row button.active { background: var(--gold-soft); border-color: var(--border-strong); color: var(--gold-bright); }
+  .top-tabs-row button.active { background: var(--gold-soft); border-color: var(--border-strong); color: var(--gold-bright); box-shadow: var(--glow-soft); }
   .top-tabs-row button:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--ink-dim); }
   @media (max-width: 900px) { .top-tabs-row { display: none; } }
   .page-title { font-family: "Inter", sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
@@ -390,12 +434,13 @@
   .diag-fail { color: var(--red); }
 
   .toolbar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-    padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-lg);
-    background: var(--panel); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    margin-bottom: 16px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    display: flex; flex-wrap: wrap; align-items: center; row-gap: 10px; column-gap: 14px;
+    padding: 13px 15px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+    background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0) 60%), var(--panel);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    margin-bottom: 16px; box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
-  .seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.04); padding: 3px; gap: 2px; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.045); padding: 3px; gap: 2px; backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); }
   .seg button {
     background: transparent; border: none; color: var(--ink-faint);
     padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
@@ -428,7 +473,13 @@
   .dir-btn.active { background: var(--gold-soft); border-color: rgba(255,182,72,0.45); color: var(--gold-bright); font-weight: 600; }
 
   /* pill/icon mode buttons — glass, colourful, Apple-widget style */
-  .mode-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mode-btn-row {
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 6px;
+    border: 1px solid var(--border); border-radius: 16px;
+    background: rgba(255,255,255,0.035);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
   .mode-btn {
     display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.055);
     border: 1px solid var(--border); color: var(--ink-dim); padding: 9px 15px 9px 10px;
@@ -462,10 +513,10 @@
      instead of being crushed. */
   table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; font-size: 12px; table-layout: auto; }
   thead th {
-    text-align: right; padding: 7px 6px; color: var(--ink-dim); font-weight: 600;
+    text-align: right; padding: 10px 8px; color: var(--ink-dim); font-weight: 600;
     background: #14161fee; white-space: normal; word-break: break-word; cursor: pointer; user-select: none;
-    font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.02em;
-    border-bottom: 1px solid var(--border); line-height: 1.25;
+    font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--border-strong); line-height: 1.25;
     transition: background 0.12s ease, color 0.12s ease;
     /* Sticky/anchored headers were tried across several rounds (top offset,
        stacked group-row offset, opaque backgrounds) and kept causing worse
@@ -487,11 +538,12 @@
   /* Corner cell (sticky top AND left at once) needs to sit above every
      other sticky-top header cell it overlaps while scrolling both ways. */
   .table-wrap table thead th.label-col:first-child { z-index: 6; }
-  thead th.sorted { color: var(--gold-bright); }
-  tbody td { padding: 7px 6px; text-align: right; border-top: 1px solid var(--border); font-size: 11.5px; }
+  thead th.sorted { color: var(--gold-bright); box-shadow: inset 0 -2px 0 rgba(255,255,255,0.35); }
+  tbody td { padding: 9px 8px; text-align: right; border-top: 1px solid var(--border); font-size: 11.5px; }
   tbody td.label-col { text-align: left; }
-  tbody tr.player-row { cursor: pointer; transition: background 0.1s ease; }
-  tbody tr.player-row:hover { background: rgba(255,255,255,0.05); }
+  tbody tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+  tbody tr.player-row { cursor: pointer; transition: background 0.12s ease; }
+  tbody tr.player-row:hover td { background: rgba(255,255,255,0.075); }
   tbody tr.detail-row td {
     background: rgba(255,255,255,0.02); border-top: none; padding: 0;
     /* The player list table can be wider than the viewport (many stat
@@ -507,8 +559,9 @@
     position: sticky; left: 0;
   }
   .table-wrap {
-    overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow);
-    background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03); backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    margin-bottom: 4px;
   }
   /* Floating scroll arrows: injected as siblings of .table-wrap inside a
      .table-scroll-shell wrapper (added by JS at runtime) so wide tables
@@ -577,8 +630,8 @@
 
   .card {
     border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); padding: 18px;
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
   .card:hover { border-color: var(--border-strong); }
@@ -704,7 +757,13 @@
   }
   .hit-tag { font-size: 11px; color: var(--red); font-family: "JetBrains Mono", monospace; }
   .gw-row-body { padding: 16px; border-top: 1px solid var(--border); }
-  .chip-btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip-btn-row {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; padding: 6px;
+    border: 1px solid var(--border); border-radius: 16px;
+    background: rgba(255,255,255,0.035);
+    backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
   .chip-btn {
     background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--ink-dim);
     padding: 6px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; font-family: inherit;
@@ -752,8 +811,8 @@
   }
   .builder-list {
     max-height: 640px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
   }
   .builder-pos-head {
     position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
@@ -784,8 +843,8 @@
   .builder-right { position: sticky; top: 78px; }
   .builder-pitch-card {
     border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); padding: 14px;
-    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.06);
-    backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    box-shadow: var(--shadow), inset 0 1.5px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.035);
+    backdrop-filter: blur(var(--glass-blur)) saturate(200%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(200%);
   }
   .builder-topbar { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
   .builder-pill { background: var(--emerald-dim); color: var(--emerald); font-weight: 700; font-size: 13px; padding: 6px 14px; border-radius: 999px; font-family: "JetBrains Mono", monospace; }
@@ -851,9 +910,10 @@
   .pitch-modal-card {
     background: rgba(18,22,36,0.85); border: 1px solid var(--border); border-radius: 20px; padding: 18px; width: 100%; max-width: 320px;
     box-shadow: var(--shadow); max-height: 80vh; overflow-y: auto;
-    backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(200%); -webkit-backdrop-filter: blur(24px) saturate(200%);
   }
   .pitch-modal-card .chip-btn { width: 100%; text-align: left; padding: 10px 12px; }
+  .pitch-modal-card .chip-btn-row { background: transparent; border: none; padding: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; flex-direction: column; }
   .bench-strip {
     display: flex; gap: 10px; justify-content: center; padding: 12px; border: 1px dashed var(--border);
     border-radius: 16px; background: rgba(255,255,255,0.04); flex-wrap: wrap;
@@ -943,6 +1003,10 @@
 </head>
 <body>
 
+<button id="sidebarToggleBtn" type="button" aria-label="Toggle navigation menu">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+<div id="sidebarBackdrop"></div>
 <nav id="tabs" class="side-toolbar">
   <div class="tb-group-label">Squad</div>
   <button data-tab="team"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19.5c1.2-3.6 4-5.2 6.5-5.2s5.3 1.6 6.5 5.2"/></svg></span><span class="tb-label">My team</span></button>
@@ -1410,7 +1474,7 @@
     </div>
     <div id="h2hSavedRow" class="chip-btn-row" style="margin-bottom:16px"></div>
 
-    <div style="display:flex;gap:6px;margin-bottom:16px">
+    <div class="chip-btn-row" style="margin-bottom:16px">
       <button class="chip-btn" data-h2h-view="overview">Overview</button>
       <button class="chip-btn" data-h2h-view="combinedxi">Combined XI (by points)</button>
       <button class="chip-btn" data-h2h-view="draftxi">Ability draft XI</button>
@@ -1498,6 +1562,12 @@
     </div>
 
     <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Export my settings</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Downloads everything Touchline has saved in this browser — player attribute edits, prior-league projections, club overrides, main positions, shortlist, and all the formula weights above — as one JSON file. Use this to back up your setup, move it to another browser, or send it to whoever maintains the site to set as the default a first-time visitor sees.</p>
+      <button class="dir-btn" id="exportSettingsBtn">⬇ Download my settings (.json)</button>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">2. Club rankings</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">A single ranked list of all 20 clubs (below), best to worst — separate from the fixture-difficulty formula above and not used by it. Each slider is how much one signal counts toward a club's overall rank.</p>
       <div class="formula-panel" id="rankFormulaPanel" style="margin-bottom:14px"></div>
@@ -1527,6 +1597,63 @@
 const FPL_BASE = "https://fantasy.premierleague.com/api";
 const POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
 const POS_COLOR = { GK: "var(--gold-bright)", DEF: "var(--emerald)", MID: "var(--blue)", FWD: "var(--red)" };
+// Specific on-pitch position (RW, LB, CDM, etc) — the FPL API only exposes
+// the 4 broad GK/DEF/MID/FWD groups (POS above), with no real left/right or
+// role split (confirmed no free scrapeable source exists for this either —
+// Sofascore and FotMob both require a real browser to get past bot
+// detection, which a Cloudflare Worker can't run). So this is a manually
+// maintained, user-editable list: state.playerPositions keyed by player id
+// -> a specific position string. A player with no entry here just falls
+// back to their broad FPL position everywhere this is read.
+const SPECIFIC_POSITIONS = {
+  GK: ["GK"],
+  DEF: ["CB", "LB", "RB", "LWB", "RWB"],
+  MID: ["CDM", "CM", "CAM", "LM", "RM", "LW", "RW"],
+  FWD: ["ST", "CF", "LW", "RW"],
+};
+function savePlayerPositions() { persistSet("playerPositions", JSON.stringify(state.playerPositions || {})); }
+function getSpecificPosition(playerId) { return (state.playerPositions || {})[playerId] || null; }
+// Returns whatever should be SHOWN as this player's position: their manual
+// specific position if set, else their broad FPL position (GK/DEF/MID/FWD)
+// as a fallback so callers never have to null-check.
+function displayPosition(p) { return (state.playerPositions && state.playerPositions[p.id]) || p.position; }
+function setSpecificPosition(playerId, pos) {
+  if (!state.playerPositions) state.playerPositions = {};
+  if (pos) state.playerPositions[playerId] = pos; else delete state.playerPositions[playerId];
+  savePlayerPositions();
+}
+// "Saka (RW)" — only appends a suffix once a real specific position has
+// been set; a player still on the broad fallback (e.g. plain "MID") is
+// left as just their name, since POS_COLOR-coded position pills already
+// show the broad position elsewhere and repeating it in the name would be
+// noise, not signal.
+function nameWithPosition(p) {
+  const specific = getSpecificPosition(p.id);
+  return specific ? `${p.webName} (${specific})` : p.webName;
+}
+function positionEditorHtml(playerId) {
+  const p = state.players.find(pl => pl.id === playerId);
+  if (!p) return "";
+  const cur = getSpecificPosition(playerId);
+  const options = (SPECIFIC_POSITIONS[p.position] || []).map(pos =>
+    `<option value="${pos}" ${cur === pos ? "selected" : ""}>${pos}</option>`).join("");
+  return `
+    <div class="position-editor" style="font-size:12px">
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">FPL only lists ${p.webName} as ${p.position}. Pin his real main position (no free live source for this) and it'll show next to his name as "${p.webName} (—)" throughout the app.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select data-pos-select style="flex:1">
+          <option value="">— use broad position (${p.position}) —</option>
+          ${options}
+        </select>
+      </div>
+    </div>
+  `;
+}
+function wirePositionEditor(container, playerId) {
+  const sel = container.querySelector(`[data-pos-select]`);
+  if (!sel) return;
+  sel.onchange = () => { setSpecificPosition(playerId, sel.value || null); renderStats(); };
+}
 const STATUS_LABEL = { d: ["Doubtful", "var(--gold-bright)"], i: ["Injured", "var(--red)"], s: ["Suspended", "var(--red)"], u: ["Unavailable", "var(--red)"] };
 const FDR_COLOR = { 1: "#3ecf8e", 2: "#8fd9ab", 3: "#d9c98a", 4: "#e39a63", 5: "#e2604f" };
 // Continuous green -> amber -> red gradient keyed to the exact 1.0-5.0
@@ -2580,7 +2707,7 @@ function openPlayerProfileCompare(ids) {
   const colMinWidth = n <= 5 ? 0 : 130;
   function renderModal(activeTab) {
     modal.innerHTML = `
-      <div style="max-width:${modalMaxWidth}px;width:100%;max-height:calc(100vh - 60px);overflow-y:auto;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%)">
+      <div style="max-width:${modalMaxWidth}px;width:100%;max-height:calc(100vh - 60px);overflow-y:auto;padding:22px;border-radius:20px;background:#14161fee;border:1px solid var(--border);box-shadow:var(--shadow);backdrop-filter:blur(28px) saturate(200%);-webkit-backdrop-filter:blur(28px) saturate(200%)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <h2 style="margin:0">Player profile comparison</h2>
           <button class="dir-btn" id="closeProfileCompare">✕ Close</button>
@@ -2700,6 +2827,49 @@ function estimatePriorLeagueProjection(playerId) {
   const pointsPerGame = 2 + (xg90 * goalPts + xa90 * 3) * (assumedMinsPerGame / 90);
   return { xg90, xa90, pointsPerGame, dropoff, source: raw };
 }
+// Single choke point for the prior-league override's downstream effects —
+// same pattern as applyPlayerClubOverrides() below. estimatePriorLeagueProjection()
+// on its own only ever fed computeProjectionRow's LOCAL effP copy inside the
+// Projections tab; it never touched the actual player object, so every other
+// screen that reads p.xg90/p.xa90/p.xgi90/p.pointsPerGame/p.pointsPer90/p.epNext
+// directly — most importantly the Player Stats table — kept showing flat 0s
+// even after Save & Apply, which is why the button looked like it did nothing.
+// This patches those fields directly onto state.players so they're correct
+// everywhere immediately, and is called both right after a save/clear AND
+// once during boot (after priorLeagueStats is restored from storage), since
+// that restore happens after the initial transformPlayer pass and epNext calc.
+function applyPriorLeagueOverrides(playerId) {
+  const targets = playerId != null ? [playerId] : Object.keys(state.priorLeagueStats || {}).map(Number);
+  const modelNextEvent = state.events && (state.events.find(e => e.is_current) || state.events.find(e => e.is_next));
+  for (const pid of targets) {
+    const p = state.players && state.players.find(pl => pl.id === pid);
+    if (!p) continue;
+    const isUnproven = (p.minutes || 0) === 0 && (p.starts || 0) === 0;
+    const est = isUnproven ? estimatePriorLeagueProjection(pid) : null;
+    if (est) {
+      p.xg90 = est.xg90;
+      p.xa90 = est.xa90;
+      p.xgi90 = est.xg90 + est.xa90;
+      p.expectedGoalInvolvements = p.xgi90;
+      p.pointsPerGame = est.pointsPerGame;
+      p.pointsPer90 = est.pointsPerGame;
+      p.priorLeagueApplied = true;
+    } else if (p.priorLeagueApplied) {
+      // Override cleared (or no longer eligible, e.g. player has since
+      // started a Prem game) — a zero-minutes player's real FPL-derived
+      // xg90/xa90/pointsPerGame are genuinely 0 anyway (that's the whole
+      // reason the estimate existed), so clearing just means dropping the
+      // estimate back to the same 0s transformPlayer would have set.
+      p.xg90 = 0; p.xa90 = 0; p.xgi90 = 0; p.expectedGoalInvolvements = 0;
+      p.pointsPerGame = 0; p.pointsPer90 = 0;
+      p.priorLeagueApplied = false;
+    }
+    if (modelNextEvent && typeof projectPoints === "function" && typeof state.fixturesByTeam !== "undefined" && state.fixturesByTeam) {
+      p.epNext = projectPoints(p, modelNextEvent.id);
+      p.fplEpNext = p.fplEpNext ?? p.epNext;
+    }
+  }
+}
 function priorLeagueEditorHtml(playerId) {
   const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "" };
   const leagueOptions = Object.keys(LEAGUE_DROPOFF).map(l =>
@@ -2733,10 +2903,11 @@ function wirePriorLeagueEditor(container, playerId) {
       assists: Number(get("assists")) || 0,
     };
     setPriorLeagueStats(playerId, data);
+    applyPriorLeagueOverrides(playerId);
     renderStats();
   };
   const clearBtn = container.querySelector(`[data-pl-clear]`);
-  if (clearBtn) clearBtn.onclick = () => { clearPriorLeagueStats(playerId); renderStats(); };
+  if (clearBtn) clearBtn.onclick = () => { clearPriorLeagueStats(playerId); applyPriorLeagueOverrides(playerId); renderStats(); };
 }
 
 // ---------- manual player club override ----------
@@ -2970,6 +3141,7 @@ let state = {
   playerAttributes: {},
   priorLeagueStats: {},
   playerClubOverrides: {},
+  playerPositions: {},
   // ---- Insights tab state (differentials / price watch / squad news / rivals / projection accuracy) ----
   diffOwnershipCeiling: 10, diffPosFilter: "ALL", diffMinMinutes: 270,
   priceWatchFilter: "ALL", // ALL | RISE | FALL
@@ -3465,6 +3637,7 @@ function setBanner(msg, kind, showRetry) {
 
 async function loadData() {
   state.diagnostics = [];
+  await applyDefaultSeedForNewVisitor();
   try {
     setBanner("Loading live data from the FPL API…", "loading", false);
     const bootstrap = await fplGet("/bootstrap-static/");
@@ -3506,6 +3679,12 @@ async function loadData() {
     await loadShortlistFromStorage();
     await loadDraftsFromStorage();
     await loadFormulasFromStorage();
+    // priorLeagueStats is restored inside loadFormulasFromStorage(), which
+    // runs after transformPlayer() and the epNext calc above — so on a
+    // fresh page load, any saved prior-league override needs to be
+    // (re)applied here or it silently sits unused until the user happens
+    // to open that player's panel and click Save again.
+    applyPriorLeagueOverrides();
     await seedStartOfSeasonRatings();
     state.piRatings = computePiRatings(fixtures); // after formulas load, so any saved learning-rate/cross-influence overrides apply
     await loadManagerNotes();
@@ -4576,7 +4755,7 @@ function scoutCardHtml({ p, score, reasons }, theme) {
         ${playerAvatarHtml(p, 44)}
         <button class="star-btn ${isShortlisted(p.id) ? "on" : ""}" data-scout-star="${p.id}" title="${isShortlisted(p.id) ? "Remove from shortlist" : "Add to shortlist"}">★</button>
       </div>
-      <div class="scout-card-name">${p.webName}</div>
+      <div class="scout-card-name">${nameWithPosition(p)}</div>
       <div class="scout-card-sub">${state.teamsById[p.teamId]?.short_name || ""} · ${fmtPrice(p.nowCost)}${p.selectedByPercent < 10 ? " · 🔍" : ""}</div>
       <div class="scout-card-reasons">${reasons.join(" · ")}</div>
     </div>`;
@@ -4668,7 +4847,7 @@ function renderStats() {
       const unproven = (p.minutes || 0) === 0 && (p.totalPoints || 0) === 0;
       tr.innerHTML = `
         <td class="label-col">
-          <div class="name-cell">${p.webName}${unproven ? ` <span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No minutes or points recorded in the Prem this season yet — could be a new signing from outside the league, on loan, or simply unused so far. Treat any season-long stats for them with caution until they've actually played.">new / no Prem data</span>` : ""}${(p.minutes || 0) >= 450 ? captaincyBadgeHtml(p, currentEventId()) : ""}</div>
+          <div class="name-cell">${nameWithPosition(p)}${unproven ? ` <span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No minutes or points recorded in the Prem this season yet — could be a new signing from outside the league, on loan, or simply unused so far. Treat any season-long stats for them with caution until they've actually played.">new / no Prem data</span>` : ""}${(p.minutes || 0) >= 450 ? captaincyBadgeHtml(p, currentEventId()) : ""}</div>
           ${statusInfo ? `<div class="status-tag" style="color:${statusInfo[1]}">${statusInfo[0]}</div>` : ""}
         </td>
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
@@ -4698,7 +4877,7 @@ function renderStats() {
         td.innerHTML = `
           <div class="detail-panel detail-panel-two-col">
             <div class="detail-panel-narrow">
-              <div style="font-weight:700;margin-bottom:8px">${p.webName}${captaincyBadgeHtml(p, currentEventId())}</div>
+              <div style="font-weight:700;margin-bottom:8px">${nameWithPosition(p)}${captaincyBadgeHtml(p, currentEventId())}</div>
               <div>
                 <div class="detail-block-title">Next 5 fixtures (your custom FDR)</div>
                 ${fixtureTickerHtml(p.teamId, 5)}
@@ -4706,6 +4885,10 @@ function renderStats() {
               <div>
                 <div class="detail-block-title">Attribute profile (computed from real stats vs same-position players, 1-99)</div>
                 <div class="radar-block">${radarChartSvg(computeFcAttributes(p), 300)}</div>
+              </div>
+              <div>
+                <div class="detail-block-title">Main position</div>
+                <div id="position-stats-${p.id}">${positionEditorHtml(p.id)}</div>
               </div>
               ${(p.minutes || 0) === 0 && (p.starts || 0) === 0 ? `
               <div>
@@ -4727,6 +4910,8 @@ function renderStats() {
         dtr.appendChild(td);
         body.appendChild(dtr);
         wireAttributeEditor(document.getElementById(`attrs-stats-${p.id}`), p.id);
+        const posContainer = document.getElementById(`position-stats-${p.id}`);
+        if (posContainer) wirePositionEditor(posContainer, p.id);
         const plContainer = document.getElementById(`priorleague-stats-${p.id}`);
         if (plContainer) wirePriorLeagueEditor(plContainer, p.id);
         const clubOvContainer = document.getElementById(`cluboverride-stats-${p.id}`);
@@ -4928,7 +5113,7 @@ function buildMiniStatsTableEl(items) {
   const rows = sorted.map(({ item, p }) => {
     const team = state.teamsById[p.teamId];
     return `<tr>
-      <td class="label-col">${playerAvatarHtml(p, 22)} <span style="font-weight:600">${p.webName}</span> <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
+      <td class="label-col">${playerAvatarHtml(p, 22)} <span style="font-weight:600">${nameWithPosition(p)}</span> <span style="color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position}</span></td>
       ${SHORTLIST_STATS_COLUMNS.map(([key]) => {
         const fmt = COLUMN_FORMAT[key];
         const [text, style] = fmt ? fmt(p) : [p[key] ?? "–", ""];
@@ -5130,7 +5315,7 @@ function renderShortlist() {
       <div class="sl-card-top" data-toggle="${p.id}">
         ${playerAvatarHtml(p, 40)}
         <div style="flex:1;min-width:0">
-          <div class="sl-card-name">${p.webName}</div>
+          <div class="sl-card-name">${nameWithPosition(p)}</div>
           <div class="sl-card-sub">${team ? team.short_name : ""} · <span style="color:${POS_COLOR[p.position] || "inherit"};font-weight:600">${p.position}</span> · ${fmtPrice(p.nowCost)}</div>
         </div>
       </div>
@@ -7432,7 +7617,7 @@ function renderProjectionsTab() {
             ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
             : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
             <td class="mono" style="text-align:center;font-weight:700;${heatOn && ranges ? heatmapBg(r.projPerGame, ranges.projPerGame.min, ranges.projPerGame.max, false) : ""}">${r.projPerGame.toFixed(1)}</td>
             <td class="mono" style="text-align:center">${r.ppm.toFixed(1)}</td>
@@ -7471,7 +7656,7 @@ function renderProjectionsTab() {
             ? "vs " + r.bestMatchup.opp.webName + " (" + (state.teamsById[r.bestMatchup.opp.teamId]?.short_name || "") + ") — best-effort inferred matchup, see Simulation tab"
             : "No fixture in range";
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${p.webName}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
             ${cell("proj", r.proj, r.proj.toFixed(1))}
             ${cell("ppm", r.ppm, r.ppm.toFixed(1))}
@@ -9378,6 +9563,10 @@ async function loadFormulasFromStorage() {
   try {
     const raw = await persistGet("priorLeagueStats");
     if (raw) state.priorLeagueStats = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("playerPositions");
+    if (raw) state.playerPositions = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   // playerClubOverrides is restored earlier, before transformPlayer runs
   // in loadData() — see there — so it's deliberately NOT re-loaded here
@@ -13131,6 +13320,84 @@ function setupRankingsControls() {
   };
   renderOddsStatus();
   setupRankingsPresets();
+  const exportBtn = document.getElementById("exportSettingsBtn");
+  if (exportBtn) exportBtn.onclick = exportTouchlineSettings;
+}
+// Keys that make up a person's "setup" — their rankings/customizations —
+// as opposed to one-off internal flags (startOfSeasonSeeded,
+// modelRecalibratedV2) or data tied to one specific FPL team/league
+// (myTeamId, drafts, h2h*, managerNotes) that wouldn't make sense as a
+// default for a stranger visiting the site. Shared by the exporter below
+// and by DEFAULT_SEED_KEYS (applyDefaultSeedForNewVisitor) so both sides
+// of the export -> bake-in -> seed pipeline agree on what "my rankings"
+// actually covers.
+const SETTINGS_EXPORT_KEYS = [
+  "fdrFormula", "rankFormula", "modelWeights", "rankingsPresets",
+  "playerAttributes", "attributeDefs", "priorLeagueStats",
+  "playerClubOverrides", "playerPositions", "teamOverrides",
+  "fixtureRunTiers", "preferKits", "shortlist", "shortlistGroups",
+];
+// ---------- default seed for first-time visitors ----------
+// cjatsi's own rankings/customizations, baked in as the starting point
+// every brand-new visitor sees instead of a blank app. Filled in from a
+// "Download my settings" export (see exportTouchlineSettings above) —
+// paste that file's `data` object in here. Left empty until that export
+// is provided; applyDefaultSeedForNewVisitor() below is a no-op per key
+// while its value here is empty/undefined, so shipping this with an empty
+// object is always safe — it just means "no seed yet" rather than
+// blanking anyone's real data.
+const DEFAULT_SEED_DATA = {
+  // fdrFormula: { attackWeight: 1.2, defenceWeight: 1.2, overallWeight: 0.3, homeAdvantage: 0.15 },
+  // rankFormula: { squadWeight: 1, strengthWeight: 1 },
+  // modelWeights: { ... },
+  // rankingsPresets: { ... },
+  // playerAttributes: { ... },
+  // attributeDefs: [ ... ],
+  // priorLeagueStats: { ... },
+  // playerClubOverrides: { ... },
+  // playerPositions: { ... },
+  // teamOverrides: { ... },
+  // fixtureRunTiers: { ... },
+  // preferKits: ...,
+  // shortlist: [ ... ],
+  // shortlistGroups: [ ... ],
+};
+// Runs once per browser, before any of the normal per-feature storage
+// reads below. Only ever WRITES a key if that browser has genuinely never
+// had Touchline data before (no key at all) — a returning visitor's own
+// edits, even a single one, are never touched or overwritten. Gated by
+// its own one-time flag (same "already: 1" pattern as
+// seedStartOfSeasonRatings) so it doesn't re-check every load once done.
+async function applyDefaultSeedForNewVisitor() {
+  const already = await persistGet("defaultSeedApplied");
+  if (already === "1") return;
+  for (const key of SETTINGS_EXPORT_KEYS) {
+    const def = DEFAULT_SEED_DATA[key];
+    if (def === undefined) continue; // nothing to seed for this key yet
+    const existing = await persistGet(key);
+    if (existing != null) continue; // this browser already has its own data — never clobber it
+    await persistSet(key, JSON.stringify(def));
+  }
+  await persistSet("defaultSeedApplied", "1");
+}
+async function exportTouchlineSettings() {
+  const out = {};
+  for (const key of SETTINGS_EXPORT_KEYS) {
+    try {
+      const raw = await persistGet(key);
+      if (raw != null) out[key] = JSON.parse(raw);
+    } catch (e) { /* skip anything unreadable/corrupt rather than fail the whole export */ }
+  }
+  const payload = { touchlineSettingsExport: true, exportedAt: new Date().toISOString(), data: out };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `touchline-settings-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 // Shows whether the /odds route is actually returning data, right next to
 // the weight that controls how much it's used — so it's obvious at a
@@ -14136,6 +14403,7 @@ const TAB_ICONS = {
 };
 const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Teams", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
 function switchTab(name) {
+  closeSidebar(); // no-op unless the tablet-range overlay is currently open — see setupSidebarToggle
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   TAB_NAMES.forEach(n => {
     document.getElementById("tab-" + n).style.display = n === name ? "block" : "none";
@@ -14156,6 +14424,44 @@ function setupTabs() {
   topTabs.querySelectorAll("button").forEach(btn => { btn.onclick = () => switchTab(btn.dataset.tab); });
   document.getElementById("loadTeamBtn").onclick = loadMyTeam;
   document.getElementById("teamIdInput").addEventListener("keydown", e => { if (e.key === "Enter") loadMyTeam(); });
+  setupSidebarToggle();
+}
+// Tap-to-open/tap-outside-to-close for the sidebar on tablet-width screens
+// (see the 641-900px media query above) — the desktop rail's :hover
+// expand doesn't work on a touchscreen, so this gives an explicit toggle
+// button instead. Clicking the ☰ button opens it; clicking the dimmed
+// backdrop, clicking anywhere else outside the nav, pressing Escape, or
+// picking a tab (via switchTab's closeSidebar() call above) all close it
+// again. Harmless no-op outside that width range since #sidebarToggleBtn
+// is display:none there and .sidebar-open has no effect in other media
+// queries.
+function openSidebar() {
+  document.getElementById("tabs").classList.add("sidebar-open");
+  document.getElementById("sidebarBackdrop").classList.add("sidebar-open");
+}
+function closeSidebar() {
+  document.getElementById("tabs").classList.remove("sidebar-open");
+  document.getElementById("sidebarBackdrop").classList.remove("sidebar-open");
+}
+function setupSidebarToggle() {
+  const toggleBtn = document.getElementById("sidebarToggleBtn");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const nav = document.getElementById("tabs");
+  if (!toggleBtn || !backdrop || !nav) return;
+  toggleBtn.onclick = (e) => {
+    e.stopPropagation();
+    nav.classList.contains("sidebar-open") ? closeSidebar() : openSidebar();
+  };
+  backdrop.onclick = closeSidebar;
+  // Belt-and-braces outside-tap-to-close: covers a tap landing on any
+  // other page element that isn't the backdrop (e.g. if something else
+  // has a higher z-index in a particular tab) while the sidebar is open.
+  document.addEventListener("click", (e) => {
+    if (!nav.classList.contains("sidebar-open")) return;
+    if (nav.contains(e.target) || e.target === toggleBtn || toggleBtn.contains(e.target)) return;
+    closeSidebar();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSidebar(); });
 }
 
 // ---------- floating table-scroll arrows ----------
