@@ -1910,10 +1910,10 @@ const STAT_THEMES = {
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
       ["Value", ["selectedByPercent", "netTransfers", "ppm", "ppm90", "ppmPerApp"]],
-      ["Output", ["goalsScored", "assists", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
+      ["Output", ["goalsScored", "assists", "goalsPer90", "assistsPer90", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["ppmPerApp", "Pts/£m/App"],
-      ["goalsScored", "G"], ["assists", "A"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
+      ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
   },
   attacking: {
     label: "Attacking",
@@ -1950,23 +1950,6 @@ const STAT_THEMES = {
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"],
       ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
-  },
-  creativity: {
-    label: "Shots & creativity",
-    groups: [
-      ["Playing time", ["minutes", "minsPerStart"]],
-      ["Shot & chance creation", ["dsShots", "dsKeyPasses", "dsXGChain", "dsXGBuildup"]],
-    ],
-    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["dsShots", "Shots"], ["dsKeyPasses", "Chances"], ["dsXGChain", "xGChain"], ["dsXGBuildup", "xGBuild"]],
-  },
-  cbit: {
-    label: "CBIT (defensive)",
-    groups: [
-      ["Playing time", ["minutes", "minsPerStart"]],
-      ["CBIT", ["dsTackles", "dsInterceptions", "dsBlocks", "dsClearances"]],
-      ["Aerial", ["dsAerialsWon", "dsAerialWinPct"]],
-    ],
-    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["dsTackles", "Tkl"], ["dsInterceptions", "Int"], ["dsBlocks", "Blk"], ["dsClearances", "Clr"], ["dsAerialsWon", "Aer W"], ["dsAerialWinPct", "Aer%"]],
   },
   per90: {
     label: "Per 90",
@@ -2027,18 +2010,17 @@ const COLUMN_FORMAT = {
   creativityPer90: p => [p.creativityPer90.toFixed(1), ""],
   threatPer90: p => [p.threatPer90.toFixed(1), ""],
   ictPer90: p => [p.ictPer90.toFixed(2), ""],
-  dsShots: p => [p.dsShots ?? "—", p.dsShots == null ? "color:var(--ink-faint)" : ""],
-  dsKeyPasses: p => [p.dsKeyPasses ?? "—", p.dsKeyPasses == null ? "color:var(--ink-faint)" : ""],
-  dsXGChain: p => [p.dsXGChain != null ? p.dsXGChain.toFixed(2) : "—", p.dsXGChain == null ? "color:var(--ink-faint)" : ""],
-  dsXGBuildup: p => [p.dsXGBuildup != null ? p.dsXGBuildup.toFixed(2) : "—", p.dsXGBuildup == null ? "color:var(--ink-faint)" : ""],
-  dsTackles: p => [p.dsTackles ?? "—", p.dsTackles == null ? "color:var(--ink-faint)" : ""],
-  dsInterceptions: p => [p.dsInterceptions ?? "—", p.dsInterceptions == null ? "color:var(--ink-faint)" : ""],
-  dsBlocks: p => [p.dsBlocks ?? "—", p.dsBlocks == null ? "color:var(--ink-faint)" : ""],
-  dsClearances: p => [p.dsClearances ?? "—", p.dsClearances == null ? "color:var(--ink-faint)" : ""],
-  dsAerialsWon: p => [p.dsAerialsWon ?? "—", p.dsAerialsWon == null ? "color:var(--ink-faint)" : ""],
-  dsAerialWinPct: p => [p.dsAerialWinPct != null ? p.dsAerialWinPct.toFixed(0) + "%" : "—", p.dsAerialWinPct == null ? "color:var(--ink-faint)" : ""],
   rangePts: p => [state.rangePoints && state.rangePoints[p.id] != null ? state.rangePoints[p.id] : "—", ""],
 };
+// Note: the ds* (dsShots/dsTackles/dsInterceptions/dsBlocks/dsClearances/
+// dsAerialsWon/dsAerialWinPct/dsXGChain/dsXGBuildup) fields themselves are
+// NOT removed — the underlying Understat/FBref scrape data still populates
+// them when available and Simulation's Shots/Tackles duels (Simulation tab,
+// "in tandem with Tactical board") still read them directly. Only the two
+// Player Stats theme TABS that displayed them as their own columns (Round
+// 10: "Shots & creativity" / "CBIT (defensive)") were removed, since that
+// scrape consistently fails (Understat's playersData markers moved; FBref
+// 403s all requests) and no free, reliably-scrapeable alternative exists.
 function activeColumns() {
   const cols = STAT_THEMES[state.statsTheme].columns.slice();
   if (state.rangePoints) cols.push(["rangePts", state.rangeLabel || "Range pts"]);
@@ -2822,15 +2804,30 @@ function teamLastSeasonCsPct(teamId) {
   if (!row || !row.played) return null;
   return (row.cs / row.played) * 100;
 }
+// Minutes-share carryover: how much of a fresh signing's PRIOR club minutes
+// share we assume carries over to the new club, per the user's own call —
+// somewhere in a 0.8-0.9 range (settling-in period/rotation risk at a new
+// club knocks a bit off, but a player who was nailed-on before is still
+// broadly expected to play). Midpoint used as a single value rather than a
+// tunable range, same "one reasonable number, not a slider for every knob"
+// approach as the rest of this estimate.
+const PRIOR_LEAGUE_MINS_CARRYOVER = 0.85;
 // Converts entered prior-league totals into the same xg90/xa90/pointsPerGame
 // shape the rest of the projection engine already reads, scaled down by the
 // league's dropoff factor, PLUS a "converted" tag and as much of the wider
 // stat picture as can be reasonably filled in from the raw inputs:
-//   - goals/assists: real underlying xG/xA from a minor league is rarely
-//     free/available, so goal/assist COUNTS are used directly as the input,
-//     scaled by league dropoff, then p90 rates kept as decimals (xg90/xa90)
-//     while converted whole-season goals/assists are rounded to integers
-//     (you can't score half a goal) for any place that shows raw totals.
+//   - xG/xA: if the user has real underlying xG/xA totals for this player,
+//     entering them directly is used in place of the goals/assists-as-proxy
+//     approximation (more accurate when the real data is available) — goals/
+//     assists COUNTS remain the fallback proxy when xG/xA isn't entered.
+//   - goals/assists: converted whole-season totals are rounded to integers
+//     (you can't score half a goal) for any place that shows raw totals;
+//     p90 rates (xg90/xa90) stay decimals like every other per-90 stat.
+//   - minutes/games: assumes the SAME minutes SHARE (mins/game) the player
+//     had at their old club carries over to the new club, scaled by
+//     PRIOR_LEAGUE_MINS_CARRYOVER (0.8-0.9), rather than a flat "fresh
+//     signing gets ~75 mins" guess — a player who was nailed-on before is
+//     assumed to stay close to nailed-on, a fringe player stays fringe.
 //   - defcon: only computed if the user entered a raw defensive-contribution
 //     total (defcon90 stays undefined/null otherwise — no guess is made).
 //   - CS: modelled from the player's chosen "last club" (lastClubTeamId) —
@@ -2846,8 +2843,10 @@ function estimatePriorLeagueProjection(playerId) {
   if (!raw || !raw.minutes || raw.minutes <= 0) return null;
   const dropoff = LEAGUE_DROPOFF[raw.league] ?? LEAGUE_DROPOFF["Other / smaller league"];
   const per90 = (v) => ((v || 0) / raw.minutes) * 90;
-  const xg90 = per90(raw.goals) * dropoff;
-  const xa90 = per90(raw.assists) * dropoff;
+  const hasRealXg = raw.xg != null && raw.xg !== "" && Number(raw.xg) > 0;
+  const hasRealXa = raw.xa != null && raw.xa !== "" && Number(raw.xa) > 0;
+  const xg90 = (hasRealXg ? per90(Number(raw.xg)) : per90(raw.goals)) * dropoff;
+  const xa90 = (hasRealXa ? per90(Number(raw.xa)) : per90(raw.assists)) * dropoff;
   const convertedGoals = Math.round((raw.goals || 0) * dropoff);
   const convertedAssists = Math.round((raw.assists || 0) * dropoff);
   const player = state.players.find(p => p.id === playerId);
@@ -2862,6 +2861,16 @@ function estimatePriorLeagueProjection(playerId) {
   const clubCsPct = raw.lastClubTeamId ? teamLastSeasonCsPct(Number(raw.lastClubTeamId)) : null;
   const appShare = raw.apps ? Math.max(0, Math.min(1, raw.apps / 38)) : 0.6; // default: plausible fresh-signing share
   const csPct = clubCsPct != null ? clubCsPct * appShare : null;
+  // Prefer the REAL entered apps count (known data) over a minutes÷75
+  // estimate for how many games worth of output this represents — capped
+  // at 38 (a full Prem-length season) either way as a sanity backstop.
+  const priorMinsPerGame = raw.apps > 0 ? raw.minutes / raw.apps : 75;
+  const gamesPerSeason = Math.min(38, raw.apps > 0 ? raw.apps : raw.minutes / priorMinsPerGame);
+  // Assumed minutes/game at the NEW club — same minutes share carried over,
+  // shaved by PRIOR_LEAGUE_MINS_CARRYOVER. Floored at 45 (a "used from the
+  // bench regularly" floor) so a very low-minutes prior-league sample
+  // doesn't project a below-substitute minutes share.
+  const assumedMinsPerGame = Math.max(45, Math.min(90, priorMinsPerGame * PRIOR_LEAGUE_MINS_CARRYOVER));
   // Simulated BPS: no real historical BPS exists for a foreign league, so
   // approximate from the same inputs the FPL bonus system actually rewards
   // — goal contributions, defensive contributions, and clean sheets — using
@@ -2869,14 +2878,6 @@ function estimatePriorLeagueProjection(playerId) {
   // (goals/assists and CS/DefCon involvement are consistently the biggest
   // single-match BPS drivers). This feeds the same expected-bonus shape the
   // rest of the app uses (bpsPer90), not a separate one-off number.
-  const assumedMinsPerGame = 75;
-  // Prefer the REAL entered apps count (known data) over a minutes÷75
-  // estimate — minutes/75 can overshoot a real season's game count when a
-  // player averaged well over 75 mins/game (e.g. an ever-present who played
-  // close to 90 every game), which would otherwise inflate the projected
-  // clean-sheet/bonus TOTALS past what a real season could contain. Capped
-  // at 38 (a full Prem-length season) either way as a sanity backstop.
-  const gamesPerSeason = Math.min(38, raw.apps > 0 ? raw.apps : raw.minutes / assumedMinsPerGame);
   const bpsFromGoals = convertedGoals * 24; // goal ≈ 24 BPS in FPL's real scale
   const bpsFromAssists = convertedAssists * 18; // assist ≈ 18 BPS
   const bpsFromDefcon = defcon90 != null ? (defcon90 / 10) * (raw.minutes / 90) * 2 : 0; // rough defcon-event BPS
@@ -2885,7 +2886,8 @@ function estimatePriorLeagueProjection(playerId) {
   const bpsPer90 = raw.minutes > 0 ? (simulatedBpsTotal / raw.minutes) * 90 : 0;
   // Points-per-game built the same way computeProjectionRow composes a real
   // projection: appearance + attacking contribution + CS + defcon, using
-  // assumedMinsPerGame as a plausible fresh-signing minutes share.
+  // assumedMinsPerGame (now derived from the player's own prior minutes
+  // share, not a flat guess) as the minutes basis.
   const minsFactor = Math.min(1, assumedMinsPerGame / 90);
   const appearancePts = 1 * (1 - minsFactor) + 2 * minsFactor; // full appearance credit at this minutes share
   const attackPts = (xg90 * goalPts + xa90 * 3) * minsFactor;
@@ -2901,11 +2903,12 @@ function estimatePriorLeagueProjection(playerId) {
   // (goalsScored/assists/cleanSheets/bonus/pointsPer90 — see
   // applyPriorLeagueOverrides below) have something other than a flat 0 to
   // show, same as XGI/pointsPer90 already did. Scaled off gamesPerSeason
-  // (minutes ÷ assumedMinsPerGame) since that's the same "how many games
-  // worth of output is this" basis the rest of this estimate already uses.
-  // cleanSheets is only ever projected for positions that can actually
-  // score CS points in FPL (CS_PTS > 0) — a forward's real cleanSheets stat
-  // is genuinely meaningless, so it's left at 0 rather than a fake number.
+  // (the player's own real apps, or a minutes-based estimate) since that's
+  // the same "how many games worth of output is this" basis the rest of
+  // this estimate already uses. cleanSheets is only ever projected for
+  // positions that can actually score CS points in FPL (CS_PTS > 0) — a
+  // forward's real cleanSheets stat is genuinely meaningless, so it's left
+  // at 0 rather than a fake number.
   const posForCs = (player && player.position) || "MID";
   const projectedCleanSheets = (csPct != null && (CS_PTS[posForCs] || 0) > 0)
     ? Math.round((csPct / 100) * gamesPerSeason) : 0;
@@ -2914,6 +2917,7 @@ function estimatePriorLeagueProjection(playerId) {
     xg90, xa90, pointsPerGame, dropoff, source: raw,
     convertedGoals, convertedAssists, defcon90, csPct, bpsPer90, simulatedBpsTotal,
     projectedCleanSheets, projectedBonus, gamesPerSeason,
+    priorMinsPerGame, assumedMinsPerGame, hasRealXg, hasRealXa,
   };
 }
 // Single choke point for the prior-league override's downstream effects —
@@ -2992,7 +2996,7 @@ function applyPriorLeagueOverrides(playerId) {
 }
 function priorLeagueEditorHtml(playerId) {
   const p = state.players.find(pl => pl.id === playerId);
-  const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "", defcon: "", lastClubTeamId: p ? String(p.teamId) : "" };
+  const cur = getPriorLeagueStats(playerId) || { league: "Belgian Pro League", minutes: "", goals: "", assists: "", apps: "", defcon: "", xg: "", xa: "", lastClubTeamId: p ? String(p.teamId) : "" };
   const leagueOptions = Object.keys(LEAGUE_DROPOFF).map(l =>
     `<option value="${l}" ${cur.league === l ? "selected" : ""}>${l} (×${LEAGUE_DROPOFF[l].toFixed(2)})</option>`).join("");
   const teamOptions = (state.teams || []).slice().sort((a, b) => a.name.localeCompare(b.name)).map(t =>
@@ -3000,14 +3004,16 @@ function priorLeagueEditorHtml(playerId) {
   const est = getPriorLeagueStats(playerId) ? estimatePriorLeagueProjection(playerId) : null;
   return `
     <div class="prior-league-editor" style="font-size:12px">
-      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">No Prem minutes yet — enter their last known league output (last season or current, whichever is more recent) and it'll scale to a Prem-equivalent projection instead of defaulting to 0. Fill in as many fields as you have — goals/assists/minutes drive xG90/xA90/BPS, DefCon total is optional, and "Last/new club" drives the modelled clean-sheet%. Applies to any player, not just this one.</div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4">No Prem minutes yet — enter their last known league output (last season or current, whichever is more recent) and it'll scale to a Prem-equivalent projection instead of defaulting to 0. Fill in as many fields as you have — goals/assists/minutes drive xG90/xA90/BPS (or enter real xG/xA directly below if you have it — more accurate than the goals/assists proxy), DefCon total is optional, and "Last/new club" drives the modelled clean-sheet% AND the assumed new-club minutes share. Applies to any player, not just this one.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">League <select data-pl-field="league">${leagueOptions}</select></label>
-        <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">Club (for CS/DefCon estimate) <select data-pl-field="lastClubTeamId"><option value="">— none —</option>${teamOptions}</select></label>
+        <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">Club (for CS/DefCon/minutes estimate) <select data-pl-field="lastClubTeamId"><option value="">— none —</option>${teamOptions}</select></label>
         <label style="display:flex;flex-direction:column;gap:2px">Minutes <input type="number" min="0" step="1" value="${cur.minutes}" data-pl-field="minutes" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Apps <input type="number" min="0" step="1" value="${cur.apps}" data-pl-field="apps" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Goals <input type="number" min="0" step="1" value="${cur.goals}" data-pl-field="goals" /></label>
         <label style="display:flex;flex-direction:column;gap:2px">Assists <input type="number" min="0" step="1" value="${cur.assists}" data-pl-field="assists" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px">xG (total, optional) <input type="number" min="0" step="0.1" value="${cur.xg ?? ""}" data-pl-field="xg" placeholder="Uses goals if blank" /></label>
+        <label style="display:flex;flex-direction:column;gap:2px">xA (total, optional) <input type="number" min="0" step="0.1" value="${cur.xa ?? ""}" data-pl-field="xa" placeholder="Uses assists if blank" /></label>
         <label style="display:flex;flex-direction:column;gap:2px;grid-column:1/3">DefCon (total, optional) <input type="number" min="0" step="1" value="${cur.defcon ?? ""}" data-pl-field="defcon" placeholder="Leave blank if unknown" /></label>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
@@ -3018,7 +3024,8 @@ function priorLeagueEditorHtml(playerId) {
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--panel-3);font-size:11px;color:var(--ink-dim);line-height:1.6">
         <div style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:4px">🔄 Converted estimate preview</div>
         <div>Goals/Assists (converted, whole season): <b>${est.convertedGoals}</b> / <b>${est.convertedAssists}</b></div>
-        <div>xG/90: <b>${est.xg90.toFixed(2)}</b> &nbsp; xA/90: <b>${est.xa90.toFixed(2)}</b></div>
+        <div>xG/90: <b>${est.xg90.toFixed(2)}</b>${est.hasRealXg ? " (from real xG)" : ""} &nbsp; xA/90: <b>${est.xa90.toFixed(2)}</b>${est.hasRealXa ? " (from real xA)" : ""}</div>
+        <div>Assumed new-club mins/game: <b>${est.assumedMinsPerGame.toFixed(0)}</b> <span style="color:var(--ink-faint)">(prior mins/game ${est.priorMinsPerGame.toFixed(0)} × ${PRIOR_LEAGUE_MINS_CARRYOVER})</span></div>
         <div>DefCon/90: <b>${est.defcon90 != null ? est.defcon90.toFixed(2) : "— not entered"}</b></div>
         <div>Modelled CS%: <b>${est.csPct != null ? est.csPct.toFixed(1) + "%" : "— no club selected"}</b></div>
         <div>Simulated BPS/90: <b>${est.bpsPer90.toFixed(1)}</b></div>
@@ -3038,6 +3045,8 @@ function wirePriorLeagueEditor(container, playerId) {
       apps: Number(get("apps")) || 0,
       goals: Number(get("goals")) || 0,
       assists: Number(get("assists")) || 0,
+      xg: get("xg") === "" ? "" : Number(get("xg")) || 0,
+      xa: get("xa") === "" ? "" : Number(get("xa")) || 0,
       defcon: get("defcon") === "" ? "" : Number(get("defcon")) || 0,
     };
     setPriorLeagueStats(playerId, data);
@@ -5105,21 +5114,15 @@ function renderStats() {
     : `Showing ${list.length} player${list.length === 1 ? "" : "s"} (max 200) · click a row to expand, a column header to sort · theme: ${STAT_THEMES[state.statsTheme].label}` +
       (scopeLabel ? ` · stats scoped to ${scopeLabel} (real per-GW data, not season totals)` : "");
 
+  // The "Shots & creativity" / "CBIT (defensive)" theme tabs that used to
+  // show this warning banner were removed (Round 10) — the Understat/FBref
+  // scrape they depended on consistently fails (Understat's playersData
+  // markers moved; FBref 403s every request) and no free, reliably-
+  // scrapeable alternative exists. state.statsTheme can no longer be
+  // "creativity"/"cbit" since those keys no longer exist in STAT_THEMES, so
+  // this banner is simply always hidden now.
   const dsNote = document.getElementById("deeperStatsNote");
-  if (state.statsTheme === "creativity" || state.statsTheme === "cbit") {
-    const anyMatched = state.players.some(p => p.dsShots != null || p.dsTackles != null);
-    if (!anyMatched) {
-      const diag = state.diagnostics.find(d => d.path === "/deeperstats/all");
-      dsNote.style.display = "block";
-      dsNote.textContent = diag && !diag.ok
-        ? `Couldn't load this from your Worker (${diag.error}). Make sure touchline-proxy.js (with the /deeperstats/ route) is deployed to your Worker, then reload.`
-        : `No players matched yet — this comes from your Worker's Understat/FBref scrape, which needs touchline-proxy.js deployed with the /deeperstats/ route. Reload to retry.`;
-    } else {
-      dsNote.style.display = "none";
-    }
-  } else {
-    dsNote.style.display = "none";
-  }
+  if (dsNote) dsNote.style.display = "none";
   renderScoutPanel();
 }
 
