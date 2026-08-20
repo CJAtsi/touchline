@@ -2973,6 +2973,26 @@ function applyPriorLeagueOverrides(playerId) {
       p.bps = Math.round(est.simulatedBpsTotal);
       p.goalsPer90 = est.xg90; // goals-as-proxy-for-xG, same approximation the rest of this estimate already makes
       p.assistsPer90 = est.xa90;
+      // Playing-time and value columns (Mins, Mins/start, Pts/£m, Pts/£m/90,
+      // Pts/£m/App) were still reading real FPL minutes/starts/totalPoints
+      // — genuinely 0 for a player with no Prem appearances — so the
+      // Overview table row looked half-empty even after G/A/CS/Bonus/BPS
+      // started populating. These are all PROJECTIONS (assumed new-club
+      // minutes share, projected points), same as everything else this
+      // estimate already produces, not real recorded totals — but showing
+      // them beats a blank "—" for a table whose whole purpose is letting
+      // you compare this player against everyone else at a glance.
+      // gamesPerSeason/assumedMinsPerGame come straight from the estimate
+      // (real apps-derived games count, prior-club minutes share carried
+      // over at 0.85×) rather than any new assumption here.
+      p.minutes = Math.round(est.gamesPerSeason * est.assumedMinsPerGame);
+      p.starts = Math.round(est.gamesPerSeason);
+      p.minsPerStart = est.assumedMinsPerGame;
+      p.totalPoints = Math.round(est.pointsPerGame * est.gamesPerSeason);
+      const priceM = (p.nowCost || 0) / 10;
+      p.ppm = priceM > 0 ? p.totalPoints / priceM : 0;
+      p.ppm90 = priceM > 0 ? est.pointsPerGame / priceM : 0; // pointsPerGame IS already a per-~90-min-equivalent rate from this estimate
+      p.ppmPerApp = priceM > 0 && p.starts > 0 ? p.totalPoints / priceM / p.starts : 0;
     } else if (p.priorLeagueApplied) {
       // Override cleared (or no longer eligible, e.g. player has since
       // started a Prem game) — a zero-minutes player's real FPL-derived
@@ -2987,6 +3007,8 @@ function applyPriorLeagueOverrides(playerId) {
       p.priorLeagueCsPct = undefined; p.bpsPer90 = 0; p.priorLeagueSimulatedBps = undefined;
       p.goalsScored = 0; p.assists = 0; p.cleanSheets = 0; p.bonus = 0; p.bps = 0;
       p.goalsPer90 = 0; p.assistsPer90 = 0;
+      p.minutes = 0; p.starts = 0; p.minsPerStart = 0;
+      p.totalPoints = 0; p.ppm = 0; p.ppm90 = 0; p.ppmPerApp = 0;
     }
     if (modelNextEvent && typeof projectPoints === "function" && typeof state.fixturesByTeam !== "undefined" && state.fixturesByTeam) {
       p.epNext = projectPoints(p, modelNextEvent.id);
@@ -3030,6 +3052,8 @@ function priorLeagueEditorHtml(playerId) {
         <div>Modelled CS%: <b>${est.csPct != null ? est.csPct.toFixed(1) + "%" : "— no club selected"}</b></div>
         <div>Simulated BPS/90: <b>${est.bpsPer90.toFixed(1)}</b></div>
         <div>Projected pts/game: <b>${est.pointsPerGame.toFixed(2)}</b></div>
+        <div>Projected games/season: <b>${Math.round(est.gamesPerSeason)}</b> &nbsp; Projected total mins: <b>${Math.round(est.gamesPerSeason * est.assumedMinsPerGame)}</b></div>
+        <div>Projected season total points: <b>${Math.round(est.pointsPerGame * est.gamesPerSeason)}</b></div>
       </div>` : ""}
     </div>
   `;
