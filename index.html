@@ -2870,7 +2870,13 @@ function estimatePriorLeagueProjection(playerId) {
   // single-match BPS drivers). This feeds the same expected-bonus shape the
   // rest of the app uses (bpsPer90), not a separate one-off number.
   const assumedMinsPerGame = 75;
-  const gamesPerSeason = raw.minutes / assumedMinsPerGame;
+  // Prefer the REAL entered apps count (known data) over a minutes÷75
+  // estimate — minutes/75 can overshoot a real season's game count when a
+  // player averaged well over 75 mins/game (e.g. an ever-present who played
+  // close to 90 every game), which would otherwise inflate the projected
+  // clean-sheet/bonus TOTALS past what a real season could contain. Capped
+  // at 38 (a full Prem-length season) either way as a sanity backstop.
+  const gamesPerSeason = Math.min(38, raw.apps > 0 ? raw.apps : raw.minutes / assumedMinsPerGame);
   const bpsFromGoals = convertedGoals * 24; // goal ≈ 24 BPS in FPL's real scale
   const bpsFromAssists = convertedAssists * 18; // assist ≈ 18 BPS
   const bpsFromDefcon = defcon90 != null ? (defcon90 / 10) * (raw.minutes / 90) * 2 : 0; // rough defcon-event BPS
@@ -2889,9 +2895,25 @@ function estimatePriorLeagueProjection(playerId) {
     : 0;
   const bonusPts = bpsPer90 > 0 ? Math.max(0, Math.min(3, (bpsPer90 - 20) / 15)) : 0; // rough bonus share from simulated BPS
   const pointsPerGame = appearancePts + attackPts + csPts + defConPts + bonusPts;
+  // Whole-season PROJECTED totals — same "converted, whole season" totals
+  // the goals/assists conversion already rounds to whole numbers, extended
+  // to clean sheets and bonus so the Player Stats "Output" columns
+  // (goalsScored/assists/cleanSheets/bonus/pointsPer90 — see
+  // applyPriorLeagueOverrides below) have something other than a flat 0 to
+  // show, same as XGI/pointsPer90 already did. Scaled off gamesPerSeason
+  // (minutes ÷ assumedMinsPerGame) since that's the same "how many games
+  // worth of output is this" basis the rest of this estimate already uses.
+  // cleanSheets is only ever projected for positions that can actually
+  // score CS points in FPL (CS_PTS > 0) — a forward's real cleanSheets stat
+  // is genuinely meaningless, so it's left at 0 rather than a fake number.
+  const posForCs = (player && player.position) || "MID";
+  const projectedCleanSheets = (csPct != null && (CS_PTS[posForCs] || 0) > 0)
+    ? Math.round((csPct / 100) * gamesPerSeason) : 0;
+  const projectedBonus = Math.round(bonusPts * gamesPerSeason);
   return {
     xg90, xa90, pointsPerGame, dropoff, source: raw,
     convertedGoals, convertedAssists, defcon90, csPct, bpsPer90, simulatedBpsTotal,
+    projectedCleanSheets, projectedBonus, gamesPerSeason,
   };
 }
 // Single choke point for the prior-league override's downstream effects —
@@ -2935,6 +2957,18 @@ function applyPriorLeagueOverrides(playerId) {
       if (est.csPct != null) p.priorLeagueCsPct = est.csPct;
       p.bpsPer90 = est.bpsPer90;
       p.priorLeagueSimulatedBps = est.simulatedBpsTotal;
+      // Player Stats' "Output" columns (goalsScored/assists/cleanSheets/
+      // bonus/bps) read these fields directly, same as every real FPL
+      // player — without this they stayed at their real (zero) FPL values
+      // even though xg90/xgi90/pointsPer90 were already converted, which is
+      // why the table row still showed 0s for G/A/CS/Bonus after applying.
+      p.goalsScored = est.convertedGoals;
+      p.assists = est.convertedAssists;
+      p.cleanSheets = est.projectedCleanSheets;
+      p.bonus = est.projectedBonus;
+      p.bps = Math.round(est.simulatedBpsTotal);
+      p.goalsPer90 = est.xg90; // goals-as-proxy-for-xG, same approximation the rest of this estimate already makes
+      p.assistsPer90 = est.xa90;
     } else if (p.priorLeagueApplied) {
       // Override cleared (or no longer eligible, e.g. player has since
       // started a Prem game) — a zero-minutes player's real FPL-derived
@@ -2947,6 +2981,8 @@ function applyPriorLeagueOverrides(playerId) {
       p.priorLeagueConvertedGoals = undefined; p.priorLeagueConvertedAssists = undefined;
       if (p.priorLeagueDefcon90 != null) { p.defensiveContributionPer90 = 0; p.priorLeagueDefcon90 = undefined; }
       p.priorLeagueCsPct = undefined; p.bpsPer90 = 0; p.priorLeagueSimulatedBps = undefined;
+      p.goalsScored = 0; p.assists = 0; p.cleanSheets = 0; p.bonus = 0; p.bps = 0;
+      p.goalsPer90 = 0; p.assistsPer90 = 0;
     }
     if (modelNextEvent && typeof projectPoints === "function" && typeof state.fixturesByTeam !== "undefined" && state.fixturesByTeam) {
       p.epNext = projectPoints(p, modelNextEvent.id);
@@ -12479,9 +12515,9 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
     }
     return `<div class="tac-token team-${t.team === "A" ? "a" : "b"}" draggable="true"
         data-tok-id="${t.tokId}" data-tok-team="${t.team}" data-tok-player="${t.p.id}"
-        style="left:${renderLeft}%;top:${renderTop}%;${ring}" title="${t.p.webName}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup, double-click for attributes"}">
+        style="left:${renderLeft}%;top:${renderTop}%;${ring}" title="${nameWithPosition(t.p)}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup, double-click for attributes"}">
       ${t.num}
-      <span class="tac-token-label">${t.p.webName}</span>
+      <span class="tac-token-label">${nameWithPosition(t.p)}</span>
     </div>`;
   }).join("");
 
@@ -12538,7 +12574,7 @@ function h2hOpenAttrModal(playerId) {
   if (!p || !modal || !card) return;
   const attrs = computeFcAttributes(p);
   card.innerHTML = `
-    <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 28)}${p.webName} <span style="color:var(--ink-faint);font-size:11px;font-weight:400">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</span></div>
+    <div class="detail-block-title" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 28)}${nameWithPosition(p)} <span style="color:var(--ink-faint);font-size:11px;font-weight:400">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position}</span></div>
     <div style="margin-top:8px">
       ${attrs.map(a => `
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -13862,7 +13898,7 @@ function simPlayerCardHtml(p, side) {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         ${playerAvatarHtml(p, 40)}
         <div>
-          <div style="font-weight:700;font-size:14px">${p.webName}</div>
+          <div style="font-weight:700;font-size:14px">${nameWithPosition(p)}</div>
           <div style="font-size:11px;color:var(--ink-faint)">${team ? team.short_name : ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>
         </div>
       </div>
