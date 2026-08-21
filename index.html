@@ -1734,7 +1734,7 @@
   <div id="autopickModal" class="pitch-modal-backdrop" style="display:none">
     <div class="pitch-modal-card" style="max-width:360px">
       <div class="detail-block-title">Auto Pick options</div>
-      <p class="foot-note" style="margin-bottom:10px">Only fills empty slots — any players already in your squad are left exactly as they are. Planning a Bench Boost week instead, where every one of the 15 needs to score? Use the dedicated <strong>💥 Best 15 (Bench Boost)</strong> buttons below the squad list — this Auto Pick is for a normal week's strong-XI-and-bench squad shape.</p>
+      <p class="foot-note" style="margin-bottom:10px">Only fills empty slots — any players already in your squad are left exactly as they are. Planning a Bench Boost week instead, where every one of the 15 needs to score? Use the dedicated <strong>💥 Bench Boost</strong> buttons below the squad list — this Auto Pick is for a normal week's strong-XI-and-bench squad shape.</p>
       <p class="foot-note" style="margin-bottom:8px">Squad shape</p>
       <div id="autopickShapeBody" style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px"></div>
       <p class="foot-note" style="margin-bottom:8px">Priority</p>
@@ -3088,21 +3088,29 @@ function applyBuiltinPositions() {
 }
 // ---------- Baked-in goalkeeper attributes (item: "import the GK export") ----------
 // Same mechanism/shape as BUILTIN_POSITIONS above, for GK_ATTR_DEFS instead
-// of specific positions. Source: gk_export.csv, a Football Manager 26
-// attribute export (FM26PlayerExport by vinteset mod), PRE-FILTERED by the
-// exporter to goalkeepers only (148 rows) — semicolon-delimited, FM's
-// native 1-20 scale, which is the exact same scale GK_ATTR_DEFS' manual
-// editor already uses (see Round 16), so this is a direct value copy, no
-// rescale needed. Only the 5 core shot-stopping-relevant attributes the
-// export actually has that map onto GK_ATTR_DEFS keys are carried:
-// Aerial Reach, Command Of Area, Handling, One On Ones, Reflexes (the
-// export has no Communication/Kicking/Throwing/Rushing out/Eccentricity-
-// equivalent columns for those other GK_ATTR_DEFS keys, so those stay
-// unset/neutral exactly as they already do for a player with no manual
-// entry — this only ever fills the 5 keys it actually has real data for).
-// Row shape: [Player, Club, aerialReach, commandOfArea, handling, oneOnOnes, reflexes].
-const BUILTIN_GK_ATTRIBUTES_KEYS = ["aerialReach", "commandOfArea", "handling", "oneOnOnes", "reflexes"];
-const BUILTIN_GK_ATTRIBUTES = [["Angus Gunn","Nott'm Forest",14,11,14,14,14],["Mads Hermansen","West Ham",11,12,12,13,16],["Đorđe Petrović","Bournemouth",15,12,13,13,17],["Marco Bizot","Aston Villa",14,13,13,14,16],["Filip Jörgensen","Chelsea",16,15,15,15,17],["Lucas Perri","Leeds",15,12,14,14,15],["Antonín Kinský","Spurs",14,17,13,13,15],["Hákon Rafn Valdimarsson","Brentford",14,14,14,13,14],["Mark Travers","Everton",14,12,15,12,16],["Christos Mandas","Bournemouth",12,12,15,12,18],["Karl Darlow","Leeds",13,13,15,13,13],["John Victor","Nott'm Forest",13,12,13,14,14],["Marcus Bettinelli","Man City",15,12,11,12,13],["Benjamin Lecomte","Fulham",13,12,13,13,15],["Max Weiß","Burnley",13,12,12,14,14],["John Ruddy","Newcastle",14,13,11,13,12],["Daniel Bentley","Wolves",14,10,12,12,13],["Freddie Woodman","Liverpool",11,10,14,13,13],["Mark Gillespie","Newcastle",13,12,13,12,13],["Václav Hladký","Burnley",12,11,13,12,13],["Brandon Austin","Spurs",13,13,13,12,15],["Teddy Sharman-Lowe","Chelsea",15,13,13,12,13],["Simon Moore","Sunderland",13,11,14,12,14],["Julian Eyestone","Brentford",17,11,12,11,12],["Ellery Balcombe","Brentford",12,11,11,10,11],["Gabriel Słonina","Chelsea",13,11,10,12,14],["Sam Proctor","Aston Villa",12,10,11,10,13],["Remi Matthews","Crystal Palace",14,11,11,12,11],["Nils Ramming","Brighton",13,11,11,13,13],["Steven Hall","Brighton",13,8,11,8,11],["Melker Ellborg","Sunderland",14,11,15,12,12],["Elyh Harrison","Man Utd",13,10,12,11,13],["Thomas McGill","Brighton",11,9,12,12,14],["Alex Cairns","Leeds",10,10,12,12,14],["Harvey Davies","Liverpool",13,11,12,11,12],["Aaron Bott","Nott'm Forest",14,9,10,13,11],["Luca Gunter","Spurs",11,7,11,11,13],["Ronnie Hollingshead","Aston Villa",11,7,12,9,12],["Tom Wooster","West Ham",15,10,12,8,12],["Tom King","Everton",15,9,9,10,12],["George Murray-Jones","Nott'm Forest",10,10,10,8,14],["Jack Wint","Man City",10,8,10,11,12],["Alex Borto","Fulham",4,8,13,8,13],["Will Murdock","Man Utd",12,8,12,7,14],["Solomon Honor","Man Utd",15,12,10,10,10],["Alfie McNally","Fulham",12,11,10,10,12],["Charlie Casper","Burnley",13,10,11,11,12],["Damian Čech","Fulham",8,11,14,11,11],["Kornel Miściur","Liverpool",10,13,14,10,14],["Dermot Mee","Man Utd",14,10,12,8,13],["Sebastian Jensen","Brighton",8,7,9,9,10],["Luke Campbell","Nott'm Forest",14,11,12,9,10],["Lorenz Ferdinand","Brighton",15,5,13,10,13],["Samual Archer","Spurs",10,8,7,7,13],["Harry Lee","Crystal Palace",13,8,10,8,11],["Robert Cook","Leeds",13,11,15,11,14],["Max Hudson","Man City",11,6,10,10,13],["Spike Brits","Man City",11,10,9,11,11],["Max Merrick","Chelsea",13,10,10,12,12],["Oliver Mayer","Fulham",9,8,14,9,11],["Reece Byrne","West Ham",9,11,12,11,13],["Carey Bloedorn","Spurs",10,11,11,12,10],["Keehan Willows","Nott'm Forest",10,11,10,11,12],["Kai Crampton","Bournemouth",13,10,10,11,8],["George Pickford","Everton",11,13,10,10,9],["Lewys Benjamin","Wolves",16,11,10,7,10],["Alfie Brooks","Wolves",15,9,10,12,12],["Alex Baird","Leeds",6,5,11,11,13],["Aidan Harris","Newcastle",10,9,9,11,11],["Alastair Graham","Nott'm Forest",11,9,10,10,8],["James Wright","Aston Villa",11,7,13,8,13],["Mikey Allen","Fulham",16,10,8,8,10],["Dylan Thompson","Spurs",6,8,13,7,11],["Cameron Byrne-Hughes","Man Utd",11,8,12,7,12],["Fred Heath","Man Utd",17,8,13,9,13],["Doug Lukjanciks","Everton",14,10,13,11,13],["Jack Allan","Aston Villa",9,10,13,12,13],["Owen Asemota","Aston Villa",7,11,13,12,13],["Darryl Ombang","Leeds",12,12,13,8,13],["Joseph Cowan","Sunderland",11,11,10,10,12],["Freddy Bernal","Chelsea",12,11,10,10,11],["Charlie Hardy","Man Utd",14,12,13,9,11],["Finlay Herrick","West Ham",10,8,10,10,12],["Ármin Pécsi","Liverpool",15,11,13,12,15],["Matt Bagot","Fulham",13,9,8,9,13],["Oisin Cooney","Burnley",11,13,9,9,12],["Owen Grainger","Nott'm Forest",13,11,13,9,10],["Farren Doran","Spurs",13,9,13,10,9],["Blake Irow","Spurs",7,12,9,10,13],["Adam Harrison","Newcastle",8,7,10,10,10],["Marco Underwood","Fulham",11,10,11,9,13],["Reggie Rose","Brentford",9,8,10,9,11],["Michael Dike","Brighton",13,7,7,10,13],["Jacob Poytress","Liverpool",10,8,12,9,14],["Zac Smith","Nott'm Forest",12,10,11,9,12],["Finley Taylor","Brighton",8,9,10,9,14],["Will Rutter","Brighton",7,6,13,10,9],["Hudson Sands","Chelsea",10,6,10,10,9],["Jack Austin","Chelsea",14,6,7,8,10],["Finley Grigg","Man City",5,10,10,8,13],["Danny Dixon","Bournemouth",6,11,9,6,13],["Lanre Awesu","West Ham",13,11,14,12,11],["Marley Tavaziva","Brentford",10,9,11,9,11],["Finley Hooper","West Ham",6,10,9,6,14],["Zach Watson","Man Utd",9,12,14,11,14],["Toby Bell","Chelsea",7,9,14,11,14],["Isaac Allan","Sunderland",10,9,10,9,10],["DJ Bernard","Liverpool",9,13,8,8,7],["Bailey Hall","Liverpool",10,8,7,10,14],["George Kenyon","Leeds",11,10,8,8,11],["Thiago Speroni","Crystal Palace",8,9,14,8,9],["Sam Lewis","Aston Villa",9,6,7,7,9],["Connor Wolfheimer","Brentford",10,7,10,8,9],["Mack Allen","Bournemouth",16,8,13,5,13],["Theo Houston","Aston Villa",10,6,12,4,12],["Tyler Jones","Newcastle",8,10,10,6,12],["Goodness Gospel-Eze","Everton",7,10,13,8,11],["Jackson Izquierdo","Crystal Palace",8,6,8,9,10],["Lewis Forshaw","Burnley",10,10,10,10,10],["Tommy Goodger","West Ham",8,7,9,8,9],["Liam Doyle","Brighton",9,11,13,11,13],["Xander Grieves","Wolves",9,7,7,10,13],["Alfie Arnold","Wolves",10,9,12,6,12],["Seve Patrick","Everton",10,9,8,9,12],["Oliver Wood","Leeds",9,7,14,7,14],["Joe Bailey","Nott'm Forest",10,6,13,5,13],["Felix Chester","Burnley",9,8,9,9,9],["Zach Sutton","Bournemouth",8,6,11,8,12],["Layton Nicholls","Brentford",8,6,12,8,14],["Ben Metcalf","Sunderland",5,8,11,8,9],["Harry Whitworth","Crystal Palace",1,7,7,8,12],["Jack Mason","Crystal Palace",6,4,8,9,12],["Connor Edwards","Burnley",7,8,13,5,13],["James Taylor","Newcastle",8,7,10,8,8],["Will Anderson","Newcastle",7,7,12,8,12],["Callum Feeney","Burnley",7,8,12,9,12],["Harry Grimshaw","Burnley",8,5,11,10,13],["Will Upstell","Bournemouth",12,9,13,3,9],["Rhys Oakley","Aston Villa",5,13,11,4,9],["Marcus Hill","Crystal Palace",8,10,10,8,13],["Matty Wright","Liverpool",10,3,11,6,13],["Adam Richardson","Sunderland",14,7,9,10,9],["Felix Lyon","Brentford",13,10,11,11,14],["Callan McKenna","Bournemouth",13,9,10,12,10],["Ben Vickery","Man City",9,7,12,7,12],["Dan Cameron","Sunderland",9,6,10,10,9],["Hayden McGhan","Bournemouth",11,6,12,4,13],["Finley Robertson","Sunderland",8,4,12,7,12]];
+// of specific positions. Source: a Football Manager 26 attribute export
+// (FM26PlayerExport by vinteset mod), PRE-FILTERED by the exporter to
+// goalkeepers only (148 rows) — semicolon-delimited, FM's native 1-20
+// scale, which is the exact same scale GK_ATTR_DEFS' manual editor already
+// uses (see Round 16), so this is a direct value copy, no rescale needed.
+// Round 22 re-exported the same 148-keeper set (identical names, clubs, and
+// values for the original 5 attributes — verified byte-for-byte against
+// Round 21's data) specifically to pick up the "Eccentricity" column, which
+// the Round 21 export's schema didn't surface but this one does. Eccentricity
+// maps directly 1:1 onto GK_ATTR_DEFS' own "eccentricity" key by name, so
+// it's now carried as a 6th value alongside the original 5 (aerialReach,
+// commandOfArea, handling, oneOnOnes, reflexes). The remaining 4 GK_ATTR_DEFS
+// keys (communication, kicking, throwing, rushingOut) still have NO clean
+// 1:1 column match in this export — the closest candidates (Passing,
+// Vision, Decisions, Positioning) are generic outfield-shaped FM attributes
+// with no unambiguous mapping to "kicking/distribution" or "throwing"
+// specifically, so per the "don't invent a mapping without asking" rule
+// they stay unset/neutral exactly as they do for a player with no manual
+// entry — this only ever fills the 6 keys it actually has real, unambiguous
+// data for.
+// Row shape: [Player, Club, aerialReach, commandOfArea, handling, oneOnOnes, reflexes, eccentricity].
+const BUILTIN_GK_ATTRIBUTES_KEYS = ["aerialReach", "commandOfArea", "handling", "oneOnOnes", "reflexes", "eccentricity"];
+const BUILTIN_GK_ATTRIBUTES = [["Angus Gunn", "Nott'm Forest", 14, 11, 14, 14, 14, 6], ["Mads Hermansen", "West Ham", 11, 12, 12, 13, 16, 12], ["Đorđe Petrović", "Bournemouth", 15, 12, 13, 13, 17, 9], ["Marco Bizot", "Aston Villa", 14, 13, 13, 14, 16, 5], ["Filip Jörgensen", "Chelsea", 16, 15, 15, 15, 17, 6], ["Lucas Perri", "Leeds", 15, 12, 14, 14, 15, 8], ["Antonín Kinský", "Spurs", 14, 17, 13, 13, 15, 13], ["Hákon Rafn Valdimarsson", "Brentford", 14, 14, 14, 13, 14, 5], ["Mark Travers", "Everton", 14, 12, 15, 12, 16, 7], ["Christos Mandas", "Bournemouth", 12, 12, 15, 12, 18, 6], ["Karl Darlow", "Leeds", 13, 13, 15, 13, 13, 5], ["John Victor", "Nott'm Forest", 13, 12, 13, 14, 14, 5], ["Marcus Bettinelli", "Man City", 15, 12, 11, 12, 13, 5], ["Benjamin Lecomte", "Fulham", 13, 12, 13, 13, 15, 8], ["Max Weiß", "Burnley", 13, 12, 12, 14, 14, 10], ["John Ruddy", "Newcastle", 14, 13, 11, 13, 12, 7], ["Daniel Bentley", "Wolves", 14, 10, 12, 12, 13, 7], ["Freddie Woodman", "Liverpool", 11, 10, 14, 13, 13, 8], ["Mark Gillespie", "Newcastle", 13, 12, 13, 12, 13, 4], ["Václav Hladký", "Burnley", 12, 11, 13, 12, 13, 13], ["Brandon Austin", "Spurs", 13, 13, 13, 12, 15, 3], ["Teddy Sharman-Lowe", "Chelsea", 15, 13, 13, 12, 13, 8], ["Simon Moore", "Sunderland", 13, 11, 14, 12, 14, 8], ["Julian Eyestone", "Brentford", 17, 11, 12, 11, 12, 6], ["Ellery Balcombe", "Brentford", 12, 11, 11, 10, 11, 8], ["Gabriel Słonina", "Chelsea", 13, 11, 10, 12, 14, 6], ["Sam Proctor", "Aston Villa", 12, 10, 11, 10, 13, 8], ["Remi Matthews", "Crystal Palace", 14, 11, 11, 12, 11, 10], ["Nils Ramming", "Brighton", 13, 11, 11, 13, 13, 12], ["Steven Hall", "Brighton", 13, 8, 11, 8, 11, 5], ["Melker Ellborg", "Sunderland", 14, 11, 15, 12, 12, 10], ["Elyh Harrison", "Man Utd", 13, 10, 12, 11, 13, 12], ["Thomas McGill", "Brighton", 11, 9, 12, 12, 14, 4], ["Alex Cairns", "Leeds", 10, 10, 12, 12, 14, 12], ["Harvey Davies", "Liverpool", 13, 11, 12, 11, 12, 6], ["Aaron Bott", "Nott'm Forest", 14, 9, 10, 13, 11, 8], ["Luca Gunter", "Spurs", 11, 7, 11, 11, 13, 5], ["Ronnie Hollingshead", "Aston Villa", 11, 7, 12, 9, 12, 8], ["Tom Wooster", "West Ham", 15, 10, 12, 8, 12, 6], ["Tom King", "Everton", 15, 9, 9, 10, 12, 10], ["George Murray-Jones", "Nott'm Forest", 10, 10, 10, 8, 14, 7], ["Jack Wint", "Man City", 10, 8, 10, 11, 12, 16], ["Alex Borto", "Fulham", 4, 8, 13, 8, 13, 5], ["Will Murdock", "Man Utd", 12, 8, 12, 7, 14, 5], ["Solomon Honor", "Man Utd", 15, 12, 10, 10, 10, 6], ["Alfie McNally", "Fulham", 12, 11, 10, 10, 12, 10], ["Charlie Casper", "Burnley", 13, 10, 11, 11, 12, 5], ["Damian Čech", "Fulham", 8, 11, 14, 11, 11, 5], ["Kornel Miściur", "Liverpool", 10, 13, 14, 10, 14, 10], ["Dermot Mee", "Man Utd", 14, 10, 12, 8, 13, 5], ["Sebastian Jensen", "Brighton", 8, 7, 9, 9, 10, 5], ["Luke Campbell", "Nott'm Forest", 14, 11, 12, 9, 10, 7], ["Lorenz Ferdinand", "Brighton", 15, 5, 13, 10, 13, 5], ["Samual Archer", "Spurs", 10, 8, 7, 7, 13, 5], ["Harry Lee", "Crystal Palace", 13, 8, 10, 8, 11, 4], ["Robert Cook", "Leeds", 13, 11, 15, 11, 14, 5], ["Max Hudson", "Man City", 11, 6, 10, 10, 13, 6], ["Spike Brits", "Man City", 11, 10, 9, 11, 11, 10], ["Max Merrick", "Chelsea", 13, 10, 10, 12, 12, 8], ["Oliver Mayer", "Fulham", 9, 8, 14, 9, 11, 6], ["Reece Byrne", "West Ham", 9, 11, 12, 11, 13, 5], ["Carey Bloedorn", "Spurs", 10, 11, 11, 12, 10, 5], ["Keehan Willows", "Nott'm Forest", 10, 11, 10, 11, 12, 5], ["Kai Crampton", "Bournemouth", 13, 10, 10, 11, 8, 5], ["George Pickford", "Everton", 11, 13, 10, 10, 9, 4], ["Lewys Benjamin", "Wolves", 16, 11, 10, 7, 10, 5], ["Alfie Brooks", "Wolves", 15, 9, 10, 12, 12, 5], ["Alex Baird", "Leeds", 6, 5, 11, 11, 13, 5], ["Aidan Harris", "Newcastle", 10, 9, 9, 11, 11, 3], ["Alastair Graham", "Nott'm Forest", 11, 9, 10, 10, 8, 4], ["James Wright", "Aston Villa", 11, 7, 13, 8, 13, 13], ["Mikey Allen", "Fulham", 16, 10, 8, 8, 10, 5], ["Dylan Thompson", "Spurs", 6, 8, 13, 7, 11, 5], ["Cameron Byrne-Hughes", "Man Utd", 11, 8, 12, 7, 12, 12], ["Fred Heath", "Man Utd", 17, 8, 13, 9, 13, 7], ["Doug Lukjanciks", "Everton", 14, 10, 13, 11, 13, 9], ["Jack Allan", "Aston Villa", 9, 10, 13, 12, 13, 5], ["Owen Asemota", "Aston Villa", 7, 11, 13, 12, 13, 5], ["Darryl Ombang", "Leeds", 12, 12, 13, 8, 13, 5], ["Joseph Cowan", "Sunderland", 11, 11, 10, 10, 12, 3], ["Freddy Bernal", "Chelsea", 12, 11, 10, 10, 11, 5], ["Charlie Hardy", "Man Utd", 14, 12, 13, 9, 11, 5], ["Finlay Herrick", "West Ham", 10, 8, 10, 10, 12, 5], ["Ármin Pécsi", "Liverpool", 15, 11, 13, 12, 15, 5], ["Matt Bagot", "Fulham", 13, 9, 8, 9, 13, 6], ["Oisin Cooney", "Burnley", 11, 13, 9, 9, 12, 5], ["Owen Grainger", "Nott'm Forest", 13, 11, 13, 9, 10, 12], ["Farren Doran", "Spurs", 13, 9, 13, 10, 9, 5], ["Blake Irow", "Spurs", 7, 12, 9, 10, 13, 5], ["Adam Harrison", "Newcastle", 8, 7, 10, 10, 10, 6], ["Marco Underwood", "Fulham", 11, 10, 11, 9, 13, 8], ["Reggie Rose", "Brentford", 9, 8, 10, 9, 11, 4], ["Michael Dike", "Brighton", 13, 7, 7, 10, 13, 5], ["Jacob Poytress", "Liverpool", 10, 8, 12, 9, 14, 5], ["Zac Smith", "Nott'm Forest", 12, 10, 11, 9, 12, 7], ["Finley Taylor", "Brighton", 8, 9, 10, 9, 14, 5], ["Will Rutter", "Brighton", 7, 6, 13, 10, 9, 10], ["Hudson Sands", "Chelsea", 10, 6, 10, 10, 9, 2], ["Jack Austin", "Chelsea", 14, 6, 7, 8, 10, 5], ["Finley Grigg", "Man City", 5, 10, 10, 8, 13, 5], ["Danny Dixon", "Bournemouth", 6, 11, 9, 6, 13, 14], ["Lanre Awesu", "West Ham", 13, 11, 14, 12, 11, 13], ["Marley Tavaziva", "Brentford", 10, 9, 11, 9, 11, 4], ["Finley Hooper", "West Ham", 6, 10, 9, 6, 14, 6], ["Zach Watson", "Man Utd", 9, 12, 14, 11, 14, 6], ["Toby Bell", "Chelsea", 7, 9, 14, 11, 14, 10], ["Isaac Allan", "Sunderland", 10, 9, 10, 9, 10, 5], ["DJ Bernard", "Liverpool", 9, 13, 8, 8, 7, 12], ["Bailey Hall", "Liverpool", 10, 8, 7, 10, 14, 5], ["George Kenyon", "Leeds", 11, 10, 8, 8, 11, 7], ["Thiago Speroni", "Crystal Palace", 8, 9, 14, 8, 9, 6], ["Sam Lewis", "Aston Villa", 9, 6, 7, 7, 9, 5], ["Connor Wolfheimer", "Brentford", 10, 7, 10, 8, 9, 5], ["Mack Allen", "Bournemouth", 16, 8, 13, 5, 13, 5], ["Theo Houston", "Aston Villa", 10, 6, 12, 4, 12, 5], ["Tyler Jones", "Newcastle", 8, 10, 10, 6, 12, 5], ["Goodness Gospel-Eze", "Everton", 7, 10, 13, 8, 11, 5], ["Jackson Izquierdo", "Crystal Palace", 8, 6, 8, 9, 10, 6], ["Lewis Forshaw", "Burnley", 10, 10, 10, 10, 10, 6], ["Tommy Goodger", "West Ham", 8, 7, 9, 8, 9, 5], ["Liam Doyle", "Brighton", 9, 11, 13, 11, 13, 5], ["Xander Grieves", "Wolves", 9, 7, 7, 10, 13, 5], ["Alfie Arnold", "Wolves", 10, 9, 12, 6, 12, 12], ["Seve Patrick", "Everton", 10, 9, 8, 9, 12, 9], ["Oliver Wood", "Leeds", 9, 7, 14, 7, 14, 5], ["Joe Bailey", "Nott'm Forest", 10, 6, 13, 5, 13, 8], ["Felix Chester", "Burnley", 9, 8, 9, 9, 9, 5], ["Zach Sutton", "Bournemouth", 8, 6, 11, 8, 12, 5], ["Layton Nicholls", "Brentford", 8, 6, 12, 8, 14, 9], ["Ben Metcalf", "Sunderland", 5, 8, 11, 8, 9, 5], ["Harry Whitworth", "Crystal Palace", 1, 7, 7, 8, 12, 6], ["Jack Mason", "Crystal Palace", 6, 4, 8, 9, 12, 12], ["Connor Edwards", "Burnley", 7, 8, 13, 5, 13, 5], ["James Taylor", "Newcastle", 8, 7, 10, 8, 8, 5], ["Will Anderson", "Newcastle", 7, 7, 12, 8, 12, 5], ["Callum Feeney", "Burnley", 7, 8, 12, 9, 12, 5], ["Harry Grimshaw", "Burnley", 8, 5, 11, 10, 13, 5], ["Will Upstell", "Bournemouth", 12, 9, 13, 3, 9, 5], ["Rhys Oakley", "Aston Villa", 5, 13, 11, 4, 9, 5], ["Marcus Hill", "Crystal Palace", 8, 10, 10, 8, 13, 5], ["Matty Wright", "Liverpool", 10, 3, 11, 6, 13, 12], ["Adam Richardson", "Sunderland", 14, 7, 9, 10, 9, 5], ["Felix Lyon", "Brentford", 13, 10, 11, 11, 14, 9], ["Callan McKenna", "Bournemouth", 13, 9, 10, 12, 10, 12], ["Ben Vickery", "Man City", 9, 7, 12, 7, 12, 5], ["Dan Cameron", "Sunderland", 9, 6, 10, 10, 9, 5], ["Hayden McGhan", "Bournemouth", 11, 6, 12, 4, 13, 7], ["Finley Robertson", "Sunderland", 8, 4, 12, 7, 12, 5]];
 // Applied once per page load, right after real saved GK attributes are
 // restored from storage (same load-order rule as applyBuiltinPositions —
 // see the boot sequence). Fills ONLY (playerId, attrKey) pairs that don't
@@ -4643,6 +4651,29 @@ const CLUB_NAME_ALIASES = {
   "man city": "manchester city", "man united": "manchester united",
   "nott'm forest": "nottingham forest", "sheffield utd": "sheffield united",
   "west brom": "west bromwich albion",
+  // Round 22 — H2H item "past-form data missing for some clubs' overview
+  // cards": matchClubByFdName() only works when BOTH sides (this app's own
+  // FPL team.name, and football-data.co.uk's E0.csv spelling) normalize to
+  // the exact same key. Two real gaps found, both one-sided (only one of
+  // the two spellings had an alias entry, so the two names landed on
+  // DIFFERENT normalized keys and could never match each other):
+  //  - FPL's own name is "Man Utd" (not "Man United"/"Manchester Utd",
+  //    the spellings already aliased above) — had no entry at all, so it
+  //    fell through to the plain normName() path ("manutd") while
+  //    football-data's "Man United" normalized to "manchesterunited" via
+  //    the alias above. Confirmed via the user's exact reported symptom.
+  //  - football-data.co.uk's own convention for Tottenham is the short
+  //    form ("Tottenham"), not "Tottenham Hotspur" — FPL's "Spurs" already
+  //    aliased to the long form ("tottenham hotspur"/"tottenhamhotspur"),
+  //    so the short form never converged onto the same key either. Both
+  //    plausible short/long spellings are aliased below so this converges
+  //    correctly regardless of which exact string the live feed sends.
+  // Coventry/Hull City showing "No past-form data" is NOT a bug — genuinely
+  // real: neither club has been in the pulled seasons' top flight (E0), so
+  // there's no PL-only historical data available for them, and the panel
+  // correctly shows "no data" rather than fabricating something.
+  "man utd": "manchester united",
+  "tottenham": "tottenham hotspur",
 };
 function normTeam(s) {
   const base = (s || "").toLowerCase().trim();
@@ -4803,6 +4834,33 @@ function setBanner(msg, kind, showRetry) {
     };
   }
 }
+
+// Round 22 bug fix (#12 — "error message i cannot see in draft creation"):
+// several UI actions (new draft, confirm squad, etc.) can throw for reasons
+// that are genuinely the user's fault to know about (storage quota, a
+// corrupted draft object) but previously had NO visible surface at all —
+// the error only ever reached the browser devtools console, invisible to a
+// normal user, who'd just see nothing happen (or a stale/wrong number, as
+// in the paired #11 budget bug). This is a last-resort net UNDER the
+// try/catch blocks already added at specific action sites above — it
+// catches anything those didn't (a render-path throw, an unexpected
+// runtime error anywhere else) and surfaces it the same way every other
+// error in this app already does, via the existing setBanner() status
+// banner, rather than failing silently. Deliberately does NOT catch the
+// sandbox/offline `ERR_TUNNEL_CONNECTION_FAILED`-style network failures —
+// those already have their own explicit handling in loadData()'s own
+// try/catch and diagnostics list; this only fires for genuinely-unhandled
+// errors elsewhere.
+window.addEventListener("error", (e) => {
+  if (!e || !e.error) return;
+  console.error("Unhandled error:", e.error);
+  try { setBanner(`Something went wrong: ${e.error.message || e.message || "unknown error"}. Your data hasn't been lost — try the action again.`, "error"); } catch (_) { /* setBanner itself unavailable this early — nothing more we can do */ }
+});
+window.addEventListener("unhandledrejection", (e) => {
+  if (!e || !e.reason) return;
+  console.error("Unhandled promise rejection:", e.reason);
+  try { setBanner(`Something went wrong: ${e.reason.message || e.reason || "unknown error"}. Your data hasn't been lost — try the action again.`, "error"); } catch (_) { /* setBanner itself unavailable this early — nothing more we can do */ }
+});
 
 async function loadData() {
   state.diagnostics = [];
@@ -7839,11 +7897,23 @@ function solveBest15ForGw(gwId, formationKey, useClubLimit, overallBudgetCap, lo
   for (const pos of ["GK", "DEF", "MID", "FWD"]) byPos[pos].sort((a, b) => b.proj - a.proj);
   const picked = { GK: [], DEF: [], MID: [], FWD: [] };
   const bench = { GK: [], DEF: [], MID: [], FWD: [] };
+  // Round 22 (item: "the Best 15/Bench Boost points should include the
+  // bench, not just the XI"): bench[pos] deliberately keeps raw player
+  // objects (comment below, unchanged) since existing callers already
+  // depend on that exact shape (e.g. the swap panel's currentP lookup at
+  // "zone === 'bench' ? bench[pos][idx]"). Rather than change that
+  // established contract (and risk breaking those callers), benchRows[pos]
+  // is added alongside it, carrying the SAME players' full projection rows
+  // (with .proj) — the only thing missing before was any bench points
+  // figure existing anywhere in this return value at all.
+  const benchRows = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
     const eligible = byPos[pos].filter(r => r.fixtures.length);
     const blank = byPos[pos].filter(r => !r.fixtures.length);
+    const benchR = [...eligible.slice(need[pos]), ...blank];
     picked[pos] = eligible.slice(0, need[pos]);
-    bench[pos] = [...eligible.slice(need[pos]), ...blank].map(r => r.p); // bench keeps raw player objects, same contract bestFifteenPitchHtml already relies on
+    bench[pos] = benchR.map(r => r.p); // bench keeps raw player objects, same contract bestFifteenPitchHtml already relies on
+    benchRows[pos] = benchR;
   }
   const totalSpent = squadIds.reduce((s, id) => s + (pool.byId.get(id)?.nowCost || 0), 0);
   const clubCountAll = {};
@@ -7855,7 +7925,7 @@ function solveBest15ForGw(gwId, formationKey, useClubLimit, overallBudgetCap, lo
   // carry are gone now that the whole 15 shares one joint budget
   // (totalSpent/budgetCap below), not a separate XI-only sub-budget.
   const xiResult = { picked, clubLimitInfeasible };
-  return { xi: xiResult, need, bench, totalSpent, budgetCap, formationKey };
+  return { xi: xiResult, need, bench, benchRows, totalSpent, budgetCap, formationKey };
 }
 // Best legal starting XI (captain applied) from a fixed 15-man squad for
 // one gameweek, using the SAME projection engine (computeProjectionRow)
@@ -7908,6 +7978,143 @@ function standardTeamSquadIds() {
   if (fav && fav.squad && fav.squad.length === 15) return { ids: fav.squad, source: `your favorited draft "${fav.name}"` };
   return null;
 }
+
+// ---------- Multi-gameweek Bench Boost (item: "BB only works for one week
+// — a GW range should be GW1 = full 15, GW2+ = best 11 from the (possibly
+// transferred) squad") ----------
+// User's exact spec, clarified via follow-up questions: lock the 15-man
+// squad found for the FIRST gameweek in the range, then for every
+// SUBSEQUENT gameweek in the range, apply real transfers (not just a
+// reshuffle of the same 15) up to a user-configurable number of free
+// transfers per week (0 = no transfers allowed that week), evolving the
+// squad week to week — reusing the existing transfer/optimizer machinery
+// rather than a parallel system. Total for the range = first week's full-15
+// total + each subsequent week's best-11 total (that week's evolved squad).
+//
+// bestGreedySquadUpgrade is the one genuinely new piece of logic this adds
+// — everything else (solveBest15ForGw for the anchor week, bestXiPointsForSquad
+// for every following week, computeProjectionRow as the value signal) is a
+// direct reuse of existing functions. It's deliberately modelled on the
+// SAME greedy pattern already proven twice elsewhere in this codebase:
+// autoPickSquad's own leftover-budget upgrade pass (find the single
+// weakest replaceable player, swap in the best legal affordable upgrade,
+// repeat) and jointOptimizeSquad's repairBudget loop — not a new
+// algorithm, the same one applied here with an explicit swap-count limit
+// instead of running until no more improvement is possible. `valueFor`
+// scores every candidate on THIS gameweek's projection specifically (the
+// actual gameweek being planned for), same as solveBenchBoostForGw already
+// does for the single-GW case.
+function bestGreedySquadUpgrade(squadIds, gwId, budgetCap, useClubLimit, maxTransfers) {
+  if (!maxTransfers || maxTransfers <= 0) {
+    // 0 free transfers this week (a real, explicit user choice, not a
+    // missing-input default) — squad is genuinely untouched.
+    return { squadIds: [...squadIds], transfersMade: 0 };
+  }
+  const squad = [...squadIds];
+  const rowById = new Map(state.players.map(p => [p.id, computeProjectionRow(p, gwId, gwId, false, 70, 0.8)]));
+  const valueFor = (p) => { const r = rowById.get(p.id); return r && r.fixtures.length ? r.proj : 0; };
+  let transfersMade = 0;
+  for (let i = 0; i < maxTransfers; i++) {
+    const spent = squadCost(squad);
+    const remaining = (budgetCap / 10) - spent; // squadCost returns £m; budgetCap is tenths
+    const clubCount = {};
+    for (const id of squad) { const pl = state.players.find(x => x.id === id); if (pl && !pl.clubOverridden) clubCount[pl.teamId] = (clubCount[pl.teamId] || 0) + 1; }
+    // Find the single weakest legal swap-out (lowest value-for-this-week
+    // among the current squad) and the single best legal, affordable
+    // same-position replacement not already in the squad — same
+    // "find worst, find best upgrade, only take it if it's a genuine
+    // improvement" shape as autoPickSquad's leftover-budget pass.
+    let worst = null, worstScore = Infinity;
+    for (const id of squad) {
+      const pl = state.players.find(x => x.id === id);
+      if (!pl) continue;
+      const sc = valueFor(pl);
+      if (sc < worstScore) { worstScore = sc; worst = pl; }
+    }
+    if (!worst) break;
+    const budgetForSwap = remaining + (worst.nowCost / 10);
+    const candidates = state.players.filter(p =>
+      p.position === worst.position && p.id !== worst.id && !squad.includes(p.id) &&
+      (p.nowCost / 10) <= budgetForSwap &&
+      (!useClubLimit || p.clubOverridden || (clubCount[p.teamId] || 0) - (p.teamId === worst.teamId ? 1 : 0) < 3)
+    ).sort((a, b) => valueFor(b) - valueFor(a));
+    const best = candidates[0];
+    if (!best || valueFor(best) <= worstScore) break; // no improving, legal, affordable swap left this week
+    const idx = squad.indexOf(worst.id);
+    squad[idx] = best.id;
+    transfersMade++;
+  }
+  return { squadIds: squad, transfersMade };
+}
+// Orchestrator for the whole multi-GW Bench Boost range. `freeTransfersFn`
+// receives the gameweek id being evaluated (the 2nd+ GW in the range) and
+// returns how many free transfers the user says they'll make that week —
+// customizable per the user's own spec ("the user sets rules how many
+// transfers a week if they even want it at all"), defaulting to
+// nextFreeTransfers-style rollover if the caller doesn't override it.
+function computeMultiGwBenchBoost(fromGw, toGw, budgetCap, useClubLimit, lockedIds, excludedIds, freeTransfersFn) {
+  // Single-GW case: unchanged pure Bench Boost behaviour (this IS item #5,
+  // the "Best 15 -> Bench Boost, include bench points" fix) — no transfer
+  // evolution to speak of when there's only one week.
+  const anchor = solveBest15ForGw(fromGw, "3-4-3", useClubLimit, budgetCap, lockedIds, excludedIds);
+  const anchorAllXi = [...anchor.xi.picked.GK, ...anchor.xi.picked.DEF, ...anchor.xi.picked.MID, ...anchor.xi.picked.FWD];
+  const anchorCaptain = anchorAllXi.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
+  const anchorXiProj = anchorAllXi.reduce((sum, r) => sum + r.proj, 0) + (anchorCaptain ? anchorCaptain.proj : 0);
+  const anchorBenchProj = [...anchor.benchRows.GK, ...anchor.benchRows.DEF, ...anchor.benchRows.MID, ...anchor.benchRows.FWD].reduce((sum, r) => sum + r.proj, 0);
+  const anchorSquadIds = [...anchorAllXi.map(r => r.p.id), ...[...anchor.bench.GK, ...anchor.bench.DEF, ...anchor.bench.MID, ...anchor.bench.FWD].map(p => p.id)];
+  const weeks = [{ gwId: fromGw, total: anchorXiProj + anchorBenchProj, squadIds: anchorSquadIds, transfersMade: 0, isBenchBoostWeek: true }];
+
+  if (toGw > fromGw) {
+    let currentSquad = anchorSquadIds;
+    for (let gw = fromGw + 1; gw <= toGw; gw++) {
+      const allowed = freeTransfersFn ? freeTransfersFn(gw) : 1;
+      const { squadIds: evolved, transfersMade } = bestGreedySquadUpgrade(currentSquad, gw, budgetCap, useClubLimit, allowed);
+      const weekTotal = bestXiPointsForSquad(evolved, gw);
+      weeks.push({ gwId: gw, total: weekTotal, squadIds: evolved, transfersMade, isBenchBoostWeek: false });
+      currentSquad = evolved;
+    }
+  }
+  const grandTotal = weeks.reduce((s, w) => s + w.total, 0);
+  return { weeks, grandTotal, anchorSquadIds };
+}
+// Renders the multi-gameweek Bench Boost view (item 6) — a per-week
+// breakdown card plus the grand total, replacing the single-week pitch
+// whenever the Projections tab's own "From"/"To" GW selectors span more
+// than one gameweek. state.projBbFreeTransfersPerWeek is the user's own
+// customizable free-transfer rule ("the user sets rules how many
+// transfers a week if they even want it at all") — a single number applied
+// to every week after the anchor week, editable right on this view. 0 is a
+// fully legal, explicit choice (no transfers allowed that week at all),
+// not treated as "unset".
+function multiGwBenchBoostBodyHtml(fromGw, toGw, useClubLimit, budgetCap, label) {
+  if (state.projBbFreeTransfersPerWeek == null) state.projBbFreeTransfersPerWeek = 1;
+  const ftPerWeek = Math.max(0, Math.min(15, Math.round(Number(state.projBbFreeTransfersPerWeek) || 0)));
+  const excludedIds = state.projBest15Excluded || (state.projBest15Excluded = new Set());
+  const lockedIds = state.projBest15Locked || (state.projBest15Locked = new Set());
+  const result = computeMultiGwBenchBoost(fromGw, toGw, budgetCap, useClubLimit, lockedIds, excludedIds, () => ftPerWeek);
+  const weekRows = result.weeks.map(w => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-subtle)">
+      <span style="width:60px;font-weight:700">${fmtGwName(w.gwId)}</span>
+      <span style="flex:1;font-size:11px;color:var(--ink-faint)">${w.isBenchBoostWeek ? "💥 Bench Boost — all 15 count" : `Best 11${w.transfersMade ? ` — ${w.transfersMade} transfer${w.transfersMade === 1 ? "" : "s"} made` : " — squad unchanged"}`}</span>
+      <span class="mono" style="font-weight:700;min-width:64px;text-align:right">${w.total.toFixed(1)} pts</span>
+    </div>
+  `).join("");
+  return `
+    <div class="proj-pitch-wrap" style="max-width:560px;margin:14px auto 0">
+      <div style="text-align:center;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--ink-faint)">${label} — GW${fromGw}-${toGw}</div>
+        <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${result.grandTotal.toFixed(1)} pts <span style="font-size:12px;font-weight:400;color:var(--ink-faint)">(range total)</span></div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:2px">${fmtGwName(fromGw)} = full 15-player Bench Boost (the squad found for that week, locked in) · every week after = that squad's best 11, evolved by real transfers under the rule below</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0;font-size:12px;color:var(--ink-dim)">
+        <label for="projBbFreeTransfersInput">Free transfers per week (GW${fromGw + 1}+):</label>
+        <input type="number" id="projBbFreeTransfersInput" min="0" max="15" step="1" value="${ftPerWeek}" class="mono" style="width:52px;font-weight:700" title="How many transfers you'll allow the algorithm to make each week after the anchor Bench Boost week — 0 means the squad from the anchor week is carried forward completely unchanged." />
+      </div>
+      <div style="border-top:1px solid var(--border-strong);padding-top:4px">${weekRows}</div>
+      <p class="foot-note" style="margin-top:10px;font-size:10.5px">Each subsequent week's transfers are chosen greedily for THAT week's own projection (same value signal solveBenchBoostForGw uses) — this shows what's achievable under your stated transfer budget, not a guarantee you'd actually make these exact moves every week.</p>
+    </div>
+  `;
+}
 // Renders the Best-15 pitch + bench view — takes over the pitch itself
 // (XI on the pitch, bench as a strip below, same visual language as the
 // Squad Builder's own bench-boost picks) rather than a separate table.
@@ -7921,10 +8128,25 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
   const excludedIds = state.projBest15Excluded || (state.projBest15Excluded = new Set());
   const lockedIds = state.projBest15Locked || (state.projBest15Locked = new Set());
   const result = solveBest15ForGw(gwId, formationKey, useClubLimit, budgetCap, lockedIds, excludedIds);
-  const { xi, need, bench, totalSpent } = result;
+  const { xi, need, bench, benchRows, totalSpent } = result;
   const allXi = [...xi.picked.GK, ...xi.picked.DEF, ...xi.picked.MID, ...xi.picked.FWD];
   const captain = allXi.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
   const xiProj = allXi.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
+  // Round 22 (item: "Bench Boost points should include the bench, not just
+  // the XI"): a real Bench Boost week scores every one of the 15 — the
+  // bench isn't just squad depth here, it's live points. benchProj sums
+  // each bench player's real projection for this exact gameweek
+  // (benchRows carries the full row incl. .proj, unlike `bench` itself
+  // which deliberately stays raw player objects for the other, pre-
+  // existing callers that only need .id). A blank-GW bench player
+  // correctly contributes 0 (their row's own .proj is already 0 for a
+  // fixtureless week, from valueFor's fallback above), not a fabricated
+  // guess. benchBoostTotal is what actually gets shown as THE headline
+  // number now — xiProj is kept as its own line for anyone comparing
+  // against a normal (non-BB) week's XI-only score.
+  const benchProj = [...benchRows.GK, ...benchRows.DEF, ...benchRows.MID, ...benchRows.FWD].reduce((sum, r) => sum + r.proj, 0);
+  const benchBoostTotal = xiProj + benchProj;
+  const benchProjById = new Map([...benchRows.GK, ...benchRows.DEF, ...benchRows.MID, ...benchRows.FWD].map(r => [r.p.id, r.proj]));
   const swapOpenSlot = state.projBest15SwapSlot || null; // { zone: "xi"|"bench", pos, idx }
   const allFifteenIds = new Set([...allXi.map(r => r.p.id), ...[...bench.GK, ...bench.DEF, ...bench.MID, ...bench.FWD].map(p => p.id)]);
   function overrideBtnsHtml(playerId, zone, pos, idx) {
@@ -7955,13 +8177,21 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
   function benchSlotHtml(p, idx) {
     if (!p) return `<div class="pitch-slot placeholder-slot"><div class="name-tag" style="opacity:0.6">—</div></div>`;
     const isLocked = lockedIds.has(p.id);
+    // Round 22: bench slots now show this player's REAL projected points
+    // for the selected gameweek (from benchProjById, the same
+    // computeProjectionRow figures the XI already shows), not price — a
+    // Bench Boost week's bench isn't squad depth, it's live scoring, so
+    // hiding the number here was the actual gap behind "should include the
+    // bench points." Price is still available via the swap panel/detail
+    // view; this pitch view is about points, matching the XI slots above.
+    const benchProjVal = benchProjById.get(p.id) ?? 0;
     return `
       <div class="pitch-slot" style="position:relative">
         ${isLocked ? '<span class="lock-mark" title="Locked" style="position:absolute;top:-6px;left:-2px;z-index:3;font-size:11px;background:rgba(10,14,12,0.85);border:1px solid var(--gold-bright);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center">📌</span>' : ""}
         ${overrideBtnsHtml(p.id, "bench", p.position, idx)}
         ${playerAvatarHtml(p, 40)}
         <div class="name-tag">${p.webName}</div>
-        <div class="pts-tag mono">${fmtPrice(p.nowCost)}</div>
+        <div class="pts-tag mono">${benchProjVal.toFixed(1)}</div>
       </div>
     `;
   }
@@ -7974,17 +8204,25 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
     const currentR = zone === "xi" ? (xi.picked[pos][idx] || null) : null;
     const currentP = zone === "xi" ? (currentR ? currentR.p : null) : (bench[pos][idx] || null);
     const currentId = currentP ? currentP.id : null;
+    // Item 7 ("both 11 needs ability to swap out and search for the player
+    // you want to take over"): without a search box, this list only ever
+    // showed the top-12-by-projection at this position — a specific named
+    // player outside that top 12 (a cheap differential, a specific
+    // favourite) was simply unreachable here. state.projB15SwapSearch
+    // mirrors the Planner browse list's own search-box pattern
+    // (plannerPickerFilterBarHtml) rather than inventing a new one.
+    const searchQ = foldAccents((state.projB15SwapSearch || "").trim());
     const gwRows = state.players.filter(p => p.position === pos).map(p => computeProjectionRow(p, gwId, gwId, false, 70, 0.8));
-    const options = gwRows
-      .filter(r => r.p.id === currentId || !allFifteenIds.has(r.p.id))
-      .sort((a, b) => b.proj - a.proj)
-      .slice(0, 12);
+    let options = gwRows.filter(r => r.p.id === currentId || !allFifteenIds.has(r.p.id));
+    if (searchQ) options = options.filter(r => r.p.id === currentId || foldAccents(r.p.webName).includes(searchQ));
+    options = options.sort((a, b) => b.proj - a.proj).slice(0, searchQ ? 30 : 12);
     return `
       <div class="pitch-swap-panel" style="margin-top:10px;border:1px solid var(--border-strong);border-radius:12px;padding:8px;background:rgba(0,0,0,0.35)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <span style="font-size:11px;font-weight:700;color:var(--gold-bright)">Swap ${pos} (${zone === "xi" ? "starting XI" : "bench"}) — pick a replacement</span>
           <button type="button" id="b15SwapCancel" style="background:transparent;border:none;color:var(--ink-faint);cursor:pointer;font-size:13px">✕</button>
         </div>
+        <input type="text" id="b15SwapSearch" placeholder="Search by name…" value="${(state.projB15SwapSearch || "").replace(/"/g, "&quot;")}" style="width:100%;margin-bottom:6px;box-sizing:border-box" />
         <div style="display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto">
           ${options.map(o => `
             <button type="button" class="b15-swap-option" data-b15-pick-id="${o.p.id}" data-b15-zone="${zone}" data-b15-pos="${pos}" data-b15-idx="${idx}"
@@ -7992,7 +8230,7 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
               <span>${nameWithPosition(o.p)} <span style="color:var(--ink-faint);font-size:10px">${state.teamsById[o.p.teamId]?.short_name || ""} · ${fmtPrice(o.p.nowCost)}</span></span>
               <span class="mono" style="font-weight:700">${o.fixtures.length ? o.proj.toFixed(1) : "—"}</span>
             </button>
-          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible ${pos} available.</span>`}
+          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible ${pos}${searchQ ? ` matching "${state.projB15SwapSearch}"` : ""} available.</span>`}
         </div>
       </div>
     `;
@@ -8024,7 +8262,8 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
     <div class="proj-pitch-wrap" style="max-width:520px;margin:14px auto 0">
       <div style="text-align:center;margin-bottom:10px">
         <div style="font-size:12px;color:var(--ink-faint)">${label} — ${formationKey}, GW${gwId}</div>
-        <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${xiProj.toFixed(1)} pts <span style="font-size:12px;font-weight:400;color:var(--ink-faint)">(XI)</span></div>
+        <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${benchBoostTotal.toFixed(1)} pts <span style="font-size:12px;font-weight:400;color:var(--ink-faint)">(all 15, Bench Boost)</span></div>
+        <div style="font-size:11px;color:var(--ink-faint)">XI: ${xiProj.toFixed(1)} pts · Bench: ${benchProj.toFixed(1)} pts</div>
         <div style="font-size:11px;color:${squadBudgetInfeasible ? "var(--warn,#e0a94f)" : "var(--ink-faint)"}">Squad cost: £${(totalSpent / 10).toFixed(1)}m / £${(result.budgetCap / 10).toFixed(1)}m — all 15 optimized jointly under this cap, not XI-then-cheapest-bench</div>
         ${squadBudgetInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ Could not fit the full 15 under budget with the current pool — every remaining swap is already the cheapest legal option</div>` : ""}
         ${useClubLimit && xi.clubLimitInfeasible ? `<div style="font-size:11px;color:var(--warn,#e0a94f)">⚠️ Could not fully respect max-3-per-club across the 15 with the current pool</div>` : ""}
@@ -8037,7 +8276,11 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
     </div>
   `;
 }
-function renderProjectionsPitch(rows, gwId) {
+function renderProjectionsPitch(rows, gwId, toGwId) {
+  // toGwId defaults to gwId (single-GW behaviour, unchanged) when the
+  // caller doesn't pass one — keeps every other call site/test of this
+  // function working exactly as before.
+  toGwId = toGwId != null ? toGwId : gwId;
   const body = document.getElementById("projectionsBody");
   const useBudget = !!state.projPitchBudget, useClubLimit = !!state.projPitchClubLimit;
   // Manual overrides: player ids the user has removed from the auto-pick
@@ -8117,18 +8360,24 @@ function renderProjectionsPitch(rows, gwId) {
     // regardless of budget/club-limit toggles (a manual swap is a
     // deliberate override, so those soft constraints don't gate it; the
     // spend total below still updates to reflect the real cost).
+    // Item 7 ("both 11 needs ability to swap out and search for the player
+    // you want to take over") — same search box added to bestFifteenPitchHtml's
+    // equivalent panel; see its comment for why this reuses a plain search
+    // box rather than the Planner's full filter bar, and the caret-restore
+    // handling below.
     const pickedIds = new Set(allPicked.map(x => x.p.id));
     const currentId = (picked[pos][idx] || {}).p?.id;
-    const options = rows
-      .filter(r => r.p.position === pos && !excludedIds.has(r.p.id) && (r.p.id === currentId || !pickedIds.has(r.p.id)))
-      .sort((a, b) => b.proj - a.proj)
-      .slice(0, 12);
+    const searchQ = foldAccents((state.projXiSwapSearch || "").trim());
+    let options = rows.filter(r => r.p.position === pos && !excludedIds.has(r.p.id) && (r.p.id === currentId || !pickedIds.has(r.p.id)));
+    if (searchQ) options = options.filter(r => r.p.id === currentId || foldAccents(r.p.webName).includes(searchQ));
+    options = options.sort((a, b) => b.proj - a.proj).slice(0, searchQ ? 30 : 12);
     return `
       <div class="pitch-swap-panel" style="margin-top:10px;border:1px solid var(--border-strong);border-radius:12px;padding:8px;background:rgba(0,0,0,0.35)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <span style="font-size:11px;font-weight:700;color:var(--gold-bright)">Swap ${pos} slot ${idx + 1} — pick a replacement</span>
           <button type="button" id="pitchSwapCancel" style="background:transparent;border:none;color:var(--ink-faint);cursor:pointer;font-size:13px">✕</button>
         </div>
+        <input type="text" id="pitchSwapSearch" placeholder="Search by name…" value="${(state.projXiSwapSearch || "").replace(/"/g, "&quot;")}" style="width:100%;margin-bottom:6px;box-sizing:border-box" />
         <div style="display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto">
           ${options.map(o => `
             <button type="button" class="pitch-swap-option" data-swap-pick-id="${o.p.id}" data-swap-pos="${pos}" data-swap-idx="${idx}"
@@ -8136,7 +8385,7 @@ function renderProjectionsPitch(rows, gwId) {
               <span>${nameWithPosition(o.p)} <span style="color:var(--ink-faint);font-size:10px">${state.teamsById[o.p.teamId]?.short_name || ""} · ${fmtPrice(o.p.nowCost)}</span></span>
               <span class="mono" style="font-weight:700">${o.proj.toFixed(1)}</span>
             </button>
-          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible ${pos} in the current filters.</span>`}
+          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible ${pos}${searchQ ? ` matching "${state.projXiSwapSearch}"` : ""} in the current filters.</span>`}
         </div>
       </div>
     `;
@@ -8149,12 +8398,19 @@ function renderProjectionsPitch(rows, gwId) {
   const hasOverrides = excludedIds.size > 0 || lockedIds.size > 0;
   const best15Mode = state.projBest15Mode || null; // null | "full" | "mine"
   const noMyDraft = best15Mode === "mine" && !(state.drafts.find(d => d.id === state.activeDraftId)?.squad || []).length;
+  // Item 6 (multi-GW Bench Boost): a genuine range (toGwId > gwId) switches
+  // to the multi-week evolution view instead of the single-week checker —
+  // see multiGwBenchBoostBodyHtml below. A single selected GW (the far more
+  // common case, and the default) keeps the exact pre-existing behaviour.
+  const isMultiGwRange = toGwId > gwId;
   // Bench Boost checker takes over the pitch entirely when active — the
   // manual swap/remove XI view and the checker are two different modes of
   // the same pitch, not stacked on top of each other.
   const best15Body = best15Mode
     ? (noMyDraft
         ? `<div class="empty-state" style="margin-top:14px">No active Squad Builder draft to base a budget on yet — start one on the Squad Builder tab first, or use the £100m version instead.</div>`
+        : isMultiGwRange
+        ? multiGwBenchBoostBodyHtml(gwId, toGwId, useClubLimit, best15Mode === "mine" ? myTeamBudgetCapTenths() : BUDGET, best15Mode === "mine" ? "Bench Boost — my team's budget" : "Bench Boost — £100m budget")
         : bestFifteenPitchHtml(
             gwId, formationKey, useClubLimit,
             best15Mode === "mine" ? myTeamBudgetCapTenths() : BUDGET,
@@ -8181,8 +8437,8 @@ function renderProjectionsPitch(rows, gwId) {
       ${!best15Mode && hasOverrides ? `<button type="button" id="pitchResetXiBtn" class="chip-btn small" style="cursor:pointer">↺ Reset XI</button>` : ""}
       ${!best15Mode && state.projXiLastRemoved ? `<button type="button" id="pitchUndoRemoveBtn" class="chip-btn small" style="cursor:pointer" title="Restore the last removed player">↩ Undo remove</button>` : ""}
       <span style="width:1px;align-self:stretch;background:var(--border-strong);margin:0 2px"></span>
-      <button type="button" id="projBest15FullBtn" class="chip-btn small${best15Mode === "full" ? " active" : ""}" style="cursor:pointer" title="Bench Boost checker — best possible 15 for this GW (not just the XI) under a full £100m budget. Doesn't touch your Squad Builder draft.">💥 Best 15 (£100m)</button>
-      <button type="button" id="projBest15MineBtn" class="chip-btn small${best15Mode === "mine" ? " active" : ""}" style="cursor:pointer" title="Same Bench Boost checker, capped at your active Squad Builder draft's total value (squad cost + bank) instead of a fantasy £100m.">💥 Best 15 (my budget)</button>
+      <button type="button" id="projBest15FullBtn" class="chip-btn small${best15Mode === "full" ? " active" : ""}" style="cursor:pointer" title="Bench Boost checker — best possible 15 for this GW (not just the XI) under a full £100m budget. Doesn't touch your Squad Builder draft.">💥 Bench Boost (£100m)</button>
+      <button type="button" id="projBest15MineBtn" class="chip-btn small${best15Mode === "mine" ? " active" : ""}" style="cursor:pointer" title="Same Bench Boost checker, capped at your active Squad Builder draft's total value (squad cost + bank) instead of a fantasy £100m.">💥 Bench Boost (my budget)</button>
     </div>
     ${best15Body}
   `;
@@ -8194,6 +8450,11 @@ function renderProjectionsPitch(rows, gwId) {
   const best15FullBtn = document.getElementById("projBest15FullBtn"), best15MineBtn = document.getElementById("projBest15MineBtn");
   if (best15FullBtn) best15FullBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "full" ? null : "full"; renderProjectionsTab(); };
   if (best15MineBtn) best15MineBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "mine" ? null : "mine"; renderProjectionsTab(); };
+  const bbFreeTransfersInput = document.getElementById("projBbFreeTransfersInput");
+  if (bbFreeTransfersInput) bbFreeTransfersInput.onchange = () => {
+    state.projBbFreeTransfersPerWeek = Math.max(0, Math.min(15, Math.round(Number(bbFreeTransfersInput.value) || 0)));
+    renderProjectionsTab();
+  };
   if (!best15Mode) {
     body.querySelectorAll(".pitch-slot-lock-btn").forEach(btn => {
       btn.onclick = () => {
@@ -8203,7 +8464,7 @@ function renderProjectionsPitch(rows, gwId) {
       };
     });
     body.querySelectorAll(".pitch-slot-swap-btn").forEach(btn => {
-      btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; renderProjectionsTab(); };
+      btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; state.projXiSwapSearch = ""; renderProjectionsTab(); };
     });
     body.querySelectorAll(".pitch-slot-remove-btn").forEach(btn => {
       btn.onclick = () => {
@@ -8214,6 +8475,7 @@ function renderProjectionsPitch(rows, gwId) {
         // least one level of undo, per the user's request.
         state.projXiLastRemoved = id;
         state.projXiSwapSlot = { pos: btn.dataset.removePos, idx: Number(btn.dataset.removeIdx) };
+        state.projXiSwapSearch = "";
         renderProjectionsTab();
       };
     });
@@ -8226,7 +8488,18 @@ function renderProjectionsPitch(rows, gwId) {
       renderProjectionsTab();
     };
     const swapCancel = document.getElementById("pitchSwapCancel");
-    if (swapCancel) swapCancel.onclick = () => { state.projXiSwapSlot = null; renderProjectionsTab(); };
+    if (swapCancel) swapCancel.onclick = () => { state.projXiSwapSlot = null; state.projXiSwapSearch = ""; renderProjectionsTab(); };
+    const pitchSwapSearchInput = document.getElementById("pitchSwapSearch");
+    if (pitchSwapSearchInput) pitchSwapSearchInput.oninput = () => {
+      // Same caret/focus preservation as the Bench Boost 15 panel's search
+      // box — see that panel's comment for why this is needed given the
+      // whole-string-innerHTML render pattern this view uses.
+      const caret = pitchSwapSearchInput.selectionStart;
+      state.projXiSwapSearch = pitchSwapSearchInput.value;
+      renderProjectionsTab();
+      const fresh = document.getElementById("pitchSwapSearch");
+      if (fresh) { fresh.focus(); fresh.setSelectionRange(caret, caret); }
+    };
     body.querySelectorAll(".pitch-swap-option").forEach(btn => {
       btn.onclick = () => {
         const pickId = Number(btn.dataset.swapPickId);
@@ -8267,6 +8540,7 @@ function renderProjectionsPitch(rows, gwId) {
     body.querySelectorAll(".b15-swap-btn").forEach(btn => {
       btn.onclick = () => {
         state.projBest15SwapSlot = { zone: btn.dataset.b15Zone, pos: btn.dataset.b15Pos, idx: Number(btn.dataset.b15Idx) };
+        state.projB15SwapSearch = "";
         renderProjectionsTab();
       };
     });
@@ -8286,7 +8560,22 @@ function renderProjectionsPitch(rows, gwId) {
       renderProjectionsTab();
     };
     const b15SwapCancel = document.getElementById("b15SwapCancel");
-    if (b15SwapCancel) b15SwapCancel.onclick = () => { state.projBest15SwapSlot = null; renderProjectionsTab(); };
+    if (b15SwapCancel) b15SwapCancel.onclick = () => { state.projBest15SwapSlot = null; state.projB15SwapSearch = ""; renderProjectionsTab(); };
+    const b15SwapSearchInput = document.getElementById("b15SwapSearch");
+    if (b15SwapSearchInput) b15SwapSearchInput.oninput = () => {
+      // renderProjectionsTab() rebuilds this whole panel from an HTML
+      // string (same pattern the rest of this view already uses), which
+      // recreates the <input> node itself — a naive re-render on every
+      // keystroke would silently drop focus/cursor position after each
+      // character, making the search box nearly unusable. Snapshot and
+      // restore both explicitly so typing feels like typing into a normal
+      // persistent input, not one that resets every keystroke.
+      const caret = b15SwapSearchInput.selectionStart;
+      state.projB15SwapSearch = b15SwapSearchInput.value;
+      renderProjectionsTab();
+      const fresh = document.getElementById("b15SwapSearch");
+      if (fresh) { fresh.focus(); fresh.setSelectionRange(caret, caret); }
+    };
     body.querySelectorAll(".b15-swap-option").forEach(btn => {
       btn.onclick = () => {
         const pickId = Number(btn.dataset.b15PickId);
@@ -9375,7 +9664,7 @@ function renderProjectionsTab() {
   if (sortDir === "asc") rows.reverse();
 
   if (pitchView) {
-    renderProjectionsPitch(rows, fromGw);
+    renderProjectionsPitch(rows, fromGw, toGw);
     return;
   }
   if (pairsView) {
@@ -9962,7 +10251,12 @@ function autoPickSquad(draft, opts) {
         return squadShape === "versatile" ? (p.ppm90 || 0) : -(p.nowCost || 0);
       };
       const clubCounts = clubCountsFor(draft.squad);
-      const remaining = BUDGET - squadCost(draft.squad);
+      // Uses this draft's real total (backfilled above), not the flat £100m
+      // constant — otherwise a draft with a genuinely different budget (an
+      // imported team, or a value-capped rebuild) would let Auto Pick spend
+      // as if it had a full £100m, then only discover it went over budget
+      // after the fact via the trailing syncDraftBank call.
+      const remaining = draft.totalBudget - squadCost(draft.squad);
       // Reserve = the cheapest realistic price (from the REAL live pool,
       // not a stale hardcoded floor) for every OTHER slot still to be
       // filled — same shared helper the squad-builder UI's disabled-button
@@ -10022,7 +10316,7 @@ function autoPickSquad(draft, opts) {
   // away and there's nothing left this run is allowed to touch.
   let upgrades = 60;
   while (upgrades-- > 0 && newlyAddedIds.length) {
-    const remaining = BUDGET - squadCost(draft.squad);
+    const remaining = draft.totalBudget - squadCost(draft.squad); // draft's real total, not the flat £100m constant — see note above
     if (remaining <= 0) break;
     const clubCounts = clubCountsFor(draft.squad);
     let worstIdx = -1, worstScore = Infinity, worstListPos = -1;
@@ -10187,8 +10481,17 @@ function openAutopickModal(draft) {
 
 function renderSquadBuilder(draft) {
   const body = document.getElementById("plannerBody");
+  // Bug fix: this used to be hardcoded to the flat £100.0m BUDGET constant,
+  // which is only correct for a brand-new draft. A draft loaded from a real
+  // imported team (seedDraftFromSquad) or budget-capped to "my current
+  // value" (findBenchBoostSquadForGwWithinCurrentValue) can have a
+  // draft.totalBudget that's genuinely different from £100.0m — using the
+  // flat constant here made the "in the bank" pill and the Confirm-squad
+  // gate disagree with draft.bank/syncDraftBank's own invariant for those
+  // drafts. Falls back to BUDGET only if totalBudget is somehow still unset.
+  const effectiveBudget = Number.isFinite(draft.totalBudget) ? draft.totalBudget : BUDGET;
   const spent = squadCost(draft.squad);
-  const remaining = BUDGET - spent;
+  const remaining = effectiveBudget - spent;
   const total = draft.squad.length;
   const readyToConfirm = total === 15 && remaining >= 0;
   // "Usable now" = remaining budget MINUS what still has to be reserved to
@@ -10234,9 +10537,9 @@ function renderSquadBuilder(draft) {
         <p class="foot-note" style="margin-top:10px">Step through gameweeks with the dropdown above to see each one's fixture and lineup. Click a starting player on the pitch to make them captain for that gameweek. Formation and bench update automatically as you add or remove players — the strongest valid XI (by projected points) is picked for you.</p>
         <div class="builder-actions">
           <button class="dir-btn" id="builderAutoPick">Auto Pick</button>
-          <button class="dir-btn" id="builderBenchBoostPick" title="Clears the squad and picks the strongest possible 15 under a full £100m budget — for weeks you plan to play Bench Boost, where every one of the 15 scores, not just your XI">💥 Best 15 (Bench Boost)</button>
-          <button class="dir-btn" id="builderBenchBoostGwFull" title="Clears the squad and picks the strongest possible 15 for the gameweek selected above (${fmtPrice(BUDGET)} budget), optimizing that week's projected points specifically — not season-long totals">💥 Best 15 for GW${state.builderGwId ?? ""} (£100m)</button>
-          <button class="dir-btn" id="builderBenchBoostGwCurrent" title="Keeps your current squad's total value as the budget cap and re-optimizes for the gameweek selected above — the best Bench Boost 15 you could actually reach via transfers, not a fantasy full rebuild">💥 Best 15 for GW${state.builderGwId ?? ""} (my budget)</button>
+          <button class="dir-btn" id="builderBenchBoostPick" title="Clears the squad and picks the strongest possible 15 under a full £100m budget — for weeks you plan to play Bench Boost, where every one of the 15 scores, not just your XI">💥 Bench Boost (season-long)</button>
+          <button class="dir-btn" id="builderBenchBoostGwFull" title="Clears the squad and picks the strongest possible 15 for the gameweek selected above (${fmtPrice(BUDGET)} budget), optimizing that week's projected points specifically — not season-long totals">💥 Bench Boost for GW${state.builderGwId ?? ""} (£100m)</button>
+          <button class="dir-btn" id="builderBenchBoostGwCurrent" title="Keeps your current squad's total value as the budget cap and re-optimizes for the gameweek selected above — the best Bench Boost 15 you could actually reach via transfers, not a fantasy full rebuild">💥 Bench Boost for GW${state.builderGwId ?? ""} (my budget)</button>
           <button class="btn-secondary" id="builderResetSquad">Reset</button>
           <button class="btn" id="builderConfirm" ${readyToConfirm ? "" : "disabled"} style="margin-left:auto">
             ${total === 15 && remaining < 0 ? "Over budget" : total === 15 ? "Confirm squad →" : `Pick ${15 - total} more`}
@@ -10325,10 +10628,21 @@ function renderSquadBuilder(draft) {
     }
   };
   document.getElementById("builderConfirm").onclick = () => {
-    if (draft.squad.length !== 15 || BUDGET - squadCost(draft.squad) < 0) return;
-    draft.squadConfirmed = true;
-    draft._editSnapshot = null; // edit finished/saved — nothing to cancel back to any more
-    saveDrafts(); renderPlanner();
+    try {
+      // Uses this draft's real total (matching readyToConfirm's gate above),
+      // not the flat £100m constant — otherwise a draft with a genuinely
+      // different budget could be confirmed while actually over its own
+      // budget, or get blocked from confirming while actually still within
+      // it.
+      const cap = Number.isFinite(draft.totalBudget) ? draft.totalBudget : BUDGET;
+      if (draft.squad.length !== 15 || cap - squadCost(draft.squad) < 0) return;
+      syncDraftBank(draft); // make sure draft.bank is exactly in sync at the moment of saving, not just relying on every prior mutation having kept it so
+      draft.squadConfirmed = true;
+      draft._editSnapshot = null; // edit finished/saved — nothing to cancel back to any more
+      saveDrafts(); renderPlanner();
+    } catch (err) {
+      setBanner(`Couldn't save this squad (${err.message}). Nothing was lost — your picks are still here, try Confirm again.`, "error");
+    }
   };
   // "Cancel" only shows when this builder session started from an
   // existing confirmed squad (i.e. via "Edit squad") — lets you back out
@@ -10407,7 +10721,10 @@ function renderBuilderList(draft) {
       // for the rest of the squad you can spend right up to the cap on
       // early picks and get stuck unable to complete the squad legally.
       const reserveForRest = minReserveForRemainingSlots(draft.squad, pos);
-      const maxAffordableSpend = BUDGET - reserveForRest;
+      // Uses this draft's real total, not the flat £100m constant — see the
+      // same fix in renderSquadBuilder's `remaining`/`effectiveBudget` above.
+      const draftBudgetCap = Number.isFinite(draft.totalBudget) ? draft.totalBudget : BUDGET;
+      const maxAffordableSpend = draftBudgetCap - reserveForRest;
       const wouldExceedBudget = !inSquad && (squadCost(draft.squad) + p.nowCost > maxAffordableSpend);
       const wouldExceedPos = !inSquad && needThisPos <= 0;
       // Club-overridden players (manual club-override feature — see
@@ -10938,14 +11255,55 @@ function renderPlannerInBrowseList(draft, gwId, entry, log, horizon) {
   if (proj5ToggleBtn) proj5ToggleBtn.classList.toggle("active", !!f.sortByProj5); // keep in sync even when filters change via Reset, not just the toggle's own click
   const q = foldAccents((f.q || "").trim());
   const horizonEnd = Math.min(38, gwId + 4);
-  let pool = state.players.filter(p => {
+  // Perf fix (item #8 — "dragging a player for a transfer takes too long"):
+  // this used to run computeProjectionRow (the full per-fixture engine —
+  // scoreline estimation, defensive-contribution probability, expected
+  // bonus, AND a matchup-boost term that itself runs the whole 5-duel
+  // Simulation engine via overallMatchupScore) for EVERY player that passed
+  // the cheap filters — typically 500-650 players with no filter applied —
+  // on every single render of this list, which happens on every drop,
+  // every chip toggle, every gameweek navigation. Only 60 rows are ever
+  // shown (the `.slice(0, 60)` below), so >90% of that expensive work was
+  // always thrown away immediately. Same "don't pay for what's not
+  // visible" principle Round 20 already applied to the proj5 toggle
+  // (_proj5Cache) — applied here to the base case too, which that round's
+  // fix didn't cover.
+  // Fix: rank by a CHEAP proxy already sitting on the player object
+  // (pointsPerGame, or the raw sort field itself when sorting by something
+  // that isn't the projection) and only run computeProjectionRow on a
+  // generously-oversized candidate slice (200 — comfortably more than the
+  // 60 ever shown, so the expensive real projection can still re-order
+  // within that slice without a genuinely-strong player ever being pushed
+  // out of contention by the cheap pre-filter) rather than the full pool.
+  let candidates = state.players.filter(p => {
     if (entry.squad.includes(p.id)) return false;
     if (f.pos !== "ALL" && p.position !== f.pos) return false;
     if (q && !foldAccents(p.webName).includes(q)) return false;
     if (f.minPrice !== "" && p.nowCost < Number(f.minPrice) * 10) return false;
     if (f.maxPrice !== "" && p.nowCost > Number(f.maxPrice) * 10) return false;
     return true;
-  }).map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, state.projProvenWeight).proj }));
+  });
+  const PRE_SORT_CANDIDATE_CAP = 200;
+  if (candidates.length > PRE_SORT_CANDIDATE_CAP) {
+    // Sorting by anything OTHER than the projection (price, ownership,
+    // form, etc.) already has its true final order from a raw field with
+    // zero computation needed — cap by THAT field directly, respecting the
+    // requested direction, so the eventual sort/slice is exactly correct,
+    // not just a proxy (an "asc" sort wants the LOWEST values, which live
+    // at the bottom of a descending ranking — capping without respecting
+    // direction would silently keep the wrong end of the pool). Sorting BY
+    // the projection (the common case, including proj5) has no cheap
+    // equivalent, so pointsPerGame descending is used as a reasonable
+    // proxy for "worth evaluating" regardless of the final sort direction
+    // — this browse list's whole point is surfacing good replacements, so
+    // biasing the pre-filter toward stronger players is deliberate even on
+    // the rare "worst first" projection view, not a correctness bug.
+    const usesRawField = !f.sortByProj5 && f.sort && f.sort !== "totalPoints";
+    const cheapKey = usesRawField ? (p) => p[f.sort] ?? 0 : (p) => p.pointsPerGame || 0;
+    const cheapDir = usesRawField && f.dir === "asc" ? 1 : -1; // -1 = descending (default/proxy case), 1 = ascending (only when it exactly matches the real final sort)
+    candidates = [...candidates].sort((a, b) => cheapDir * (cheapKey(a) - cheapKey(b))).slice(0, PRE_SORT_CANDIDATE_CAP);
+  }
+  let pool = candidates.map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, state.projProvenWeight).proj }));
   // The 5-GW sum is only computed (and only for players that already
   // survived the cheap filters above, plus memoized — see plannerProj5)
   // when the toggle is actually on, so leaving it off costs nothing extra
@@ -11123,7 +11481,24 @@ function computeRecommendedTransfers(draft, gwId, entry) {
     const reliability = Math.min(1, (p.minutes || 0) / (gwsPlayedSoFar * 75));
     return (p.pointsPerGame || 0) * reliability;
   };
-  const longTermScore = (p) => computeProjectionRow(p, gwId, horizonEnd, false, 70, state.projProvenWeight).proj;
+  // Round 22 perf fix (item: "dragging a player for a transfer takes too
+  // long, it was quicker before"). Root cause: this whole function reruns
+  // on EVERY renderGwDetail (i.e. after every single drag-drop transfer,
+  // chip toggle, or undo in the Planner), and longTermScore used to call
+  // computeProjectionRow directly — a real per-fixture, matchup-aware model
+  // — across the full ~600-player candidate pool (recommendedTransfer-
+  // CandidatePool, "every player not already in your squad") every single
+  // time, unmemoized. That's the same class of "recompute an expensive
+  // 5-GW model for the whole pool on every interaction" regression Round 20
+  // already fought once for the browse list's optional 5-GW-sort toggle
+  // (see plannerProj5/_proj5Cache above) — just never applied to this
+  // ALWAYS-ON panel, which is why the browse list's own optional toggle
+  // felt fine while the transfer-drop path (which always renders this
+  // panel too) felt like it had regressed. Switched to the same existing
+  // memo instead of a new one, so repeated renders (the common case: you
+  // drop ONE transfer, not a different player pool each time) reuse the
+  // cached per-player 5-GW figure instead of recomputing it from scratch.
+  const longTermScore = (p) => plannerProj5(p, gwId, horizonEnd);
   // Punt no longer forces a small sample (the old `>= 450 mins` exclusion
   // shut out anyone who'd actually nailed down more minutes, which isn't
   // what "punt" is meant to mean) — this is about strong underlying per-90
@@ -11664,12 +12039,26 @@ function setupPlannerControls() {
     renderPlanner();
   };
   document.getElementById("newDraftBtn").onclick = () => {
-    const name = prompt("Name this draft:", "New draft");
-    if (!name) return;
-    const id = "draft_" + Date.now();
-    state.drafts.push({ id, name, squad: [], bank: BUDGET, transfersLog: {}, chipsUsed: {}, squadConfirmed: false, builderCaptainId: null });
-    state.activeDraftId = id;
-    saveDrafts(); renderPlanner();
+    try {
+      const name = prompt("Name this draft:", "New draft");
+      if (!name) return;
+      const id = "draft_" + Date.now();
+      // totalBudget MUST be set explicitly here (bug fix — see syncDraftBank):
+      // without it, syncDraftBank's legacy-backfill branch computes it from
+      // squadCost(draft.squad) + draft.bank on the FIRST manual add, but by
+      // then the new player has already been pushed onto draft.squad, so the
+      // backfilled total is inflated by that first player's price (e.g. a
+      // £5.0m first pick permanently baked £105.0m in as the "total" instead
+      // of £100.0m) — showing a nonsense leftover bank once the squad fills
+      // up (this was reported as "spent my full budget, it said I had £6m
+      // left"). Setting it here up front means the backfill branch never
+      // triggers for a freshly created draft.
+      state.drafts.push({ id, name, squad: [], bank: BUDGET, totalBudget: BUDGET, transfersLog: {}, chipsUsed: {}, squadConfirmed: false, builderCaptainId: null });
+      state.activeDraftId = id;
+      saveDrafts(); renderPlanner();
+    } catch (err) {
+      setBanner(`Couldn't create a new draft (${err.message}). Your other drafts are unaffected — try again, and if it keeps happening, export/back up your drafts first.`, "error");
+    }
   };
   document.getElementById("renameDraftBtn").onclick = () => {
     const draft = getDraft(state.activeDraftId);
@@ -14546,18 +14935,37 @@ function h2hSetBoardXiSlot(team, key, pos, idx, newPlayerId) {
   bx[pos][idx] = newPlayerId;
   state.h2hBoardXi[xiKey] = bx;
   saveH2hBoardXi();
-  // Slot shape changed identity — drop any saved token position for this
-  // exact slot so it re-lays-out from the default rather than showing the
-  // old player's saved coordinate under a new name.
+  // Item: "subbing a player shouldn't reset the pitch." Only the ONE slot
+  // that actually changed identity needs its saved token coordinate
+  // dropped (so the new player re-lays-out at the default spot for that
+  // slot instead of inheriting the old occupant's saved x/y) — every other
+  // slot, on EITHER side, keeps its manually-dragged position untouched.
+  // Previously this cleared sigA/sigB for the whole key, which wiped BOTH
+  // teams' entire saved layout on any single substitution (the render
+  // function's sig-check treats a cleared signature as "shape changed,
+  // rebuild everything from defaults") — that was the actual "resets the
+  // pitch" bug, not a real formation-shape change (row count/order for
+  // every other slot is unchanged, only this one id is different).
   const posStore = state.h2hBoardPos[key];
-  if (posStore) { posStore.sigA = ""; posStore.sigB = ""; }
+  if (posStore) {
+    const side = posStore.teamAId === team.id ? "A" : "B";
+    if (posStore[side]) delete posStore[side][`${pos}-${idx}`];
+  }
   return true;
 }
 function h2hResetBoardXi(team, key) {
   delete state.h2hBoardXi[h2hBoardXiKey(key, team.id)];
   saveH2hBoardXi();
+  // Resetting a whole side back to auto genuinely can change shape (row
+  // counts/order revert to the formation default), so that side's full
+  // saved layout is correctly invalidated here — but only THAT side, never
+  // the opponent's, who's untouched by this reset.
   const posStore = state.h2hBoardPos[key];
-  if (posStore) { posStore.sigA = ""; posStore.sigB = ""; }
+  if (posStore) {
+    const side = posStore.teamAId === team.id ? "A" : "B";
+    if (side === "A") { posStore.A = {}; posStore.sigA = ""; }
+    else { posStore.B = {}; posStore.sigB = ""; }
+  }
 }
 function saveH2hSavedBoards() { persistSet("h2hSavedBoards", JSON.stringify(state.h2hSavedBoards)); }
 function saveH2hBoardMode() { persistSet("h2hBoardMode", JSON.stringify(state.h2hBoardMode)); }
@@ -15226,6 +15634,40 @@ function formationFitRank(p, pos) {
   if ((FORMATION_SECONDARY_ROLE[pos] || []).includes(specific)) return 1;
   return 0;
 }
+// Item: "fit to the best of ability the players in their rightful position
+// e.g. Gyökeres should be put LW, chosen from the LW options at Arsenal for
+// LW" — formationFitRank/h2hAutoDraftXi above already pick the right PLAYERS
+// for a row (specific-position fit ranked ahead of raw points), but a row's
+// array order purely reflected that ranking, and h2hDefaultTokenPos lays a
+// row out strictly left-to-right BY ARRAY INDEX — so a real left-winger
+// could still land on the right-hand side of the front three (or a
+// right-back on the left of the back four) whenever the fit/points sort
+// didn't happen to also put them array-first. This assigns each row's own
+// LEFT/CENTRE/RIGHT slot by the player's actual specific position (LB/LWB/
+// LM/LW -> left, RB/RWB/RM/RW -> right, everything else -> centre),
+// re-ordering the row left-to-right so array index now genuinely matches
+// visual side. Players sharing a side keep their existing fit/points order
+// relative to each other; the count and WHICH players were picked is
+// completely unchanged — this only reorders, never re-selects.
+const FORMATION_LEFT_ROLE = ["LB", "LWB", "LM", "LW"];
+const FORMATION_RIGHT_ROLE = ["RB", "RWB", "RM", "RW"];
+function formationSideRank(p) {
+  const specific = getSpecificPosition(p.id);
+  if (FORMATION_LEFT_ROLE.includes(specific)) return -1; // left
+  if (FORMATION_RIGHT_ROLE.includes(specific)) return 1; // right
+  return 0; // centre / untagged / no left-right-specific role
+}
+function orderRowBySide(row) {
+  // Stable partition into left/centre/right groups (each group keeps the
+  // row's existing relative order), then concatenated left->centre->right
+  // — a genuine stable sort would also work, but Array#sort's stability
+  // isn't guaranteed pre-ES2019 and this codebase doesn't need to rely on
+  // engine version for something this cheap to do explicitly.
+  const left = row.filter(p => formationSideRank(p) < 0);
+  const centre = row.filter(p => formationSideRank(p) === 0);
+  const right = row.filter(p => formationSideRank(p) > 0);
+  return [...left, ...centre, ...right];
+}
 function h2hAutoDraftXi(team) {
   // Default XI fed into the Tactical board / Auto matchups preset / match-
   // mode Simulation whenever there's no manually-drafted Ability draft XI
@@ -15246,7 +15688,7 @@ function h2hAutoDraftXi(team) {
   // matched more than one position filter), which showed up on the board
   // as a duplicated token.
   ["GK", "DEF", "MID", "FWD"].forEach(pos => {
-    out[pos] = h2hEligiblePlayers(pos)(team)
+    const picked = h2hEligiblePlayers(pos)(team)
       .filter(p => !used.has(p.id))
       .sort((a, b) => {
         const fa = formationFitRank(a, pos), fb = formationFitRank(b, pos);
@@ -15254,6 +15696,11 @@ function h2hAutoDraftXi(team) {
         return (b.totalPoints || 0) - (a.totalPoints || 0);
       })
       .slice(0, need[pos]);
+    // Re-order left-to-right by actual specific position (see
+    // orderRowBySide) so a real left-winger/left-back doesn't end up
+    // rendered on the right side of their own row just because they sorted
+    // later on fit-rank/points — selection (who's in `picked`) is untouched.
+    out[pos] = orderRowBySide(picked);
     out[pos].forEach(p => used.add(p.id));
   });
   return out;
@@ -15422,15 +15869,54 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
   } else {
     const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
     const posStore = state.h2hBoardPos[key] || (state.h2hBoardPos[key] = { A: {}, B: {}, sigA: "", sigB: "" });
+    // Records which concrete team.id is the "A" side for THIS key, so a
+    // targeted single-slot edit elsewhere (h2hSetBoardXiSlot/h2hResetBoardXi)
+    // can look up "is this team A or B" without re-deriving it — needed
+    // because h2hMatchupKey sorts ids numerically, which is NOT necessarily
+    // the same order teamA/teamB were passed in as here.
+    posStore.teamAId = teamA.id;
     // Saved token positions are keyed by "POS-idx" (e.g. "DEF-2"), which
     // silently drifts stale if the underlying XI's shape changes (a
     // different formation, or a player swap that shifts array order/length)
     // — each side's saved positions are wiped whenever that side's actual
     // player-id signature no longer matches what they were saved against.
     const sigOf = (xi) => ["GK", "DEF", "MID", "FWD"].map(pos => (xi[pos] || []).map(p => p.id).join(",")).join("|");
-    const sigA = sigOf(xiA), sigB = sigOf(xiB);
-    if (posStore.sigA !== sigA) { posStore.A = {}; posStore.sigA = sigA; }
-    if (posStore.sigB !== sigB) { posStore.B = {}; posStore.sigB = sigB; }
+    // Per-SLOT signature (one exact "pos-idx" -> playerId check), not a
+    // whole-row or whole-side flattened string — so a shape change is
+    // detected, and stale positions cleared, at the granularity of "this
+    // ONE slot's occupant changed" instead of "anything anywhere in this
+    // row/side changed." A single substitution (item: "subbing shouldn't
+    // reset the pitch") only ever changes the one slot the user actually
+    // subbed — even other slots in the SAME row (e.g. DEF-0/DEF-2/DEF-3
+    // when DEF-1 was the one subbed) must keep their saved coordinates.
+    // Both a genuine formation change (row grows/shrinks/reorders) and a
+    // single swap are just "which slots' player id differs from last time
+    // this rendered" under this per-slot check, so one mechanism correctly
+    // covers both without over-invalidating.
+    const reconcileSide = (xi, sideKey) => {
+      const store = posStore[sideKey] || (posStore[sideKey] = {});
+      ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+        const row = xi[pos] || [];
+        const idKey = `_slotIds_${pos}`;
+        const prevIds = store[idKey] || [];
+        row.forEach((p, idx) => {
+          if (prevIds[idx] !== p.id) delete store[`${pos}-${idx}`];
+        });
+        // A slot that existed before but no longer does (row shrank) has
+        // nothing left reading it, so it's harmless to leave its stale
+        // coordinate in `store` — but clean it up anyway to stop the
+        // store growing unbounded across formation changes.
+        for (let idx = row.length; idx < prevIds.length; idx++) delete store[`${pos}-${idx}`];
+        store[idKey] = row.map(p => p.id);
+      });
+    };
+    reconcileSide(xiA, "A");
+    reconcileSide(xiB, "B");
+    // sigA/sigB kept (whole-side signature) purely for any other code that
+    // still reads them (e.g. a full-shape reset) — no longer used above to
+    // decide what to wipe, since that whole-side/whole-row granularity was
+    // the actual "resets the pitch" bug.
+    posStore.sigA = sigOf(xiA); posStore.sigB = sigOf(xiB);
     let n = 0;
     ["GK", "DEF", "MID", "FWD"].forEach(pos => {
       const rowA = xiA[pos] || [], rowB = xiB[pos] || [];
@@ -16474,26 +16960,37 @@ function renderH2hFixturesOverview(body) {
     // pctA/pctB, instead of one bar filling uniformly from one end. An
     // even matchup (disparityPct=0) shows the midline dead-centre at 50/50;
     // a full 100 blowout pushes it all the way to one edge (100/0).
-    // True tug-of-war split (H2H item: "the bar is not aligned" — also
-    // referenced under Simulation as "should be a tilting bar that leans
-    // to the side of dominance like a tug of war"). The old version filled
-    // pctA then pctB sequentially from the left edge while a SEPARATE
-    // absolutely-positioned line was drawn at a fixed 50% — that line only
-    // lined up with the real colour boundary when the split happened to be
-    // exactly 50/50, which is almost never, hence "not aligned". Now the
-    // track is two fixed flex:1 halves (so the shared boundary between
-    // them — no separate marker needed — IS the true midline, always),
-    // and each half's fill is scaled against whichever side is larger, so
-    // the more one-sided side visibly leans further into its own half —
-    // the actual tug-of-war behaviour, same pattern as the Simulation
-    // duel/matchup bars elsewhere in the app.
-    const maxDispPct = Math.max(disparity.pctA, disparity.pctB, 1);
-    const dispHalfA = (disparity.pctA / maxDispPct) * 100, dispHalfB = (disparity.pctB / maxDispPct) * 100;
+    // Round 22 rebuild (item: "the bars are still wrong, it should be ONE
+    // bar, two colours — white and grey. Neutral = 50/50. An advantage
+    // shifts the bar to take up a correlating % in line with the number
+    // advantage"). The Round 20 version LOOKED like one bar in the markup
+    // (two flex:1 halves) but each half's fill was scaled against
+    // whichever side was larger (`pct / max(pctA,pctB)`), which pins the
+    // LEADING side's colour flush to its own outer edge at 100% and only
+    // ever shrinks the TRAILING side's colour — so anything other than an
+    // exact 50/50 left a visible gap at the trailing side's own outer
+    // edge, and the two colours never actually summed to a single
+    // continuous 100%-filled bar. That's what read as "still wrong"/"two
+    // bars" — two colour blocks that visibly detach from each other as
+    // soon as one side leads, not a single bar whose midline slides.
+    // Fixed as a genuinely single, always-100%-filled two-colour bar: one
+    // continuous track, colour A occupies exactly pctA% measured from the
+    // left edge, colour B occupies the remaining pctB% from the right —
+    // they always meet (no gap, no overlap) at one boundary that IS the
+    // real 50/50 midline at neutral and slides proportionally toward
+    // whichever side leads, exactly the "50% white/50% grey, moving in
+    // line with the advantage" spec. White/grey (not gold/blue) per the
+    // user's exact colour spec, since this bar is about magnitude of
+    // advantage, not which specific side (home/away) it favours.
+    const dispA = Math.max(0, Math.min(100, disparity.pctA));
     const disparityHtml = disparity
       ? `<div style="margin:6px auto 0;text-align:center" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
-          <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08)">
-            <div style="flex:1;display:flex;justify-content:flex-end"><div style="width:${dispHalfA}%;height:100%;background:var(--gold-bright)"></div></div>
-            <div style="flex:1;border-left:1px solid rgba(255,255,255,0.35)"><div style="width:${dispHalfB}%;height:100%;background:var(--ink-dim)"></div></div>
+          <div style="position:relative;height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08)">
+            <div style="position:absolute;inset:0;display:flex">
+              <div style="width:${dispA}%;height:100%;background:#f2f2f2"></div>
+              <div style="flex:1;height:100%;background:#7a7a7a"></div>
+            </div>
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.25)"></div>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-faint);margin-top:2px">
             <span class="mono">${home.short_name} ${Math.round(disparity.pctA)}%</span>
