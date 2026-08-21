@@ -398,6 +398,23 @@
   .tac-token.team-a { background: var(--gold-bright); color: var(--gold-ink); }
   .tac-token.team-b { background: #3ba7ff; color: #06121f; }
   .tac-token.drag-over-target { box-shadow: 0 0 0 3px #3cd25a; }
+  /* Discoverability + direct-edit affordance (Tactical board item: "double
+     click is unknown to a new user" / "add an Edit button on players") —
+     a small always-visible icon badge on every token's corner. Deliberately
+     NOT draggable itself (draggable="false" on the element, plus this isn't
+     part of the parent's own drag hit-testing since native DnD only starts
+     from where the actual pointerdown/dragstart target is) so it can't be
+     mistaken for a second drag handle, and its own click handler stops
+     propagation so clicking it never also triggers the token's drag/click
+     behaviour underneath it. */
+  .tac-token-edit-btn {
+    position: absolute; top: -6px; right: -6px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--panel, #14161c); color: var(--ink, #fff);
+    border: 1.5px solid rgba(255,255,255,0.7); font-size: 9px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    cursor: pointer; z-index: 6; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .tac-token-edit-btn:hover { background: var(--gold-bright); color: var(--gold-ink); border-color: var(--gold-bright); }
   .tac-token-label {
     position: absolute; top: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap;
     font-size: 9.5px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8); margin-top: 2px; pointer-events: none;
@@ -3069,6 +3086,67 @@ function applyBuiltinPositions() {
   }
   return filled;
 }
+// ---------- Baked-in goalkeeper attributes (item: "import the GK export") ----------
+// Same mechanism/shape as BUILTIN_POSITIONS above, for GK_ATTR_DEFS instead
+// of specific positions. Source: gk_export.csv, a Football Manager 26
+// attribute export (FM26PlayerExport by vinteset mod), PRE-FILTERED by the
+// exporter to goalkeepers only (148 rows) — semicolon-delimited, FM's
+// native 1-20 scale, which is the exact same scale GK_ATTR_DEFS' manual
+// editor already uses (see Round 16), so this is a direct value copy, no
+// rescale needed. Only the 5 core shot-stopping-relevant attributes the
+// export actually has that map onto GK_ATTR_DEFS keys are carried:
+// Aerial Reach, Command Of Area, Handling, One On Ones, Reflexes (the
+// export has no Communication/Kicking/Throwing/Rushing out/Eccentricity-
+// equivalent columns for those other GK_ATTR_DEFS keys, so those stay
+// unset/neutral exactly as they already do for a player with no manual
+// entry — this only ever fills the 5 keys it actually has real data for).
+// Row shape: [Player, Club, aerialReach, commandOfArea, handling, oneOnOnes, reflexes].
+const BUILTIN_GK_ATTRIBUTES_KEYS = ["aerialReach", "commandOfArea", "handling", "oneOnOnes", "reflexes"];
+const BUILTIN_GK_ATTRIBUTES = [["Angus Gunn","Nott'm Forest",14,11,14,14,14],["Mads Hermansen","West Ham",11,12,12,13,16],["Đorđe Petrović","Bournemouth",15,12,13,13,17],["Marco Bizot","Aston Villa",14,13,13,14,16],["Filip Jörgensen","Chelsea",16,15,15,15,17],["Lucas Perri","Leeds",15,12,14,14,15],["Antonín Kinský","Spurs",14,17,13,13,15],["Hákon Rafn Valdimarsson","Brentford",14,14,14,13,14],["Mark Travers","Everton",14,12,15,12,16],["Christos Mandas","Bournemouth",12,12,15,12,18],["Karl Darlow","Leeds",13,13,15,13,13],["John Victor","Nott'm Forest",13,12,13,14,14],["Marcus Bettinelli","Man City",15,12,11,12,13],["Benjamin Lecomte","Fulham",13,12,13,13,15],["Max Weiß","Burnley",13,12,12,14,14],["John Ruddy","Newcastle",14,13,11,13,12],["Daniel Bentley","Wolves",14,10,12,12,13],["Freddie Woodman","Liverpool",11,10,14,13,13],["Mark Gillespie","Newcastle",13,12,13,12,13],["Václav Hladký","Burnley",12,11,13,12,13],["Brandon Austin","Spurs",13,13,13,12,15],["Teddy Sharman-Lowe","Chelsea",15,13,13,12,13],["Simon Moore","Sunderland",13,11,14,12,14],["Julian Eyestone","Brentford",17,11,12,11,12],["Ellery Balcombe","Brentford",12,11,11,10,11],["Gabriel Słonina","Chelsea",13,11,10,12,14],["Sam Proctor","Aston Villa",12,10,11,10,13],["Remi Matthews","Crystal Palace",14,11,11,12,11],["Nils Ramming","Brighton",13,11,11,13,13],["Steven Hall","Brighton",13,8,11,8,11],["Melker Ellborg","Sunderland",14,11,15,12,12],["Elyh Harrison","Man Utd",13,10,12,11,13],["Thomas McGill","Brighton",11,9,12,12,14],["Alex Cairns","Leeds",10,10,12,12,14],["Harvey Davies","Liverpool",13,11,12,11,12],["Aaron Bott","Nott'm Forest",14,9,10,13,11],["Luca Gunter","Spurs",11,7,11,11,13],["Ronnie Hollingshead","Aston Villa",11,7,12,9,12],["Tom Wooster","West Ham",15,10,12,8,12],["Tom King","Everton",15,9,9,10,12],["George Murray-Jones","Nott'm Forest",10,10,10,8,14],["Jack Wint","Man City",10,8,10,11,12],["Alex Borto","Fulham",4,8,13,8,13],["Will Murdock","Man Utd",12,8,12,7,14],["Solomon Honor","Man Utd",15,12,10,10,10],["Alfie McNally","Fulham",12,11,10,10,12],["Charlie Casper","Burnley",13,10,11,11,12],["Damian Čech","Fulham",8,11,14,11,11],["Kornel Miściur","Liverpool",10,13,14,10,14],["Dermot Mee","Man Utd",14,10,12,8,13],["Sebastian Jensen","Brighton",8,7,9,9,10],["Luke Campbell","Nott'm Forest",14,11,12,9,10],["Lorenz Ferdinand","Brighton",15,5,13,10,13],["Samual Archer","Spurs",10,8,7,7,13],["Harry Lee","Crystal Palace",13,8,10,8,11],["Robert Cook","Leeds",13,11,15,11,14],["Max Hudson","Man City",11,6,10,10,13],["Spike Brits","Man City",11,10,9,11,11],["Max Merrick","Chelsea",13,10,10,12,12],["Oliver Mayer","Fulham",9,8,14,9,11],["Reece Byrne","West Ham",9,11,12,11,13],["Carey Bloedorn","Spurs",10,11,11,12,10],["Keehan Willows","Nott'm Forest",10,11,10,11,12],["Kai Crampton","Bournemouth",13,10,10,11,8],["George Pickford","Everton",11,13,10,10,9],["Lewys Benjamin","Wolves",16,11,10,7,10],["Alfie Brooks","Wolves",15,9,10,12,12],["Alex Baird","Leeds",6,5,11,11,13],["Aidan Harris","Newcastle",10,9,9,11,11],["Alastair Graham","Nott'm Forest",11,9,10,10,8],["James Wright","Aston Villa",11,7,13,8,13],["Mikey Allen","Fulham",16,10,8,8,10],["Dylan Thompson","Spurs",6,8,13,7,11],["Cameron Byrne-Hughes","Man Utd",11,8,12,7,12],["Fred Heath","Man Utd",17,8,13,9,13],["Doug Lukjanciks","Everton",14,10,13,11,13],["Jack Allan","Aston Villa",9,10,13,12,13],["Owen Asemota","Aston Villa",7,11,13,12,13],["Darryl Ombang","Leeds",12,12,13,8,13],["Joseph Cowan","Sunderland",11,11,10,10,12],["Freddy Bernal","Chelsea",12,11,10,10,11],["Charlie Hardy","Man Utd",14,12,13,9,11],["Finlay Herrick","West Ham",10,8,10,10,12],["Ármin Pécsi","Liverpool",15,11,13,12,15],["Matt Bagot","Fulham",13,9,8,9,13],["Oisin Cooney","Burnley",11,13,9,9,12],["Owen Grainger","Nott'm Forest",13,11,13,9,10],["Farren Doran","Spurs",13,9,13,10,9],["Blake Irow","Spurs",7,12,9,10,13],["Adam Harrison","Newcastle",8,7,10,10,10],["Marco Underwood","Fulham",11,10,11,9,13],["Reggie Rose","Brentford",9,8,10,9,11],["Michael Dike","Brighton",13,7,7,10,13],["Jacob Poytress","Liverpool",10,8,12,9,14],["Zac Smith","Nott'm Forest",12,10,11,9,12],["Finley Taylor","Brighton",8,9,10,9,14],["Will Rutter","Brighton",7,6,13,10,9],["Hudson Sands","Chelsea",10,6,10,10,9],["Jack Austin","Chelsea",14,6,7,8,10],["Finley Grigg","Man City",5,10,10,8,13],["Danny Dixon","Bournemouth",6,11,9,6,13],["Lanre Awesu","West Ham",13,11,14,12,11],["Marley Tavaziva","Brentford",10,9,11,9,11],["Finley Hooper","West Ham",6,10,9,6,14],["Zach Watson","Man Utd",9,12,14,11,14],["Toby Bell","Chelsea",7,9,14,11,14],["Isaac Allan","Sunderland",10,9,10,9,10],["DJ Bernard","Liverpool",9,13,8,8,7],["Bailey Hall","Liverpool",10,8,7,10,14],["George Kenyon","Leeds",11,10,8,8,11],["Thiago Speroni","Crystal Palace",8,9,14,8,9],["Sam Lewis","Aston Villa",9,6,7,7,9],["Connor Wolfheimer","Brentford",10,7,10,8,9],["Mack Allen","Bournemouth",16,8,13,5,13],["Theo Houston","Aston Villa",10,6,12,4,12],["Tyler Jones","Newcastle",8,10,10,6,12],["Goodness Gospel-Eze","Everton",7,10,13,8,11],["Jackson Izquierdo","Crystal Palace",8,6,8,9,10],["Lewis Forshaw","Burnley",10,10,10,10,10],["Tommy Goodger","West Ham",8,7,9,8,9],["Liam Doyle","Brighton",9,11,13,11,13],["Xander Grieves","Wolves",9,7,7,10,13],["Alfie Arnold","Wolves",10,9,12,6,12],["Seve Patrick","Everton",10,9,8,9,12],["Oliver Wood","Leeds",9,7,14,7,14],["Joe Bailey","Nott'm Forest",10,6,13,5,13],["Felix Chester","Burnley",9,8,9,9,9],["Zach Sutton","Bournemouth",8,6,11,8,12],["Layton Nicholls","Brentford",8,6,12,8,14],["Ben Metcalf","Sunderland",5,8,11,8,9],["Harry Whitworth","Crystal Palace",1,7,7,8,12],["Jack Mason","Crystal Palace",6,4,8,9,12],["Connor Edwards","Burnley",7,8,13,5,13],["James Taylor","Newcastle",8,7,10,8,8],["Will Anderson","Newcastle",7,7,12,8,12],["Callum Feeney","Burnley",7,8,12,9,12],["Harry Grimshaw","Burnley",8,5,11,10,13],["Will Upstell","Bournemouth",12,9,13,3,9],["Rhys Oakley","Aston Villa",5,13,11,4,9],["Marcus Hill","Crystal Palace",8,10,10,8,13],["Matty Wright","Liverpool",10,3,11,6,13],["Adam Richardson","Sunderland",14,7,9,10,9],["Felix Lyon","Brentford",13,10,11,11,14],["Callan McKenna","Bournemouth",13,9,10,12,10],["Ben Vickery","Man City",9,7,12,7,12],["Dan Cameron","Sunderland",9,6,10,10,9],["Hayden McGhan","Bournemouth",11,6,12,4,13],["Finley Robertson","Sunderland",8,4,12,7,12]];
+// Applied once per page load, right after real saved GK attributes are
+// restored from storage (same load-order rule as applyBuiltinPositions —
+// see the boot sequence). Fills ONLY (playerId, attrKey) pairs that don't
+// already have a real manually-entered value — never overwrites, and never
+// persists to localStorage (recomputed fresh from this constant every
+// load, exactly like applyBuiltinPositions, so a future season's re-export
+// reaches every visitor with zero re-import step). Two independent GK-only
+// guards, per the "no outfield writes, ever" requirement: (1) the row loop
+// below only calls setGkAttribute for a player whose OWN p.position is
+// exactly "GK" — a non-GK match is skipped entirely, never even considered
+// — and (2) setGkAttributeIfBlank() itself re-checks p.position === "GK"
+// before writing, as a second, independent layer of defense that holds
+// even if some future caller reuses that helper from a different context.
+function setGkAttributeIfBlank(player, key, value) {
+  if (!player || player.position !== "GK") return false; // second guard: never write GK attrs to a non-GK
+  if (!state.gkAttributes) state.gkAttributes = {};
+  const existing = getGkAttributes(player.id);
+  if (existing[key] != null) return false; // real manual entry already here — never overwrite
+  // Deliberately does NOT call setGkAttribute()/saveGkAttributes() — those
+  // persist to localStorage, which would turn this baked-in fill into a
+  // one-time seed instead of a fresh-every-load fill (same in-memory-only
+  // rule applyBuiltinPositions follows, and for the same reason: a future
+  // round can update BUILTIN_GK_ATTRIBUTES and every visitor picks up the
+  // refresh automatically, with zero re-import step). Write the value
+  // straight onto state.gkAttributes, clamped the same way setGkAttribute
+  // clamps a real manual entry so the two paths can never disagree on range.
+  const v = Math.max(1, Math.min(20, Math.round(Number(value) || 1)));
+  if (!state.gkAttributes[player.id]) state.gkAttributes[player.id] = {};
+  state.gkAttributes[player.id][key] = v;
+  return true;
+}
+function applyBuiltinGkAttributes() {
+  let filled = 0;
+  for (const row of BUILTIN_GK_ATTRIBUTES) {
+    const [name, club, ...vals] = row;
+    const player = matchPlayerByNameClub(name, club);
+    if (!player) continue;
+    if (player.position !== "GK") continue; // first guard: source is keeper-only, but never trust that blindly
+    BUILTIN_GK_ATTRIBUTES_KEYS.forEach((key, i) => {
+      if (setGkAttributeIfBlank(player, key, vals[i])) filled++;
+    });
+  }
+  return filled;
+}
 const COMPARE_COLORS = ["#00ff66", "#3ba7ff", "#ffcf4d", "#ff6ec7"];
 // Attribute-driven matchup edge: blends each player's 9 FC attributes into
 // one "matchup strength" score weighted by role — an attacker's score
@@ -3631,26 +3709,35 @@ function applyPriorLeagueOverrides(playerId) {
       p.goalsPer90 = est.xg90; // goals-as-proxy-for-xG, same approximation the rest of this estimate already makes
       p.assistsPer90 = est.xa90;
       p.gaPer90 = est.xg90 + est.xa90; // keep in sync with the goalsPer90/assistsPer90 override above (Round 13's GA/90 field, same staleness risk Round 9 fixed for the other Output columns)
-      // Playing-time and value columns (Mins, Mins/start, Pts/£m, Pts/£m/90,
-      // Pts/£m/App) were still reading real FPL minutes/starts/totalPoints
-      // — genuinely 0 for a player with no Prem appearances — so the
-      // Overview table row looked half-empty even after G/A/CS/Bonus/BPS
-      // started populating. These are all PROJECTIONS (assumed new-club
-      // minutes share, projected points), same as everything else this
-      // estimate already produces, not real recorded totals — but showing
-      // them beats a blank "—" for a table whose whole purpose is letting
-      // you compare this player against everyone else at a glance.
-      // gamesPerSeason/assumedMinsPerGame come straight from the estimate
-      // (real apps-derived games count, prior-club minutes share carried
-      // over at 0.85×) rather than any new assumption here.
-      p.minutes = Math.round(est.gamesPerSeason * est.assumedMinsPerGame);
-      p.starts = Math.round(est.gamesPerSeason);
-      p.minsPerStart = est.assumedMinsPerGame;
-      p.totalPoints = Math.round(est.pointsPerGame * est.gamesPerSeason);
+      // Playing-time (Mins, Mins/start) is DELIBERATELY left untouched here
+      // — user feedback: "when editing stats of players who transferred
+      // into the prem, minutes should stay the same and not altered." This
+      // used to overwrite p.minutes/p.starts/p.minsPerStart with a
+      // projection (gamesPerSeason × an assumed new-club minutes share
+      // carried over from the prior club at 0.85×), which is exactly the
+      // behaviour being reversed: the player's REAL current-season minutes
+      // (from the live FPL element / _rawFplElement) now stay exactly as
+      // FPL reports them, override active or not — only the *quality*
+      // fields (goals/assists/CS/bonus/xG/xA/DefCon/BPS) are estimated from
+      // the prior league, never playing time. p.starts/p.minsPerStart are
+      // real FPL data already (set by transformPlayer) and are simply not
+      // touched in this branch anymore, so whatever they already are stands.
+      //
+      // Pts/£m, Pts/£m/90 and Pts/£m/App DO still need to reflect the
+      // converted quality estimate (that's the whole point of the feature —
+      // "how good does this projected player look per pound"), but must now
+      // be computed from real minutes/starts rather than the removed
+      // projected totals, so they stay internally consistent with the real
+      // Mins/Mins-per-start columns sitting right next to them in the same
+      // table row. totalPoints is left as the player's real total (genuinely
+      // 0/low for a fresh signing) since it's a recorded-season-total field,
+      // not a projection field — pointsPerGame/pointsPer90 (the rate fields)
+      // already carry the converted estimate for anyone who wants "how good
+      // is this player projected to be per game."
       const priceM = (p.nowCost || 0) / 10;
-      p.ppm = priceM > 0 ? p.totalPoints / priceM : 0;
-      p.ppm90 = priceM > 0 ? est.pointsPerGame / priceM : 0; // pointsPerGame IS already a per-~90-min-equivalent rate from this estimate
-      p.ppmPerApp = priceM > 0 && p.starts > 0 ? p.totalPoints / priceM / p.starts : 0;
+      p.ppm = priceM > 0 ? p.totalPoints / priceM : 0; // real totalPoints ÷ price, unchanged shape
+      p.ppm90 = priceM > 0 ? est.pointsPerGame / priceM : 0; // projected quality rate ÷ price — pointsPerGame IS already a per-~90-min-equivalent rate from this estimate
+      p.ppmPerApp = priceM > 0 && p.starts > 0 ? (est.pointsPerGame * p.starts) / priceM / p.starts : 0; // = est.pointsPerGame / priceM when starts>0; real starts, not projected
     } else if (p.priorLeagueApplied) {
       // Override cleared. Bug fix: this USED to just hard-zero every
       // field, on the assumption that a player reaching this branch always
@@ -3988,6 +4075,8 @@ let state = {
   tableSort: { key: "points", dir: "desc" }, clubStatsSort: { key: "xG", dir: "desc" },
   h2h: { teamA: null, teamB: null }, managerNotes: {},
   h2hViewMode: "fixtures", h2hFormation: "4-3-3", h2hMatchups: {}, h2hBoardPos: {}, h2hDoneMap: {}, h2hFixturesGw: null,
+  h2hRecentFormVenue: "ALL", // "ALL" | "HOME" | "AWAY" — filter for the past-scorelines panel on the Fixtures overview
+
   h2hBoardManual: {}, h2hBoardFlip: {}, h2hSavedBoards: {}, h2hBoardMode: {}, tacOrientation: {}, tacboard: { teamA: null, teamB: null },
   h2hDraft: {}, h2hDraftFormation: "4-3-3", h2hDraftPickPos: null, h2hDraftPickSlot: 0,
   h2hDraftMode: "classic", // classic | flashcard
@@ -4398,6 +4487,62 @@ function h2hLastMeetings(teamA, teamB, n) {
   parsed.sort((x, y) => y._ts - x._ts);
   return parsed.slice(0, n);
 }
+// ---------- Past gameweek scorelines / recent form (H2H item: "past
+// gameweek scorelines... past 5 results, filterable to past 5 home + past
+// 5 away") ----------
+// Deliberately distinct from h2hLastMeetings() above: that function is
+// meetings BETWEEN the two specific clubs in a fixture (head-to-head
+// history). This is each club's OWN recent match results, independent of
+// opponent — i.e. genuine recent form scorelines, one side of the fixture
+// at a time — which is what "past gameweek scorelines" + "filterable to
+// past 5 home + past 5 away" actually describes once re-read carefully:
+// a home/away split only makes sense as a filter on a club's own fixture
+// list, not on a fixed pairing (a fixed pair only ever has one home club
+// and one away club in real life, so "past 5 home" for a H2H pairing would
+// almost always just be "every meeting" with nothing to filter).
+// Reuses the exact same state.pastFormMatches data source and
+// matchClubByFdName() matcher as h2hLastMeetings — no parallel fetch/cache
+// system, per the "reuse existing data-fetch plumbing" instruction.
+// venue: undefined/"ALL" = both, "HOME" = only matches this club played at
+// home, "AWAY" = only matches this club played away — same three-value
+// convention computeClubPlaystyleProfile already uses elsewhere in H2H.
+function clubRecentResults(teamId, n, venue) {
+  n = n || 5;
+  if (!state.pastFormMatches || !state.pastFormMatches.length) return [];
+  const rows = state.pastFormMatches.filter(m => {
+    const h = matchClubByFdName(m.homeTeam), a = matchClubByFdName(m.awayTeam);
+    const isHome = h && h.id === teamId;
+    const isAway = a && a.id === teamId;
+    if (!isHome && !isAway) return false;
+    if (venue === "HOME" && !isHome) return false;
+    if (venue === "AWAY" && !isAway) return false;
+    return true;
+  }).map(m => {
+    const isHome = (matchClubByFdName(m.homeTeam) || {}).id === teamId;
+    const gf = isHome ? m.fthg : m.ftag;
+    const ga = isHome ? m.ftag : m.fthg;
+    const result = gf > ga ? "W" : gf === ga ? "D" : "L";
+    const [d, mo, y] = (m.date || "").split("/");
+    const year = y ? (y.length === 2 ? 2000 + Number(y) : Number(y)) : 0;
+    const ts = d && mo ? new Date(year, Number(mo) - 1, Number(d)).getTime() : 0;
+    return { date: m.date, isHome, gf, ga, result, opponent: isHome ? m.awayTeam : m.homeTeam, _ts: ts };
+  });
+  rows.sort((x, y) => y._ts - x._ts);
+  return rows.slice(0, n);
+}
+// Form rating for a set of recent results — points-per-game (3/1/0), the
+// same "real PPG" convention computeClubPlaystyleProfile already
+// establishes elsewhere in H2H (footyStatsFormTableHtml), so this reads
+// consistently with the rest of the tab rather than introducing a second,
+// different form-scoring convention. Also returns a W/D/L string (most
+// recent first) since that's the more scannable "form" shorthand FPL/
+// football media both use, alongside the numeric PPG.
+function clubFormRating(results) {
+  if (!results || !results.length) return null;
+  const pts = results.reduce((s, r) => s + (r.result === "W" ? 3 : r.result === "D" ? 1 : 0), 0);
+  const wdl = results.map(r => r.result).join("");
+  return { n: results.length, ppg: pts / results.length, wdl };
+}
 // Every club's real goals-conceded-per-game across ALL pulled seasons —
 // the season-long defensive-solidity signal that actually defines "this
 // club tends to be a low block / hard to break down", as opposed to
@@ -4722,6 +4867,11 @@ async function loadData() {
     // has to run after it — applyBuiltinPositions() only fills players who
     // still have nothing set, so it never overwrites what just loaded.
     if (typeof applyBuiltinPositions === "function") applyBuiltinPositions();
+    // Same reasoning again: state.gkAttributes (any real manual GK entry) is
+    // also restored inside loadFormulasFromStorage(), so this runs after it —
+    // applyBuiltinGkAttributes() only fills (player, attribute) pairs that
+    // are still blank, so it never overwrites what just loaded.
+    if (typeof applyBuiltinGkAttributes === "function") applyBuiltinGkAttributes();
     await seedStartOfSeasonRatings();
     state.piRatings = computePiRatings(fixtures); // after formulas load, so any saved learning-rate/cross-influence overrides apply
     await loadManagerNotes();
@@ -15324,10 +15474,21 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
       const won = winner && ((winner === "A" && isThisSideA) || (winner === "B" && !isThisSideA));
       ring = winner === "EVEN" ? "box-shadow:0 0 0 3px #e0a94f" : won ? "box-shadow:0 0 0 3px #3cd25a" : winner ? "box-shadow:0 0 0 3px rgba(255,255,255,0.25)" : "box-shadow:0 0 0 2px rgba(255,255,255,0.4)";
     }
+    // Discoverability fix (item: "double click is unknown to a new user") +
+    // explicit Edit entry point (item: "add an Edit button on players") —
+    // both solved together with one small always-visible icon button per
+    // token, per the plan: it opens the exact same View/Edit/Substitute
+    // popup double-click already opens, just landing straight in Edit mode
+    // instead of View, so it's both a visible "there's more here" affordance
+    // for a first-time user AND a direct one-click path to editing without
+    // detouring through the Stats tab first. Positioned as a small badge at
+    // the token's corner so it doesn't compete with the token's own
+    // draggable hit-area or obscure the shirt number/name label.
     return `<div class="tac-token team-${t.team === "A" ? "a" : "b"}" draggable="true"
         data-tok-id="${t.tokId}" data-tok-team="${t.team}" data-tok-player="${t.p.id}"
         style="left:${renderLeft}%;top:${renderTop}%;${ring}" title="${nameWithPosition(t.p)}${pairedWith ? " — matchup set, drop on another token to change it" : " — drag onto an opponent's token to create a matchup, double-click for attributes"}">
       ${t.num}
+      <button type="button" class="tac-token-edit-btn" data-tok-edit-id="${t.tokId}" data-tok-edit-team="${t.team}" data-tok-edit-player="${t.p.id}" title="Edit ${nameWithPosition(t.p)}'s attributes" draggable="false">✎</button>
       <span class="tac-token-label">${nameWithPosition(t.p)}</span>
     </div>`;
   }).join("");
@@ -15581,6 +15742,14 @@ function h2hOpenAttrModal(playerId, ctx) {
   _tacModalMode = "view";
   renderTacAttrModal(playerId, ctx);
 }
+// Direct-to-Edit entry point (item: "Edit button on players... opens the
+// popup directly in Edit mode, skip straight past View mode") — same modal
+// as h2hOpenAttrModal, just starting on the "edit" tab instead of "view",
+// wired to the new visible per-token edit icon (see .tac-token-edit-btn).
+function h2hOpenAttrModalEdit(playerId, ctx) {
+  _tacModalMode = "edit";
+  renderTacAttrModal(playerId, ctx);
+}
 function renderTacAttrModal(playerId, ctx) {
   const p = state.players.find(x => x.id === playerId);
   const modal = document.getElementById("tacAttrModal");
@@ -15821,7 +15990,28 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
     el.ondragstart = (e) => {
       dragTok = { tokId: el.dataset.tokId, team: el.dataset.tokTeam, playerId: Number(el.dataset.tokPlayer) };
       e.dataTransfer.effectAllowed = "move";
-      try { e.dataTransfer.setDragImage(el, 17, 17); } catch (err) { /* not all browsers support this */ }
+      // Bug fix (item: "the ghost version being dragged is offset from the
+      // mouse but registered as the mouse"): this used to call
+      // setDragImage(el, 17, 17) unconditionally — 17,17 is the token's own
+      // CENTRE (it's a 34×34 circle, see .tac-token's -17px margin trick),
+      // not wherever the user actually clicked within it. setDragImage's
+      // 2nd/3rd args are the offset from the drag image's top-left corner
+      // to the cursor, so a fixed 17,17 only looked right if you happened
+      // to grab dead-centre — grabbing near an edge (very plausible on a
+      // small 34px token) made the ghost visibly jump so its centre, not
+      // your actual grab point, snapped under the cursor, then track the
+      // mouse from that wrong offset for the whole drag. Computing the
+      // real click-point-within-the-element offset from the dragstart
+      // event's own clientX/Y against the element's bounding box (native
+      // drag events fire with real client coordinates, same as any mouse
+      // event) makes the offset correct for wherever the token was
+      // actually grabbed, centre or edge alike.
+      try {
+        const rect = el.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const offsetY = e.clientY - rect.top;
+        e.dataTransfer.setDragImage(el, offsetX, offsetY);
+      } catch (err) { /* not all browsers support this */ }
     };
     el.ondragover = (e) => { e.preventDefault(); if (dragTok && dragTok.team !== el.dataset.tokTeam) el.classList.add("drag-over-target"); };
     el.ondragleave = () => { el.classList.remove("drag-over-target"); };
@@ -15838,6 +16028,32 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
         : null; // manual-board tokens aren't formation slots — no substitute option for those
       h2hOpenAttrModal(Number(el.dataset.tokPlayer), ctx);
     };
+    // Edit-icon badge (see .tac-token-edit-btn) — same ctx derivation as the
+    // double-click handler right above (kept in sync deliberately, not
+    // factored into a shared closure, since both are short and co-located)
+    // but opens straight into Edit mode instead of View, and stops
+    // propagation so this click never also fires the token's own
+    // click/drag-related listeners underneath it.
+    const editBtn = el.querySelector("[data-tok-edit-id]");
+    if (editBtn) {
+      editBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tokTeam = el.dataset.tokTeam === "A" ? teamA : teamB;
+        const tokId = el.dataset.tokId || "";
+        const dashIdx = tokId.lastIndexOf("-");
+        const ctx = (mode === "auto" && dashIdx > -1)
+          ? { key, team: tokTeam, pos: tokId.slice(0, dashIdx), idx: Number(tokId.slice(dashIdx + 1)) }
+          : null;
+        h2hOpenAttrModalEdit(Number(el.dataset.tokPlayer), ctx);
+      };
+      // Prevent the badge from ever starting (or being mistaken for) a
+      // native drag itself — it sits inside a draggable="true" parent, so
+      // without this a press-and-drag starting on the badge could still
+      // kick off the token's own drag gesture.
+      editBtn.ondragstart = (e) => { e.preventDefault(); e.stopPropagation(); };
+      editBtn.onmousedown = (e) => { e.stopPropagation(); };
+    }
     el.ondrop = (e) => {
       e.preventDefault();
       el.classList.remove("drag-over-target");
@@ -16156,6 +16372,61 @@ function computeH2hDisparity(teamA, teamB) {
   const pctB = 100 - pctA;
   return { aWins, bWins, evens, total, netWins, avgMagnitude, disparityPct, favoured, pctA, pctB };
 }
+// Renders the "past gameweek scorelines" panel for ONE fixture — both
+// sides' own recent results side by side, plus the venue filter (item:
+// "filterable to past 5 home + past 5 away"), reusing state.pastFormMatches
+// (the existing /pastform Worker route data, already loaded for
+// h2hLastMeetings/the playstyle profile — no new fetch). The venue toggle
+// is one shared control for the whole Fixtures overview page (state.
+// h2hRecentFormVenue) rather than per-fixture, so flipping it once updates
+// every card consistently instead of needing to be set fixture-by-fixture.
+//
+// Known data-source limitation, surfaced in the UI rather than silently
+// hidden: /pastform is backed by football-data.co.uk's per-division export
+// (same source h2hLastMeetings already uses) — English top-flight league
+// matches only, not cup or European fixtures. There is no free/reliable
+// source in this app for cup/European scorelines (same class of gap as the
+// missing per-match xG noted elsewhere in H2H) — flagged via a footnote on
+// the panel rather than fabricating or silently narrowing the request.
+function recentFormPanelHtml(home, away) {
+  const venue = state.h2hRecentFormVenue || "ALL";
+  const sideHtml = (team, isHomeSide) => {
+    // "Home"/"Away" filter is about THIS club's own venue history, not
+    // which side of the current fixture they're on — a club's past-5-away
+    // form is the same list regardless of whether they're playing this
+    // particular fixture at home or away.
+    const results = clubRecentResults(team.id, 5, venue);
+    const rating = clubFormRating(results);
+    const resultColor = { W: "#3cd25a", D: "#e0a94f", L: "#e0529a" };
+    const scorelines = results.length
+      ? results.map(r => `
+          <div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <span style="width:16px;text-align:center;font-weight:800;color:${resultColor[r.result]}">${r.result}</span>
+            <span style="flex:1;color:var(--ink-dim)">${r.isHome ? "vs" : "@"} ${r.opponent}</span>
+            <span class="mono" style="font-weight:700">${r.gf}-${r.ga}</span>
+          </div>`).join("")
+      : `<div style="font-size:11px;color:var(--ink-faint);padding:4px 0">No past-form data for this club yet.</div>`;
+    return `
+      <div style="flex:1;min-width:170px">
+        <div style="font-size:11px;font-weight:700;text-align:center;margin-bottom:4px">${team.short_name}${rating ? ` <span class="mono" style="color:var(--gold-bright)">${rating.wdl}</span>` : ""}</div>
+        ${rating ? `<div style="font-size:10px;color:var(--ink-faint);text-align:center;margin-bottom:4px">PPG ${rating.ppg.toFixed(2)} over last ${rating.n}${venue === "HOME" ? " home" : venue === "AWAY" ? " away" : ""}</div>` : ""}
+        ${scorelines}
+      </div>`;
+  };
+  return `
+    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border-subtle)">
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:6px" onclick="event.stopPropagation()">
+        <span style="font-size:10px;color:var(--ink-faint)">Recent form:</span>
+        <button type="button" class="chip-btn" data-h2h-form-venue="ALL" style="padding:2px 8px;font-size:10px;${venue === "ALL" ? "background:var(--gold-bright);color:#000" : ""}">Last 5</button>
+        <button type="button" class="chip-btn" data-h2h-form-venue="HOME" style="padding:2px 8px;font-size:10px;${venue === "HOME" ? "background:var(--gold-bright);color:#000" : ""}">Last 5 home</button>
+        <button type="button" class="chip-btn" data-h2h-form-venue="AWAY" style="padding:2px 8px;font-size:10px;${venue === "AWAY" ? "background:var(--gold-bright);color:#000" : ""}">Last 5 away</button>
+      </div>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+        ${sideHtml(home, true)}
+        ${sideHtml(away, false)}
+      </div>
+    </div>`;
+}
 // ---- Fixtures overview (item: "overview of gameweek fixtures... make
 // each fixture clickable that then takes me to this current overview
 // view... checkmark if h2h has been done or not... showcase scores from
@@ -16165,6 +16436,12 @@ function computeH2hDisparity(teamA, teamB) {
 // meaning of "A"/"B" doesn't depend on click order) and jumps straight to
 // the Overview tab, same destination every saved-pairing chip already
 // jumps to.
+// Also renders a "past gameweek scorelines" panel per fixture (item: "for
+// the current gameweek + next 3 gameweeks, show past scorelines for each
+// side") — H2H_RECENT_FORM_GW_WINDOW gameweeks starting at whichever GW is
+// currently selected, matching the existing prev/next GW navigation on this
+// page rather than adding a second, separate GW picker.
+const H2H_RECENT_FORM_GW_WINDOW = 4; // current GW + next 3
 function renderH2hFixturesOverview(body) {
   const events = state.events || [];
   if (!events.length) { body.innerHTML = `<div class="empty-state">No gameweek data yet.</div>`; return; }
@@ -16173,9 +16450,15 @@ function renderH2hFixturesOverview(body) {
   }
   const gwId = state.h2hFixturesGw;
   const gwIdx = events.findIndex(e => e.id === gwId);
-  const fixtures = (state.allFixtures || [])
-    .filter(f => f.event === gwId && state.teamsById[f.team_h] && state.teamsById[f.team_a])
+  const fixturesForGw = (id) => (state.allFixtures || [])
+    .filter(f => f.event === id && state.teamsById[f.team_h] && state.teamsById[f.team_a])
     .sort((a, b) => new Date(a.kickoff_time || 0) - new Date(b.kickoff_time || 0));
+  const fixtures = fixturesForGw(gwId);
+  // Current GW + next 3 (H2H_RECENT_FORM_GW_WINDOW) — the window the past-
+  // scorelines panel is shown across, anchored to whichever GW the existing
+  // prev/next nav has selected, same pattern FDR's footer block uses
+  // (FDR_FOOTER_GW_WINDOW anchored to state.plannerExpandedGw).
+  const windowEvents = events.slice(gwIdx, gwIdx + H2H_RECENT_FORM_GW_WINDOW);
 
   const rowHtml = (f) => {
     const home = state.teamsById[f.team_h], away = state.teamsById[f.team_a];
@@ -16236,9 +16519,23 @@ function renderH2hFixturesOverview(body) {
           </div>
         </div>
         <div style="max-width:420px;margin:8px auto 0">${disparityHtml}</div>
+        ${recentFormPanelHtml(home, away)}
         <div style="text-align:center;font-size:10px;color:var(--ink-faint);margin-top:2px">${played ? "Final" : (f.kickoff_time ? new Date(f.kickoff_time).toLocaleString() : "Date TBC")}</div>
       </div>
     `;
+  };
+
+  // One collapsible-free section per GW in the window — first section is
+  // the currently-selected GW (same fixtures/prev-next nav as before), the
+  // next three render below it so "current + next 3" is genuinely visible
+  // on one page rather than requiring 3 clicks of "next GW" to see.
+  const gwSectionHtml = (gwEvent, isFirst) => {
+    const fx = fixturesForGw(gwEvent.id);
+    return `
+      <div style="margin-bottom:22px">
+        ${!isFirst ? `<div style="font-size:13px;font-weight:700;color:var(--ink-dim);margin:0 0 8px;text-align:center">${fmtGwName(gwEvent.id)}</div>` : ""}
+        ${fx.length ? fx.map(rowHtml).join("") : `<div class="empty-state">No fixtures found for this gameweek.</div>`}
+      </div>`;
   };
 
   body.innerHTML = `
@@ -16248,8 +16545,8 @@ function renderH2hFixturesOverview(body) {
       <button class="dir-btn" id="h2hFixturesGwNext" ${gwIdx >= events.length - 1 ? "disabled" : ""}>›</button>
       <span style="margin-left:auto;font-size:11px;color:var(--ink-faint)">${fixtures.filter(f => state.h2hDoneMap[h2hMatchupKey(f.team_h, f.team_a)]).length}/${fixtures.length} reviewed</span>
     </div>
-    <p class="foot-note" style="margin-bottom:12px">Click a fixture to open its full head-to-head. Disparity score: how one-sided the Player matchups board looks position-by-position — 100 means one side wins (or clearly edges) every single role; 0 means it's even throughout. Falls back to the 4-3-3 auto-preset if you haven't pinned real matchups for that pairing yet.</p>
-    ${fixtures.length ? fixtures.map(rowHtml).join("") : `<div class="empty-state">No fixtures found for this gameweek.</div>`}
+    <p class="foot-note" style="margin-bottom:12px">Click a fixture to open its full head-to-head. Disparity score: how one-sided the Player matchups board looks position-by-position — 100 means one side wins (or clearly edges) every single role; 0 means it's even throughout. Falls back to the 4-3-3 auto-preset if you haven't pinned real matchups for that pairing yet. "Recent form" scorelines are each club's own last 5 results (not meetings between these two clubs) — sourced from football-data.co.uk via the same feed as the Overview tab's past-meetings panel, which covers English top-flight league matches only; no free/reliable source for cup or European scorelines is available to this app, so those competitions aren't included.</p>
+    ${windowEvents.map((e, i) => gwSectionHtml(e, i === 0)).join("")}
   `;
 
   const prevBtn = document.getElementById("h2hFixturesGwPrev"), nextBtn = document.getElementById("h2hFixturesGwNext");
@@ -16259,6 +16556,13 @@ function renderH2hFixturesOverview(body) {
     cb.onchange = () => {
       state.h2hDoneMap[cb.dataset.h2hDoneToggle] = cb.checked;
       saveH2hDoneMap();
+      renderH2H();
+    };
+  });
+  body.querySelectorAll("[data-h2h-form-venue]").forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      state.h2hRecentFormVenue = btn.dataset.h2hFormVenue;
       renderH2H();
     };
   });
