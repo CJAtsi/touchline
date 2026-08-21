@@ -16,6 +16,13 @@
  *      API (free tier, real bookmaker consensus — not scraped). Needs a
  *      free API key set as a Worker secret: wrangler secret put
  *      ODDS_API_KEY. Route: /odds
+ *   5. Serves real historical match results (scorelines, shots, corners,
+ *      cards — several past seasons) from football-data.co.uk's public,
+ *      no-auth CSV files. Powers H2H's "past form / last meetings" panel
+ *      AND the "does this club actually do worse against a low-block/
+ *      compact opponent" read — both built from the same real results,
+ *      no API key needed, no rate limit (static file hosting). Route:
+ *      /pastform
  *
  * HOW TO DEPLOY
  * This project needs THREE files kept in sync on your repo's main branch:
@@ -67,6 +74,9 @@ export default {
     }
     if (url.pathname.startsWith("/odds")) {
       return handleOdds(url, request, env);
+    }
+    if (url.pathname.startsWith("/pastform")) {
+      return handlePastForm(url, request);
     }
     if (isFplApiPath(url.pathname)) {
       return handleFplProxy(url);
@@ -409,5 +419,96 @@ async function handleOdds(url, request, env) {
     },
   });
   if (!warnings.length) await cache.put(cacheKey, response.clone());
+  return response;
+}
+
+// ---------- 5. Past form / results history (football-data.co.uk) ----------
+// Plain static CSV, no auth, no rate limit — a genuinely different access
+// method from the sites already confirmed blocked for this project
+// (Sofascore/FotMob/Transfermarkt-live/FBref-live/Understat all 403 or
+// need a real browser). One file per season at a fixed, predictable URL —
+// https://www.football-data.co.uk/mmz4281/<YYYY><YY>/E0.csv — e.g. 2526
+// for 2025/26. Pulls the current season plus the 3 before it (enough
+// history for a "does this club do worse against a low-block/defensive
+// opponent" read without re-fetching decades of stale form) and returns
+// plain match rows; team-name matching against this app's own club list
+// happens client-side (see matchClubByName/loadPastFormData in index.html)
+// since football-data.co.uk's own club-name spelling ("Man City", "Nott'm
+// Forest", "Spurs") doesn't always match FPL's.
+function seasonCode(startYear) {
+  const yy = String(startYear).slice(-2);
+  const yy2 = String(startYear + 1).slice(-2);
+  return yy + yy2;
+}
+function currentSeasonStartYear() {
+  // Season "starts" in the summer (Aug) and runs into the following May —
+  // before August, we're still in the season that started the PREVIOUS
+  // calendar year.
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  return now.getUTCMonth() >= 6 ? y : y - 1; // getUTCMonth() is 0-indexed; 6 = July, a safe early cutoff
+}
+// Minimal CSV parser — football-data.co.uk's files are a simple flat
+// comma-separated grid with a header row, no quoted/embedded commas in the
+// columns this route actually reads, so a naive split is genuinely
+// sufficient (no need for a full CSV grammar here).
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  if (!lines.length) return [];
+  const header = lines[0].split(",").map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const cells = line.split(",");
+    const row = {};
+    header.forEach((h, i) => { row[h] = cells[i] !== undefined ? cells[i].trim() : ""; });
+    return row;
+  });
+}
+async function fetchSeasonCsv(startYear) {
+  const code = seasonCode(startYear);
+  const target = `https://www.football-data.co.uk/mmz4281/${code}/E0.csv`;
+  const res = await fetch(target, { headers: { "Accept": "text/csv,*/*" } });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} from football-data.co.uk (${code}) — snippet: ${text.slice(0, 150).replace(/\s+/g, " ")}`);
+  const rows = parseCsv(text);
+  return rows
+    .filter(r => r.HomeTeam && r.AwayTeam && r.FTHG !== "" && r.FTAG !== "")
+    .map(r => ({
+      season: `${startYear}/${String(startYear + 1).slice(-2)}`,
+      date: r.Date || "",
+      homeTeam: r.HomeTeam, awayTeam: r.AwayTeam,
+      fthg: Number(r.FTHG) || 0, ftag: Number(r.FTAG) || 0, ftr: r.FTR || "",
+      hthg: r.HTHG !== undefined && r.HTHG !== "" ? Number(r.HTHG) : null,
+      htag: r.HTAG !== undefined && r.HTAG !== "" ? Number(r.HTAG) : null,
+      hs: r.HS !== undefined && r.HS !== "" ? Number(r.HS) : null, as: r.AS !== undefined && r.AS !== "" ? Number(r.AS) : null,
+      hst: r.HST !== undefined && r.HST !== "" ? Number(r.HST) : null, ast: r.AST !== undefined && r.AST !== "" ? Number(r.AST) : null,
+      hc: r.HC !== undefined && r.HC !== "" ? Number(r.HC) : null, ac: r.AC !== undefined && r.AC !== "" ? Number(r.AC) : null,
+    }));
+}
+async function handlePastForm(url, request) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const startYear = currentSeasonStartYear();
+  const seasons = [startYear, startYear - 1, startYear - 2, startYear - 3];
+  const warnings = [];
+  const results = await Promise.all(seasons.map(async (y) => {
+    try { return await fetchSeasonCsv(y); } catch (e) { warnings.push(`Season ${seasonCode(y)}: ${e.message}`); return []; }
+  }));
+  const matches = results.flat();
+
+  const body = JSON.stringify({ matches, seasons: seasons.map(seasonCode), warnings, syncedAt: new Date().toISOString() });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      // The current season's file grows every matchday; cache for a few
+      // hours rather than a full day like the fully-static deeper-stats
+      // scrapes, so a finished gameweek's results show up reasonably soon.
+      "Cache-Control": (!matches.length) ? "no-store" : "public, max-age=10800",
+    },
+  });
+  if (matches.length) await cache.put(cacheKey, response.clone());
   return response;
 }
