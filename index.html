@@ -244,20 +244,6 @@
   #tabs.side-toolbar button .tb-label { opacity: 0; transition: opacity 0.15s ease; }
   #tabs.side-toolbar:hover button .tb-label { opacity: 1; }
   body { padding-left: 90px; }
-  @media (max-width: 640px) {
-    #tabs.side-toolbar { position: static; left: auto; top: auto; bottom: auto; width: 100%; flex-direction: row; overflow-x: auto; padding: 8px; margin: 10px; border-radius: 18px; justify-content: space-between; }
-    #tabs.side-toolbar:hover { width: 100%; box-shadow: var(--shadow); }
-    #tabs.side-toolbar .tb-group-label { display: none; }
-    /* Icon-only by default on mobile (label hidden) so all tabs fit in one
-       row without needing to scroll to find one — labels previously
-       always showed here, which made the row wide enough that reaching
-       later tabs meant scrolling. Active tab still shows its label so
-       there's a clear "where am I" cue. */
-    #tabs.side-toolbar button { flex-direction: column; gap: 2px; padding: 7px 4px; justify-content: center; text-align: center; flex: 1 1 0; min-width: 0; }
-    #tabs.side-toolbar button .tb-label { opacity: 0; font-size: 8.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-    #tabs.side-toolbar button.active .tb-label { opacity: 1; }
-    body { padding-left: 0; }
-  }
   #sidebarToggleBtn {
     display: none; position: fixed; left: 14px; top: 14px; z-index: 51;
     width: 34px; height: 34px; border-radius: 10px; align-items: center; justify-content: center;
@@ -282,21 +268,60 @@
      Pro 12.9" landscape, at 1194px CSS width, falls just outside this and
      back onto the desktop hover behavior — accepted trade-off since a
      wider bracket starts catching real laptop windows instead). Below
-     640px this is overridden back to the always-visible horizontal strip
-     above, which doesn't need an open/close state since every tab is
-     already reachable without expanding anything. NOTE: these rules must
-     come AFTER the unconditional #sidebarToggleBtn/#sidebarBackdrop
-     display:none rules above — same specificity, so source order decides,
-     and a media query placed before its base rule gets silently
-     overridden. */
+     640px, mobile gets the same tap-to-open-overlay treatment via its own
+     media query further down — not a persistent icon rail at all there,
+     just the ☰ button, since even a 58px rail is proportionally much more
+     intrusive on a phone-width screen. NOTE: these rules must come AFTER
+     the unconditional #sidebarToggleBtn/#sidebarBackdrop display:none
+     rules above — same specificity, so source order decides, and a media
+     query placed before its base rule gets silently overridden. */
   @media (min-width: 641px) and (max-width: 1180px) {
     #tabs.side-toolbar:hover { width: 58px; box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.08); }
     #tabs.side-toolbar:hover .tb-group-label, #tabs.side-toolbar:hover button .tb-label { opacity: 0; }
     #tabs.side-toolbar.sidebar-open { width: 216px; box-shadow: 8px 8px 40px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border); }
     #tabs.side-toolbar.sidebar-open .tb-group-label, #tabs.side-toolbar.sidebar-open button .tb-label { opacity: 1; }
+    /* Bug fix: the ☰ toggle button is fixed at the exact same (14px,14px)
+       corner the sidebar panel itself starts from, so once the panel opens
+       to its full 216px width, its first group label ("Squad") rendered
+       directly under the button and was getting covered by it — the
+       screenshot showed only "UAD" peeking out. Push the open panel's
+       content down clear of the button's footprint (34px + margin)
+       instead of moving the button, so it stays anchored exactly where
+       users tap to open/close it. Rail (collapsed, unhovered) state is
+       icon-only with no visible label text this high up, so it's
+       unaffected — this only applies once the panel is actually open. */
+    #tabs.side-toolbar.sidebar-open { padding-top: 52px; }
     #sidebarToggleBtn { display: flex; }
     #sidebarBackdrop.sidebar-open { display: block; }
     body { padding-left: 90px; }
+  }
+  /* Mobile (<640px) — bug fix: this used to make the sidebar an
+     always-visible full-width horizontal strip sitting in its own row
+     above the page content ("takes up most of the screen and blocks
+     data"). Replaced with the same arrow-toggle overlay pattern as the
+     tablet range above, not a persistent bar: collapsed to nothing but
+     the small ☰ arrow button by default (no icon rail at all, unlike
+     tablet — even 58px is too much on a phone), and only becomes a real
+     panel — sliding in over a dimmed backdrop — once tapped. Closes the
+     same way the tablet overlay does (backdrop tap, outside tap, tab
+     selection, Escape — see setupSidebarToggle/closeSidebar). Must also
+     come after the unconditional #sidebarToggleBtn/#sidebarBackdrop
+     display:none rules above, same reasoning as the tablet block. */
+  @media (max-width: 640px) {
+    #tabs.side-toolbar {
+      width: 0; min-width: 0; padding: 0; border: none; box-shadow: none;
+      opacity: 0; overflow: hidden; pointer-events: none;
+      transition: width 0.18s ease, opacity 0.12s ease;
+    }
+    #tabs.side-toolbar.sidebar-open {
+      width: min(78vw, 260px); padding: 16px 8px; padding-top: 52px; opacity: 1; pointer-events: auto;
+      box-shadow: 8px 8px 40px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+    }
+    #tabs.side-toolbar.sidebar-open .tb-group-label, #tabs.side-toolbar.sidebar-open button .tb-label { opacity: 1; }
+    #tabs.side-toolbar.sidebar-open button { flex-direction: row; text-align: left; }
+    #sidebarToggleBtn { display: flex; }
+    #sidebarBackdrop.sidebar-open { display: block; }
+    body { padding-left: 0; }
   }
 
   main { max-width: 1540px; margin: 0 auto; padding: 32px 24px 70px; }
@@ -492,11 +517,17 @@
   .sl-tier-chip-score { font-size: 10px; color: var(--ink-faint); }
   .sl-tier-empty { font-size: 11px; color: var(--ink-faint); padding: 4px 8px; }
   .top-tabs-row {
-    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    display: flex; gap: 6px; flex-wrap: nowrap; justify-content: center;
     margin: 0 auto; padding: 6px; border-radius: 16px; max-width: 100%;
     background: rgba(0,0,0,0.24); border: 1px solid rgba(255,255,255,0.08);
     backdrop-filter: blur(var(--glass-blur)) saturate(180%); -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    /* Was flex-wrap:wrap, which ragged-wrapped into uneven rows as the
+       window narrowed (some rows with more buttons than others, badly
+       misaligned) — a single non-wrapping row that scrolls horizontally
+       once it doesn't fit reads as tidy at every width instead, and this
+       is a natural touch gesture on tablet/mobile too. */
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
   }
   /* Deliberately different visual language from the floating glass side
      nav (icon-only pill, gold glow, left edge). This is a distinct piece
@@ -506,11 +537,19 @@
   .top-tabs-row button {
     display: flex; flex-direction: column; align-items: center; gap: 3px;
     background: transparent; border: 1px solid transparent; color: var(--ink-faint);
-    padding: 9px 16px; border-radius: 12px; cursor: pointer; line-height: 1.1;
+    padding: 9px 12px; border-radius: 12px; cursor: pointer; line-height: 1.1;
     font-family: inherit; font-size: 11px; font-weight: 600; transition: all 0.15s ease;
+    /* Fixed-width slot (was padding-only, so a short label like "FDR" and
+       a long one like "Head-to-head" produced very different button
+       widths and made the gaps between icons look inconsistent even
+       though the flex gap itself was always a uniform 6px) — every button
+       now occupies the same width, so icon-to-icon spacing reads as even
+       regardless of label length. flex-shrink:0 keeps them from being
+       squeezed differently from each other in the scrolling row above. */
+    flex: 0 0 auto; width: 74px;
   }
   .top-tabs-row button .tt-icon { display: flex; line-height: 1; }
-  .top-tabs-row button .tt-label { white-space: nowrap; }
+  .top-tabs-row button .tt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .top-tabs-row button.active { background: var(--gold-soft); border-color: var(--border-strong); color: var(--gold-bright); box-shadow: var(--glow-soft); }
   .top-tabs-row button:hover:not(.active) { background: rgba(255,255,255,0.05); color: var(--ink-dim); }
   @media (max-width: 900px) { .top-tabs-row { display: none; } }
@@ -668,13 +707,11 @@
   /* Bottom-of-page FDR reference block (site-wide footer, sits outside
      <main> so it stays visible under every tab, not just the FDR tab
      itself) — a compact version of the full FDR grid: all 20 clubs, badge
-     + short name, colour-coded fixture pills. Column COUNT is picked at
-     render time in JS based on available width (see renderFdrFooterBlock)
-     rather than fixed here, per "fills the space it has... aesthetically
-     pleasing in spacing more than a desired amount" — this CSS only
-     handles the fixed layout shell, not how many GW columns show. */
-  .fdr-footer { border-top: 1px solid var(--border); margin-top: 32px; padding: 20px 0 28px; background: var(--panel-solid); }
-  .fdr-footer-inner { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+     + short name, colour-coded fixture pills. Planner-only (see
+     renderFdrFooterBlock): shows a fixed 6-gameweek window starting at
+     whichever gameweek is currently selected in the planner, scrolling
+     forward/back with it — not a page-wide footer any more. */
+  .fdr-footer-inner { max-width: none; margin: 0; padding: 0; }
   .fdr-footer-title { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 10px; }
   .fdr-footer-grid-wrap { overflow-x: auto; }
   .fdr-footer-table { border-collapse: collapse; width: 100%; table-layout: fixed; }
@@ -685,7 +722,7 @@
   }
   .fdr-footer-table td.fdr-footer-club-col { display: flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
   .fdr-footer-table th { color: var(--ink-faint); font-weight: 600; font-size: 10.5px; }
-  .fdr-footer-pill { display: inline-block; width: 100%; border-radius: 5px; padding: 3px 0; font-size: 10px; font-weight: 700; color: #12141a; }
+  .fdr-footer-pill { display: inline-block; width: 100%; border-radius: 9px; padding: 3px 0; font-size: 10px; font-weight: 700; color: #12141a; box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -5px 7px -4px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.18); }
   .fdr-footer-pill.blank { color: var(--ink-faint); background: transparent !important; font-weight: 400; }
 
   /* Corner cell (sticky top AND left at once) needs to sit above every
@@ -798,8 +835,18 @@
   /* fixture ticker */
   .fdr-ticker { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
   .fdr-pill {
-    font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", monospace;
+    font-size: 10px; font-weight: 700; padding: 2px 5px; border-radius: 9px; font-family: "JetBrains Mono", monospace;
     color: #0b1310;
+    /* Glassy/bubbly per request: rounder corners + tighter horizontal
+       padding than before, plus a glossy sheen (bright inset highlight
+       along the top edge, soft shadow underneath) so the solid FDR colour
+       reads as a glass-like bubble rather than a flat rectangle. The
+       small negative translateY nudges it up slightly, per "slightly
+       higher" — same effect as reducing padding-top without also
+       squeezing the pill's height/legibility. */
+    position: relative;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -5px 7px -4px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.18);
+    transform: translateY(-1px);
   }
 
   /* detail drawer */
@@ -1310,6 +1357,13 @@
           <span id="fmAttrImportStatus" style="font-size:11px;color:var(--ink-faint)"></span>
         </div>
       </div>
+      <div class="spacer" style="gap:6px;flex-direction:column;align-items:flex-start;border-left:1px solid var(--panel-2);padding-left:10px">
+        <span style="font-size:10.5px;color:var(--ink-faint)" title="Most players already have a specific position (RW/CB/CDM etc, not just FPL's broad GK/DEF/MID/FWD) baked in automatically — 726 of the 20 current PL clubs' 729 players, sourced from a free public dataset and applied every time the app loads. This importer is for fixing the odd miss (usually a shared surname at the same club) or overriding one yourself: copy Name,Position rows (one per line, header row required) from Wikipedia, an FM export, or anywhere else into a CSV and import it here — a CSV import always wins over the automatic default. Common free-text labels (Right winger, Centre-back, Defensive midfielder, etc.) are recognised automatically; unrecognised ones are skipped, not guessed.">Bulk-import / fix specific positions ⓘ</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="file" id="positionsCsvInput" accept=".csv,text/csv" style="max-width:220px;font-size:11px" />
+          <span id="positionsImportStatus" style="font-size:11px;color:var(--ink-faint)"></span>
+        </div>
+      </div>
     </div>
     <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
       <select id="sortField"></select>
@@ -1355,9 +1409,9 @@
   </section>
 
   <section id="tab-captaincy" style="display:none">
-    <h1 class="page-title">Captaincy</h1>
-    <p class="page-sub">Beyond raw projected points — weighs each candidate's route to points (a goals-only striker has a lower floor than a midfielder who can also score via clean sheets, DefCon, assists, and bonus) and gives a playstyle-matchup boost from the player attributes (Player stats tab) when the fixture suits their game, e.g. a quick, mobile forward against a club that sits off and invites counter-attacks.</p>
-    <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
+    <h1 class="page-title" style="margin-bottom:4px">Captaincy</h1>
+    <p class="page-sub" style="margin-bottom:10px">Weighs each candidate's route to points (goals, clean sheets, DefCon, assists, bonus) plus a playstyle-matchup boost for how the fixture suits their game.</p>
+    <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap">
       <select id="capGwSelect"></select>
       <div id="capSourceToggle" class="view-toggle" role="group">
         <button type="button" data-cap-source="myteam">My team's squad only</button>
@@ -1396,6 +1450,13 @@
     </div>
 
     <div id="plannerBody"></div>
+
+    <div class="card" id="fdrFooterBlock" style="margin-top:20px">
+      <div class="fdr-footer-inner">
+        <div class="fdr-footer-title" id="fdrFooterTitle">FDR at a glance</div>
+        <div id="fdrFooterGrid" class="fdr-footer-grid-wrap"></div>
+      </div>
+    </div>
   </section>
 
   <section id="tab-table" style="display:none">
@@ -1511,9 +1572,9 @@
     </div>
 
     <div class="card" style="margin-top:20px">
-      <div class="detail-block-title">Chip advisor — Bench Boost / Triple Captain timing</div>
+      <div class="detail-block-title">Chip advisor — situational plan, plus Bench Boost / Triple Captain timing</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Candidate gameweeks for your two single-gameweek chips. Bench Boost wants every squad player (especially the bench) to have a fixture, ideally with a double gameweek somewhere in the 15; Triple Captain wants your single best captaincy option (reusing the same scoring as the Captaincy tab) to have an exceptional fixture. If you've loaded a squad on the My team tab it's used directly — otherwise this falls back to a pool-wide signal. <strong>Heuristic ranking, not a guarantee</strong> — treat it as a shortlist to sanity-check yourself, not an auto-pick.
+        The 🧠 Chip suggestion cards look at the bigger picture — whether a cluster of genuinely strong teams have a fixture swing worth Wildcarding into (and whether that sets up a Bench Boost or Triple Captain follow-up), or whether a single isolated bad gameweek for your squad is better solved with a Free Hit than a full rebuild. Below that, candidate gameweeks for the two single-gameweek chips on their own: Bench Boost wants every squad player (especially the bench) to have a fixture, ideally with a double gameweek somewhere in the 15; Triple Captain wants your single best captaincy option (reusing the same scoring as the Captaincy tab) to have an exceptional fixture. If you've loaded a squad on the My team tab it's used directly — otherwise this falls back to a pool-wide signal. This season's double chips (a second Wildcard/Free Hit/Bench Boost/Triple Captain from GW19) are accounted for throughout. <strong>Heuristic ranking, not a guarantee</strong> — treat it as a shortlist to sanity-check yourself, not an auto-pick.
       </p>
       <div id="chipAdvisorBody"></div>
     </div>
@@ -1788,13 +1849,6 @@
   </section>
 </main>
 
-<footer id="fdrFooterBlock" class="fdr-footer">
-  <div class="fdr-footer-inner">
-    <div class="fdr-footer-title">FDR at a glance</div>
-    <div id="fdrFooterGrid" class="fdr-footer-grid-wrap"></div>
-  </div>
-</footer>
-
 <script>
 const FPL_BASE = "https://fantasy.premierleague.com/api";
 const POS = { 1: "GK", 2: "DEF", 3: "MID", 4: "FWD" };
@@ -1908,6 +1962,18 @@ function isLegalXi(playerIds) {
   return Object.keys(XI_MIN).every(pos => counts[pos] >= XI_MIN[pos] && counts[pos] <= XI_MAX[pos]);
 }
 const CHIP_LABELS = { WC: "Wildcard", FH: "Free Hit", BB: "Bench Boost", TC: "Triple Captain" };
+// Double chips (item: "we get double chips this season from gw 19") — the
+// 2025/26 FPL rule gives every manager a SECOND Wildcard, Free Hit, Bench
+// Boost and Triple Captain, usable from GW19 onward, on top of the
+// original one usable any time before GW19. So each chip type is really
+// two independent uses now — one scoped to GW1-18, one to GW19+ — not a
+// single once-per-season use. draft.chipsUsed tracks this by storing a
+// separate key per half (e.g. "WC1" for the pre-GW19 Wildcard, "WC2" for
+// the GW19+ one) instead of one boolean per chip type, so playing the
+// first-half Wildcard doesn't block the second-half one and vice versa.
+const DOUBLE_CHIPS_START_GW = 19;
+function chipHalfForGw(gwId) { return gwId >= DOUBLE_CHIPS_START_GW ? 2 : 1; }
+function chipUsageKey(chip, gwId) { return chip + chipHalfForGw(gwId); }
 
 // Curated kit colors for clubs commonly in/around the Premier League. Any
 // club not listed here (e.g. a newly promoted side we don't have on file)
@@ -2833,6 +2899,130 @@ function importFmAttributesCsv(csvText) {
   }
   _fm12EstimateCache = new Map(); // stale after an import touches state.playerAttributes broadly
   return { matched, unmatched, error: null };
+}
+// Bulk specific-position import (item: "grab positions... even wikipedia
+// would do"). Confirmed this round: Wikipedia's per-CLUB "Current squad"
+// tables only carry the broad GK/DF/MF/FW groups FPL already gives us
+// (checked live) — no use. But each PLAYER's own Wikipedia article has a
+// "Position(s)" field in its infobox with the real specific position as
+// free text (checked live on Bukayo Saka's page: "Right winger") — a
+// genuine, scrapeable, one-time-gatherable source, just per-player rather
+// than one bulk club table. This importer takes whatever the user
+// gathers — pasted from Wikipedia infoboxes, an FM export, or typed by
+// hand — as a simple Name,Position CSV and maps common free-text labels
+// onto this app's existing SPECIFIC_POSITIONS vocabulary (the same one
+// the single-player manual editor above already writes to), so a bulk
+// import and a one-off manual edit are indistinguishable afterwards.
+// Unrecognised position text is skipped (reported as unmatched), never
+// guessed at.
+const POSITION_LABEL_MAP = {
+  // Goalkeeper
+  "gk": "GK", "goalkeeper": "GK", "keeper": "GK",
+  // Defenders
+  "cb": "CB", "centreback": "CB", "centerback": "CB", "centrehalf": "CB", "defender": "CB",
+  "lb": "LB", "leftback": "LB",
+  "rb": "RB", "rightback": "RB",
+  "lwb": "LWB", "leftwingback": "LWB",
+  "rwb": "RWB", "rightwingback": "RWB",
+  // Midfielders
+  "cdm": "CDM", "defensivemidfielder": "CDM", "defensivemidfield": "CDM", "holdingmidfielder": "CDM",
+  "cm": "CM", "centralmidfielder": "CM", "centralmidfield": "CM", "centremidfielder": "CM", "centremidfield": "CM", "midfielder": "CM",
+  "cam": "CAM", "attackingmidfielder": "CAM", "attackingmidfield": "CAM", "playmaker": "CAM",
+  "lm": "LM", "leftmidfielder": "LM", "leftmidfield": "LM",
+  "rm": "RM", "rightmidfielder": "RM", "rightmidfield": "RM",
+  "lw": "LW", "leftwinger": "LW", "leftwing": "LW",
+  "rw": "RW", "rightwinger": "RW", "rightwing": "RW", "winger": "RW",
+  // Forwards
+  "st": "ST", "striker": "ST", "centreforward": "ST", "centerforward": "ST", "forward": "ST",
+  "cf": "CF", "secondstriker": "CF", "falsenine": "CF",
+};
+function normalizePositionLabel(raw) {
+  const key = stripDiacritics(raw || "").toLowerCase().replace(/[^a-z]/g, "");
+  return POSITION_LABEL_MAP[key] || null;
+}
+// Shared name/club fuzzy-matcher — the one choke point both the CSV
+// importer below and applyBuiltinPositions() (further down) use to find a
+// state.players entry for a given "Name" + optional "Club" pair. Kept as a
+// single function so the two never drift apart the way h2hFlashcardAlternates
+// and h2hBestPlayerForRole once did (see the Round 16 handoff notes).
+function matchPlayerByNameClub(rawName, rawClub) {
+  const norm = (s) => stripDiacritics(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const nName = norm(rawName);
+  const nClub = norm(rawClub);
+  const candidates = state.players.filter(p => norm(p.webName) === nName || norm(p.webName) === norm((rawName || "").split(" ").pop()));
+  let player = candidates.length === 1 ? candidates[0] : candidates.find(p => norm(state.teamsById[p.teamId]?.name || "") === nClub || norm(state.teamsById[p.teamId]?.short_name || "") === nClub);
+  if (!player && candidates.length) player = candidates[0];
+  return player || null;
+}
+function importPlayerPositionsCsv(csvText) {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return { matched: 0, unmatched: 0, error: "CSV appears empty." };
+  const header = parseCsvLine(lines[0]).map(h => h.trim());
+  const nameIdx = header.findIndex(h => /^(name|player)$/i.test(h));
+  const posIdx = header.findIndex(h => /^position(s)?$/i.test(h));
+  const clubIdx = header.findIndex(h => /^club$/i.test(h));
+  if (nameIdx === -1) return { matched: 0, unmatched: 0, error: 'No "Name"/"Player" column found in CSV header.' };
+  if (posIdx === -1) return { matched: 0, unmatched: 0, error: 'No "Position" column found in CSV header.' };
+  let matched = 0, unmatched = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvLine(lines[i]);
+    const rawName = cells[nameIdx];
+    if (!rawName) continue;
+    const rawClub = clubIdx !== -1 ? cells[clubIdx] : "";
+    const player = matchPlayerByNameClub(rawName, rawClub);
+    if (!player) { unmatched++; continue; }
+    const code = normalizePositionLabel(cells[posIdx]);
+    // Only accept a specific position that's actually legal for this
+    // player's broad FPL position (e.g. never let a "CB" import land on a
+    // player FPL has down as FWD — that's almost certainly a name
+    // mismatch, not a real position) — same list the manual dropdown uses.
+    if (!code || !(SPECIFIC_POSITIONS[player.position] || []).includes(code)) { unmatched++; continue; }
+    // A manual/CSV import is an explicit user action — persist it, and let
+    // it always win over the baked-in default below (applyBuiltinPositions
+    // only ever fills gaps, never overwrites an entry that's already set).
+    setSpecificPosition(player.id, code);
+    matched++;
+  }
+  return { matched, unmatched, error: null };
+}
+// Baked-in specific-position dataset ("embed the import into the code" —
+// item requested right after the CSV importer shipped with nothing to
+// import yet). Sourced from dcaribou/transfermarkt-datasets (CC0, weekly
+// updated) filtered to the real current 20 Premier League clubs as of
+// 2026-08-21 — 729 players, [Name, Position code, Club]. Verified via an
+// adversarial Node harness against the app's own real matching functions:
+// 726/729 (99.6%) resolve correctly, zero illegal (position-incompatible)
+// assignments; the 3 misses are irreducible same-club/same-surname
+// collisions (see touchline-handoff.md). This is a snapshot, not a live
+// feed — refreshing it for a future season/transfer window means
+// regenerating this array from a fresh copy of the source dataset (it's
+// hosted somewhere this app's own users can reach directly, but was only
+// reachable from the dev sandbox via a manual download — see the handoff
+// notes for that whole story), not something this app can re-fetch itself.
+const BUILTIN_POSITIONS = [["James Milner","CM","Brighton"],["Casemiro","CDM","Man Utd"],["Lukasz Fabianski","GK","West Ham"],["John Ruddy","GK","Newcastle"],["Tom Heaton","GK","Man Utd"],["Mateo Kovacic","CM","Man City"],["Fraser Forster","GK","Bournemouth"],["İlkay Gündoğan","CM","Man City"],["Jordan Henderson","CDM","Brentford"],["Wes Foderingham","GK","West Ham"],["Adam Smith","RB","Bournemouth"],["Ashley Barnes","ST","Burnley"],["Danny Welbeck","ST","Brighton"],["Séamus Coleman","RB","Everton"],["Bernd Leno","GK","Fulham"],["Jason Steele","GK","Brighton"],["Martin Dúbravka","GK","Burnley"],["Niclas Füllkrug","ST","West Ham"],["Nathaniel Clyne","RB","Crystal Palace"],["Stefan Ortega","GK","Man City"],["Kyle Walker","RB","Burnley"],["Václav Hladký","GK","Burnley"],["Kieran Trippier","RB","Newcastle"],["Karl Darlow","GK","Leeds"],["Alisson","GK","Liverpool"],["Chris Wood","ST","Nott'm Forest"],["Sam Johnstone","GK","Wolves"],["Joël Veltman","RB","Brighton"],["Granit Xhaka","CDM","Sunderland"],["Emiliano Martínez","GK","Aston Villa"],["Marcus Bettinelli","GK","Man City"],["Michael Keane","CB","Everton"],["Alphonse Areola","GK","West Ham"],["Tom Cairney","CM","Fulham"],["Simon Moore","GK","Sunderland"],["Callum Wilson","ST","West Ham"],["Marco Bizot","GK","Aston Villa"],["Lucas Digne","LB","Aston Villa"],["Idrissa Gueye","CDM","Everton"],["Benjamin Lecomte","GK","Fulham"],["Matz Sels","GK","Nott'm Forest"],["Jordan Pickford","GK","Everton"],["Ross Barkley","CM","Aston Villa"],["Bertrand Traoré","RW","Sunderland"],["Dan Burn","CB","Newcastle"],["Fabian Schär","CB","Newcastle"],["Daniel Bentley","GK","Wolves"],["Virgil van Dijk","CB","Liverpool"],["Willy Boly","CB","Nott'm Forest"],["Mark Gillespie","GK","Newcastle"],["Leandro Trossard","LW","Arsenal"],["Wataru Endo","CDM","Liverpool"],["Lewis Dunk","CB","Brighton"],["Christian Nørgaard","CDM","Arsenal"],["Mohamed Salah","RW","Liverpool"],["Matt Doherty","RB","Wolves"],["James Tarkowski","CB","Everton"],["Nathan Aké","CB","Man City"],["Harry Maguire","CB","Man Utd"],["Arthur Masuaku","LB","Sunderland"],["James Ward-Prowse","CM","West Ham"],["Luke Shaw","LB","Man Utd"],["Jamaal Lascelles","CB","Newcastle"],["Emil Krafth","RB","Newcastle"],["Victor Lindelöf","CB","Aston Villa"],["John Stones","CB","Man City"],["Ryan Christie","CM","Bournemouth"],["Nick Pope","GK","Newcastle"],["Kepa Arrizabalaga","GK","Arsenal"],["Ben Davies","CB","Spurs"],["John McGinn","CM","Aston Villa"],["Alex Cairns","GK","Leeds"],["Remi Matthews","GK","Crystal Palace"],["Jacob Murphy","RW","Newcastle"],["Angus Gunn","GK","Nott'm Forest"],["Jack Grealish","LW","Everton"],["Adama Traoré","RW","West Ham"],["Raúl Jiménez","ST","Fulham"],["Kenny Tete","RB","Fulham"],["Will Hughes","CM","Crystal Palace"],["Solly March","RW","Brighton"],["Adam Webster","CB","Brighton"],["Connor Roberts","RB","Burnley"],["Tom King","GK","Everton"],["Patrick Roberts","RW","Sunderland"],["Freddie Woodman","GK","Liverpool"],["Harrison Reed","CM","Fulham"],["Andrew Robertson","LB","Liverpool"],["Ola Aina","RB","Nott'm Forest"],["Sam Byram","LB","Leeds"],["Ederson","GK","Man City"],["Bruno Fernandes","CAM","Man Utd"],["Reinildo Mandava","LB","Sunderland"],["Bernardo Silva","CAM","Man City"],["Josh Cullen","CM","Burnley"],["Alex Iwobi","LW","Fulham"],["Saša Lukić","CM","Fulham"],["Lewis Cook","CM","Bournemouth"],["Youri Tielemans","CM","Aston Villa"],["José Sá","GK","Wolves"],["Adam Armstrong","ST","Wolves"],["Matt Targett","LB","Newcastle"],["Enes Ünal","ST","Bournemouth"],["Tyrone Mings","CB","Aston Villa"],["Joe Gomez","CB","Liverpool"],["João Palhinha","CDM","Spurs"],["Rúben Dias","CB","Man City"],["Tosin Adarabioyo","CB","Chelsea"],["Dominic Solanke","ST","Spurs"],["Dean Henderson","GK","Crystal Palace"],["Joachim Andersen","CB","Fulham"],["Timothy Castagne","RB","Fulham"],["David Raya","GK","Arsenal"],["Jefferson Lerma","CDM","Crystal Palace"],["Kevin Danso","CB","Spurs"],["Vitaly Janelt","CDM","Brentford"],["Issa Diop","CB","Fulham"],["David Brooks","RW","Bournemouth"],["Harry Wilson","RW","Fulham"],["Luke O'Nien","CB","Sunderland"],["Tomáš Souček","CDM","West Ham"],["Manuel Akanji","CB","Man City"],["Marc Cucurella","LB","Chelsea"],["Guglielmo Vicario","GK","Spurs"],["Hee-chan Hwang","ST","Wolves"],["Borna Sosa","LB","Crystal Palace"],["Jacob Bruun Larsen","LW","Burnley"],["James Maddison","CAM","Spurs"],["Taiwo Awoniyi","ST","Nott'm Forest"],["Walter Benítez","GK","Crystal Palace"],["Joe Rodon","CB","Leeds"],["Dominic Calvert-Lewin","ST","Leeds"],["Kai Havertz","ST","Arsenal"],["Josh Laurent","CM","Burnley"],["Lukas Nmecha","ST","Leeds"],["Marcus Edwards","RW","Burnley"],["Jarrod Bowen","RW","West Ham"],["Gianluigi Donnarumma","GK","Man City"],["Martin Ødegaard","CAM","Arsenal"],["Olivier Boscagli","CB","Brighton"],["Daniel James","RW","Leeds"],["Mathias Jensen","CM","Brentford"],["Philip Billing","CM","Bournemouth"],["Emiliano Buendía","LW","Aston Villa"],["Ollie Watkins","ST","Aston Villa"],["Viktor Gyökeres","ST","Arsenal"],["Matthijs de Ligt","CB","Man Utd"],["Kristoffer Ajer","CB","Brentford"],["Justin Kluivert","CAM","Bournemouth"],["Tyler Adams","CDM","Bournemouth"],["Sander Berge","CDM","Fulham"],["Joelinton","CM","Newcastle"],["Ben White","RB","Arsenal"],["Altay Bayındır","GK","Man Utd"],["Mikel Merino","CM","Arsenal"],["Sebastiaan Bornauw","CB","Leeds"],["Tyrell Malacia","LB","Man Utd"],["Rico Henry","LB","Brentford"],["Josh Dasilva","CM","Brentford"],["Eddie Nketiah","ST","Crystal Palace"],["Reiss Nelson","LW","Brentford"],["Joe Willock","CM","Newcastle"],["Noussair Mazraoui","RB","Man Utd"],["Caoimhín Kelleher","GK","Brentford"],["Kyle Walker-Peters","RB","West Ham"],["Federico Chiesa","RW","Liverpool"],["Axel Tuanzebe","CB","Burnley"],["Guido Rodríguez","CDM","West Ham"],["Anton Stach","CDM","Leeds"],["Trevoh Chalobah","CB","Chelsea"],["Mason Mount","CAM","Man Utd"],["Sean Longstaff","CM","Leeds"],["Noah Okafor","LW","Leeds"],["Nordi Mukiele","RB","Sunderland"],["Alexander Isak","ST","Liverpool"],["Antonee Robinson","LB","Fulham"],["Kalvin Phillips","CDM","Man City"],["Lucas Perri","GK","Leeds"],["Omar Alderete","CB","Sunderland"],["Rodrigo Bentancur","CDM","Spurs"],["Cristian Romero","CB","Spurs"],["Daichi Kamada","CAM","Crystal Palace"],["Ibrahima Konaté","CB","Liverpool"],["Diogo Dalot","RB","Man Utd"],["Florentino","CDM","Burnley"],["Rodri","CDM","Man City"],["Mark Travers","GK","Everton"],["Declan Rice","CM","Arsenal"],["Sven Botman","CB","Newcastle"],["Gabriel Gudmundsson","LB","Leeds"],["Gabriel Jesus","ST","Arsenal"],["Dan Ndoye","RW","Nott'm Forest"],["Ferdi Kadıoğlu","LB","Brighton"],["Joël Piroe","ST","Leeds"],["Jaka Bijol","CB","Leeds"],["Ibrahim Sangaré","CDM","Nott'm Forest"],["Richarlison","ST","Spurs"],["Igor Julio","CB","West Ham"],["Ilia Gruev","CDM","Leeds"],["Mike Tresor","CAM","Burnley"],["Axel Disasi","CB","West Ham"],["Yoane Wissa","ST","Newcastle"],["Mads Roerslev","RB","Brentford"],["Hjalmar Ekdal","CB","Burnley"],["Marc Guéhi","CB","Man City"],["Emile Smith Rowe","CAM","Fulham"],["Callum Hudson-Odoi","LW","Nott'm Forest"],["Ethan Ampadu","CDM","Leeds"],["Ryan Sessegnon","LB","Fulham"],["Brenden Aaronson","CAM","Leeds"],["Boubacar Kamara","CDM","Aston Villa"],["Sandro Tonali","CDM","Newcastle"],["Harvey Barnes","LW","Newcastle"],["Marcus Tavernier","CAM","Bournemouth"],["Pau Torres","CB","Aston Villa"],["Mads Hermansen","GK","West Ham"],["Jadon Sancho","LW","Aston Villa"],["Edson Álvarez","CDM","West Ham"],["Robert Sánchez","GK","Chelsea"],["Jordan Beyer","CB","Burnley"],["Vitaliy Mykolenko","LB","Everton"],["Tom McGill","GK","Brighton"],["Phil Foden","CAM","Man City"],["Ismaïla Sarr","RW","Crystal Palace"],["Yves Bissouma","CDM","Spurs"],["Pascal Struijk","CB","Leeds"],["Zian Flemming","ST","Burnley"],["Bryan Mbeumo","RW","Man Utd"],["James Justin","RB","Leeds"],["Ezri Konsa","CB","Aston Villa"],["Nikola Milenković","CB","Nott'm Forest"],["Mats Wieffer","RB","Brighton"],["Konstantinos Mavropanos","CB","West Ham"],["Joe Worrall","CB","Burnley"],["Jack Harrison","LW","Leeds"],["Erling Haaland","ST","Man City"],["Jean-Philippe Mateta","ST","Crystal Palace"],["Jurriën Timber","RB","Arsenal"],["Frank Onyeka","CM","Brentford"],["Martín Zubimendi","CDM","Arsenal"],["Nathan Patterson","RB","Everton"],["Matty Cash","RB","Aston Villa"],["Ryan Yates","CM","Nott'm Forest"],["Jakub Kiwior","CB","Arsenal"],["Aaron Ramsdale","GK","Newcastle"],["Brandon Austin","GK","Spurs"],["Morgan Gibbs-White","CAM","Nott'm Forest"],["Maxim De Cuyper","LB","Brighton"],["Jørgen Strand Larsen","ST","Wolves"],["Andrew Irving","CM","West Ham"],["Dejan Kulusevski","CAM","Spurs"],["Igor Jesus","ST","Nott'm Forest"],["John Victor","GK","Nott'm Forest"],["Bukayo Saka","RW","Arsenal"],["Tommy Doyle","CM","Wolves"],["Curtis Jones","CM","Liverpool"],["Maxence Lacroix","CB","Crystal Palace"],["Cody Gakpo","LW","Liverpool"],["Gabriel","CB","Arsenal"],["Joshua Zirkzee","ST","Man Utd"],["Santiago Bueno","CB","Wolves"],["Ethan Pinnock","CB","Brentford"],["Michael Obafemi","ST","Burnley"],["Lucas Paquetá","CAM","West Ham"],["Omar Marmoush","ST","Man City"],["Douglas Luiz","CM","Nott'm Forest"],["Jean-Ricner Bellegarde","CM","Wolves"],["Dominik Szoboszlai","CAM","Liverpool"],["Nick Woltemade","ST","Newcastle"],["Ellery Balcombe","GK","Brentford"],["Tijjani Reijnders","CM","Man City"],["Calvin Bassey","CB","Fulham"],["Benoît Badiashile","CB","Chelsea"],["Bafodé Diakité","CB","Bournemouth"],["Djordje Petrovic","GK","Bournemouth"],["Jayden Bogle","RB","Leeds"],["Nico González","CDM","Man City"],["Lyle Foster","ST","Burnley"],["Nathan Collins","CB","Brentford"],["Marcos Senesi","CB","Bournemouth"],["Brennan Johnson","RW","Spurs"],["Reece James","RB","Chelsea"],["Kevin Schade","LW","Brentford"],["Brian Brobbey","ST","Sunderland"],["Crysencio Summerville","LW","West Ham"],["Kiernan Dewsbury-Hall","CM","Everton"],["Wesley Fofana","CB","Chelsea"],["Anthony Patterson","GK","Sunderland"],["Josko Gvardiol","CB","Man City"],["Manuel Ugarte","CDM","Man Utd"],["Aaron Wan-Bissaka","RB","West Ham"],["Ryan Gravenberch","CDM","Liverpool"],["Eberechi Eze","CAM","Arsenal"],["Lisandro Martínez","CB","Man Utd"],["Djed Spence","LB","Spurs"],["Jeremie Frimpong","RB","Liverpool"],["Ki-Jana Hoever","RB","Wolves"],["Ian Maatsen","LB","Aston Villa"],["Amadou Onana","CDM","Aston Villa"],["Jérémy Doku","LW","Man City"],["Pedro Neto","RW","Chelsea"],["Randal Kolo Muani","ST","Spurs"],["Conor Gallagher","CM","Spurs"],["Hákon Valdimarsson","GK","Brentford"],["Ao Tanaka","CM","Leeds"],["Daniel Muñoz","RB","Crystal Palace"],["Wilson Isidor","ST","Sunderland"],["Jorge Cuenca","CB","Fulham"],["William Saliba","CB","Arsenal"],["Nicolás Domínguez","CM","Nott'm Forest"],["Evann Guessand","RW","Crystal Palace"],["Giorgi Mamardashvili","GK","Liverpool"],["Riccardo Calafiori","LB","Arsenal"],["Rhys Williams","CB","Liverpool"],["Neco Williams","LB","Nott'm Forest"],["Dan Ballard","CB","Sunderland"],["Anthony Gordon","LW","Newcastle"],["Morgan Rogers","CAM","Aston Villa"],["Jacob Ramsey","CM","Newcastle"],["James Hillson","GK","Chelsea"],["Tino Livramento","RB","Newcastle"],["Noni Madueke","RW","Arsenal"],["Kaoru Mitoma","LW","Brighton"],["James Garner","CDM","Everton"],["Julián Araujo","RB","Bournemouth"],["Quilindschy Hartman","LB","Burnley"],["Trai Hume","RB","Sunderland"],["Matheus Cunha","ST","Man Utd"],["Largie Ramazani","LW","Leeds"],["Bruno Guimarães","CM","Newcastle"],["Malick Thiaw","CB","Newcastle"],["Taty Castellanos","ST","West Ham"],["Maximilian Kilman","CB","West Ham"],["Amine Adli","LW","Bournemouth"],["Alexis Mac Allister","CM","Liverpool"],["Amad Diallo","RW","Man Utd"],["Mykhaylo Mudryk","LW","Chelsea"],["Georginio Rutter","ST","Brighton"],["Mikkel Damsgaard","CAM","Brentford"],["Sepp van den Berg","CB","Brentford"],["Illan Meslier","GK","Leeds"],["Cheick Doucouré","CDM","Crystal Palace"],["Mohammed Kudus","RW","Spurs"],["Zeki Amdouni","ST","Burnley"],["Pedro Porro","RB","Spurs"],["Romain Faivre","CAM","Bournemouth"],["Destiny Udogie","LB","Spurs"],["Micky van de Ven","CB","Spurs"],["Harrison Ashby","RB","Newcastle"],["Fábio Carvalho","CAM","Brentford"],["Niall Huggins","RB","Sunderland"],["Bart Verbruggen","GK","Brighton"],["Harvey Elliott","CAM","Liverpool"],["James Trafford","GK","Man City"],["Elliot Anderson","CM","Nott'm Forest"],["Dennis Cirkin","LB","Sunderland"],["Cole Palmer","CAM","Chelsea"],["Radu Drăgușin","CB","Spurs"],["Pape Matar Sarr","CM","Spurs"],["Dan Neil","CM","Sunderland"],["Armando Broja","ST","Burnley"],["Harry Tyrer","GK","Everton"],["Jan Paul van Hecke","CB","Brighton"],["Rayan Aït-Nouri","LB","Man City"],["Chris Richards","CB","Crystal Palace"],["Eiran Cashin","CB","Brighton"],["Will Dennis","GK","Bournemouth"],["Anthony Elanga","RW","Newcastle"],["James McAtee","CAM","Nott'm Forest"],["Antoine Semenyo","RW","Man City"],["Owen Bevan","CB","Bournemouth"],["Dwight McNeil","LW","Everton"],["Filip Jørgensen","GK","Chelsea"],["Myles Peart-Harris","CAM","Brentford"],["Aaron Hickey","RB","Brentford"],["Beto","ST","Everton"],["Florian Wirtz","CAM","Liverpool"],["Matheus Nunes","RB","Man City"],["Jean-Clair Todibo","CB","West Ham"],["Melker Ellborg","GK","Sunderland"],["Toti","CB","Wolves"],["Rayan Cherki","CAM","Man City"],["Hannibal","CAM","Burnley"],["Loum Tchaouna","RW","Burnley"],["Merlin Röhl","CAM","Everton"],["William Osula","ST","Newcastle"],["Liam Delap","ST","Chelsea"],["James Hill","CB","Bournemouth"],["Bashir Humphreys","CB","Burnley"],["Levi Colwill","CB","Chelsea"],["Joe White","CAM","Newcastle"],["Jenson Seelt","CB","Sunderland"],["Malo Gusto","RB","Chelsea"],["Iliman Ndiaye","RW","Everton"],["Conor Bradley","RB","Liverpool"],["João Pedro","ST","Chelsea"],["Lewis Dobbin","LW","Aston Villa"],["Benjamin Sesko","ST","Man Utd"],["Wilfried Gnonto","RW","Leeds"],["Roméo Lavia","CDM","Chelsea"],["Calvin Ramsay","RB","Liverpool"],["Enzo Le Fée","CM","Sunderland"],["Keane Lewis-Potter","LM","Brentford"],["Lamare Bogarde","CDM","Aston Villa"],["Carl Rushworth","GK","Brighton"],["Aaron Ramsey","CAM","Burnley"],["Cristhian Mosquera","CB","Arsenal"],["Robin Roefs","GK","Sunderland"],["Enzo Fernández","CM","Chelsea"],["Abdoullah Ba","RM","Sunderland"],["Adrien Truffert","LB","Bournemouth"],["Gabriel Martinelli","LW","Arsenal"],["Reece Welch","CB","Everton"],["Gabriel Slonina","GK","Chelsea"],["Simon Adingra","LW","Sunderland"],["Piero Hincapié","CB","Arsenal"],["Max Thompson","GK","Newcastle"],["Jarrad Branthwaite","CB","Everton"],["Oscar Bobb","RW","Man City"],["Leo Hjelde","CB","Sunderland"],["David Møller Wolfe","LB","Wolves"],["Tyler Onyango","CM","Everton"],["Rodrigo Gomes","LM","Wolves"],["Yasin Ayari","CM","Brighton"],["Ronnie Hollingshead","GK","Aston Villa"],["Ben Hammond","CM","Nott'm Forest"],["Youssef Chermiti","ST","Everton"],["Dário Essugo","CDM","Chelsea"],["Lewis Hall","LB","Newcastle"],["James Beadle","GK","Brighton"],["Jamie Gittens","LW","Chelsea"],["Kota Takai","CB","Spurs"],["Morato","CB","Nott'm Forest"],["Antoni Milambo","CAM","Brentford"],["Jaidon Anthony","LW","Burnley"],["Moisés Caicedo","CDM","Chelsea"],["Chadi Riad","CB","Crystal Palace"],["Romaine Mundle","LW","Sunderland"],["Tim Iroegbunam","CM","Everton"],["George Earthy","CAM","West Ham"],["Freddie Potts","CDM","West Ham"],["Hugo Bueno","LB","Wolves"],["Alfie Brooks","GK","Wolves"],["Rico Lewis","RB","Man City"],["Harvey Davies","GK","Liverpool"],["Jaydon Banel","LW","Burnley"],["Nicolò Savona","RB","Nott'm Forest"],["Hugo Ekitiké","ST","Liverpool"],["Evanilson","ST","Bournemouth"],["Jake O'Brien","RB","Everton"],["Lesley Ugochukwu","CDM","Burnley"],["James Wright","GK","Aston Villa"],["Yerson Mosquera","CB","Wolves"],["Yegor Yarmolyuk","CM","Brentford"],["Ben Gannon-Doak","RW","Liverpool"],["Enock Agyei","RW","Burnley"],["Tawanda Chirewa","CAM","Wolves"],["Antonín Kinský","GK","Spurs"],["Noah Sadiki","CM","Sunderland"],["Milos Kerkez","LB","Liverpool"],["Tyrick Mitchell","LB","Crystal Palace"],["Teddy Sharman-Lowe","GK","Chelsea"],["Kaide Gordon","RW","Liverpool"],["João Gomes","CM","Wolves"],["Rodrigo Muniz","ST","Fulham"],["Igor Thiago","ST","Brentford"],["Matthew Cox","GK","Brentford"],["Omari Hutchinson","CAM","Nott'm Forest"],["Chemsdine Talbi","RW","Sunderland"],["Nico O'Reilly","LB","Man City"],["Wilson Odobert","LW","Spurs"],["Savinho","LW","Man City"],["Andrey Santos","CM","Chelsea"],["Adam Wharton","CDM","Crystal Palace"],["Soungoutou Magassa","CDM","West Ham"],["Caleb Wiley","LB","Chelsea"],["Justin Devenny","CAM","Crystal Palace"],["Elijah Campbell","CB","Everton"],["Alfie McNally","GK","Fulham"],["Carlos Alcaraz","CM","Everton"],["Abdukodir Khusanov","CB","Man City"],["André","CDM","Wolves"],["Mathys Tel","ST","Spurs"],["Alejandro Garnacho","LW","Chelsea"],["Temple Ojinnaka","CB","Wolves"],["Luke Harris","CAM","Fulham"],["Pablo","ST","West Ham"],["Kobbie Mainoo","CM","Man Utd"],["Alfie Pond","CB","Wolves"],["Dango Ouattara","RW","Brentford"],["Michael Kayode","RB","Brentford"],["Max Merrick","GK","Chelsea"],["Max Weiß","GK","Burnley"],["Maxime Estève","CB","Burnley"],["Max Alleyne","CB","Man City"],["Louie Copley","CM","Arsenal"],["James McConnell","CDM","Liverpool"],["Lewis Orford","CM","West Ham"],["Harrison Dudziak","CAM","Arsenal"],["Finlay Herrick","GK","West Ham"],["Jackson Tchatchoua","RB","Wolves"],["Tommy Setford","GK","Arsenal"],["Ben Winterburn","CDM","Bournemouth"],["Alex Scott","CM","Bournemouth"],["Aaron Bott","GK","Nott'm Forest"],["Ted Curd","GK","Chelsea"],["Ashley Phillips","CB","Spurs"],["Kaden Rodney","CDM","Crystal Palace"],["Tommy Pilling","CM","Liverpool"],["Danny Imray","RB","Crystal Palace"],["Nathan Fraser","ST","Wolves"],["Stefan Bajcetic","CDM","Liverpool"],["David Ozoh","CDM","Crystal Palace"],["Lucas Bergvall","CM","Spurs"],["Tyler Dibling","RW","Everton"],["Jack Hinshelwood","CDM","Brighton"],["Ryan Trevitt","CM","Brentford"],["Travis Patterson","LB","Aston Villa"],["Habib Diarra","CM","Sunderland"],["Amario Cozier-Duberry","RW","Brighton"],["Mateus Fernandes","CM","West Ham"],["Rio Kyerematen","CM","Spurs"],["Charlie Crew","CDM","Leeds"],["Kadan Young","LW","Aston Villa"],["Luca Gunter","GK","Spurs"],["Myles Lewis-Skelly","LB","Arsenal"],["Luka Vuskovic","CB","Spurs"],["Alex Murphy","LB","Newcastle"],["Jorrel Hato","LB","Chelsea"],["Riley Owen","CM","Brentford"],["Mamadou Sarr","CB","Chelsea"],["Tyler Fredricson","CB","Man Utd"],["Sverre Nypan","CM","Man City"],["Nehemiah Oriola","LW","Brighton"],["Jackson Izquierdo","GK","Crystal Palace"],["Charlie Tasker","RB","Brighton"],["Wellity Lucky","CB","Liverpool"],["Ben Middlemas","CM","Sunderland"],["Oliver Scarles","LB","West Ham"],["Archie Gray","CDM","Spurs"],["Lewis Miley","CM","Newcastle"],["Leny Yoro","CB","Man Utd"],["Justin Hanks","CB","Nott'm Forest"],["Jack Thompson","CB","Nott'm Forest"],["Shea Lacey","RW","Man Utd"],["Patrick Dorgu","LW","Man Utd"],["Lucas Pires","LB","Burnley"],["Zach Abbott","CB","Nott'm Forest"],["Tom Watson","LW","Brighton"],["Ármin Pécsi","GK","Liverpool"],["Tyrique George","LW","Chelsea"],["Dominic Sadi","RW","Bournemouth"],["Harrison Jones","CAM","Sunderland"],["Thierno Barry","ST","Everton"],["Adam Aznou","LB","Everton"],["Marc Guiu","ST","Chelsea"],["Jayden Danns","ST","Liverpool"],["Leo Shahar","RB","Newcastle"],["Alexéi Rojas","GK","Arsenal"],["Trent Koné-Doherty","LW","Liverpool"],["Michael Laffey","CDM","Liverpool"],["Chris Rigg","CAM","Sunderland"],["Murray Campbell","CB","Burnley"],["Stefanos Tzimas","ST","Brighton"],["Callum Marshall","ST","West Ham"],["Keyrol Figueroa","ST","Liverpool"],["Jack Moorhouse","CM","Man Utd"],["Jayden Meghoma","LB","Brentford"],["Jamaldeen Jimoh-Aloba","CAM","Aston Villa"],["Junior Kroupi","ST","Bournemouth"],["Jaden Heskey","CM","Man City"],["Josh Nichols","RB","Arsenal"],["Romain Esse","RW","Crystal Palace"],["Joshua Stephenson","CB","Brentford"],["Eliezer Mayenda","ST","Sunderland"],["Carlos Baleba","CDM","Brighton"],["Joe Knight","CM","Brighton"],["Sam Chambers","CAM","Leeds"],["Shumaira Mheuka","ST","Chelsea"],["Callan McKenna","GK","Bournemouth"],["Facundo Buonanotte","CAM","Chelsea"],["Jair Cunha","CB","Nott'm Forest"],["Triston Rowe","RB","Aston Villa"],["Kian Noble","CB","Man City"],["Callum Olusesi","CM","Spurs"],["Veljko Milosavljevic","CB","Bournemouth"],["Jenson Jones","RB","Sunderland"],["Luís Guilherme","RW","West Ham"],["Keehan Willows","GK","Nott'm Forest"],["Matai Akinmboni","CB","Bournemouth"],["Archie Whitehall","CM","Nott'm Forest"],["Diego Gómez","CM","Brighton"],["Alex Tóth","CM","Bournemouth"],["James Rowswell","CB","Spurs"],["Keiber Lamadrid","LW","West Ham"],["Zach Marsh","ST","Crystal Palace"],["Josh Acheampong","RB","Chelsea"],["Sam Proctor","GK","Aston Villa"],["Alysson","RW","Aston Villa"],["Murillo","CB","Nott'm Forest"],["Jaydee Canvot","CB","Crystal Palace"],["Conor McManus","LB","Brentford"],["Julian Eyestone","GK","Brentford"],["Julio Soler","LB","Bournemouth"],["Josh King","CAM","Fulham"],["Carter Pinnington","CB","Liverpool"],["Jaden Dixon","CB","Arsenal"],["Jack Fletcher","CAM","Man Utd"],["Rhys Chadwick","CDM","Leeds"],["Yankuba Minteh","RW","Brighton"],["Rayan","RW","Bournemouth"],["Ahmed Abdullahi","ST","Sunderland"],["Callum Bates","CM","Everton"],["Jack Whittaker","CAM","Sunderland"],["Jaydon Jones","CM","Sunderland"],["Adam Harrison","GK","Newcastle"],["Aidan Harris","GK","Newcastle"],["George Hemmings","CM","Aston Villa"],["Sam Amissah","CB","Fulham"],["Charlie Gray","CDM","Man City"],["James Wilson","ST","Spurs"],["Chido Obi","ST","Man Utd"],["Ethan Sutherland","LM","Wolves"],["George King","CB","Crystal Palace"],["Trey Nyoni","CM","Liverpool"],["Rio Cardines","LB","Crystal Palace"],["Caleb Kporha","RB","Crystal Palace"],["Divine Mukasa","CAM","Man City"],["Yusuf Akhamrich","RW","Spurs"],["Jimmy Sinclair","RM","Nott'm Forest"],["Stephen Mfuni","CB","Man City"],["Aidan Borland","CM","Aston Villa"],["Tyler Fletcher","CM","Man Utd"],["Zyan Blake","LW","Nott'm Forest"],["Kieran Morrison","RW","Liverpool"],["Reigan Heskey","LW","Man City"],["Estêvão","RW","Chelsea"],["Charalampos Kostoulas","ST","Brighton"],["Enso González","LW","Wolves"],["Andrés García","RB","Aston Villa"],["Alfie Cresswell","CM","Leeds"],["Tom Edozie","RW","Wolves"],["Harry Howell","CAM","Brighton"],["Jonah Kusi-Asare","ST","Fulham"],["Sean Neave","ST","Newcastle"],["Ollie Harrison","CDM","Chelsea"],["Kaden Braithwaite","CB","Man City"],["Seth Ridgeon","CM","Fulham"],["Ife Ibrahim","CDM","Arsenal"],["Ayden Heaven","CB","Man Utd"],["Timur Tuterov","LW","Sunderland"],["Saheed Olagunju","CB","Wolves"],["Mohamadou Kanté","CDM","West Ham"],["Luke Rawlings","CDM","Wolves"],["Bendito Mantato","RW","Man Utd"],["Souza","LB","Spurs"],["Gustavo Nunes","LW","Brentford"],["Giovanni Leoni","CB","Liverpool"],["Remy Rees-Dottin","ST","Bournemouth"],["Romelle Donovan","RW","Brentford"],["Marley Leuluai","CDM","Burnley"],["Khari Ranson","GK","Arsenal"],["Ezra Mayers","CB","West Ham"],["Harrison Armstrong","CM","Everton"],["Amara Nallo","CB","Liverpool"],["Reggie Walsh","CAM","Chelsea"],["Malachi Hardy","CB","Spurs"],["Rio Ngumoha","LW","Liverpool"],["Landon Emenalo","LB","Chelsea"],["Luca Williams-Barnett","CAM","Spurs"],["Harry Gray","ST","Leeds"],["Airidas Golambeckis","CB","West Ham"],["El Hadji Malick Diouf","LB","West Ham"],["Freddie Simmonds","CB","Brighton"],["Jayden Lienou","LB","Leeds"],["Charlie Stevens","CDM","Bournemouth"],["Braiden Graham","ST","Everton"],["Kornel Misciur","GK","Liverpool"],["TJ Carroll","CB","Aston Villa"],["Jack Porter","GK","Arsenal"],["Seung-soo Park","LW","Newcastle"],["Jesse Derry","LW","Chelsea"],["Joshua Ajala","ST","West Ham"],["Yunus Konak","CDM","Brentford"],["Benjamin Arthur","CB","Brentford"],["Nils Ramming","GK","Brighton"],["Sam Alabi","CM","Newcastle"],["Ellis Clark","CM","Burnley"],["Josh Gracey","GK","Wolves"],["Kian McMahon-Brown","RW","Burnley"],["Finn Geragusyan","ST","Sunderland"],["Malik Olayiwola","CM","Everton"],["Ben Casey","ST","Crystal Palace"],["Malick Yalcouyé","CM","Brighton"],["Ceadach O'Neill","ST","Arsenal"],["Jim Thwaites","CDM","Man Utd"],["Godwill Kukonki","CB","Man Utd"],["Max Dowman","RW","Arsenal"],["Ryan McAidoo","RW","Man City"],["Jun'ai Byfield","CB","Spurs"],["Bradley Burrowes","RW","Aston Villa"],["Brandon Pouani","LW","Burnley"],["Tyrone Samba","LW","Man City"],["Ollie Shield","RB","Brentford"],["Oliver Pimlott","LB","Burnley"],["Rhys Oakley","GK","Aston Villa"],["Mateus Mané","CAM","Wolves"],["Andre Harriman-Annous","ST","Arsenal"],["Brando Bailey-Joseph","LW","Arsenal"],["Ryan Kavuma-McQueen","RW","Chelsea"],["Tynan Thompson","LW","Spurs"],["Charlie Holland","CDM","Chelsea"],["Floyd Samba","CM","Man City"],["Diego León","LB","Man Utd"],["Dean Benamar","LB","Crystal Palace"],["Mohamed Koné","CM","Aston Villa"],["Marli Salmon","CB","Arsenal"],["Leon Routh","CB","Aston Villa"],["Tye Hall","CM","Spurs"],["Jocelin Ta Bi","RW","Sunderland"],["Malcom Dacosta González","CDM","Bournemouth"],["Lamin Sillah","ST","Nott'm Forest"],["Mathis Eboué","LW","Chelsea"],["Will Wright","ST","Liverpool"],["Joél Drakes-Thomas","RW","Crystal Palace"],["George Brierley","CM","Burnley"],["Jerome Abbey","CDM","Wolves"],["Luka Bentt","CAM","Brentford"],["Mor Talla Ndiaye","CB","Liverpool"]];
+// Applied once per page load, right after real players + any saved
+// (manual/CSV-imported) positions are in state — fills in ONLY players who
+// don't already have a specific position set, and deliberately does NOT
+// persist to localStorage (unlike setSpecificPosition/the CSV importer).
+// That split is the whole point: a real edit or CSV import is an explicit
+// user action and always wins, forever: a baked-in default is regenerated
+// fresh from this constant every load, so shipping an updated
+// BUILTIN_POSITIONS list in a future round instantly reaches every visitor
+// without anyone re-running an import. Never overwrites, never guesses —
+// same "only accept a specific position that's legal for this player's
+// broad FPL position" gate as the CSV importer, reusing the same matcher.
+function applyBuiltinPositions() {
+  if (!state.playerPositions) state.playerPositions = {};
+  let filled = 0;
+  for (const [name, code, club] of BUILTIN_POSITIONS) {
+    const player = matchPlayerByNameClub(name, club);
+    if (!player) continue;
+    if (state.playerPositions[player.id]) continue; // real data already here — never overwrite
+    if (!(SPECIFIC_POSITIONS[player.position] || []).includes(code)) continue;
+    state.playerPositions[player.id] = code;
+    filled++;
+  }
+  return filled;
 }
 const COMPARE_COLORS = ["#00ff66", "#3ba7ff", "#ffcf4d", "#ff6ec7"];
 // Attribute-driven matchup edge: blends each player's 9 FC attributes into
@@ -4337,6 +4527,11 @@ async function loadData() {
     // (re)applied here or it silently sits unused until the user happens
     // to open that player's panel and click Save again.
     applyPriorLeagueOverrides();
+    // Same reasoning: state.playerPositions (any real manual edit or CSV
+    // import) is also restored inside loadFormulasFromStorage(), so this
+    // has to run after it — applyBuiltinPositions() only fills players who
+    // still have nothing set, so it never overwrites what just loaded.
+    if (typeof applyBuiltinPositions === "function") applyBuiltinPositions();
     await seedStartOfSeasonRatings();
     state.piRatings = computePiRatings(fixtures); // after formulas load, so any saved learning-rate/cross-influence overrides apply
     await loadManagerNotes();
@@ -4354,12 +4549,11 @@ async function loadData() {
     renderDash();
     renderStats();
     renderShortlist();
-    renderPlanner();
+    renderPlanner(); // also renders the Planner-scoped FDR-at-a-glance block now
     renderPlTable();
     renderFdrGrid();
     renderRankings();
     renderH2H();
-    renderFdrFooterBlock();
   } catch (err) {
     setBanner(
       `Couldn't reach the FPL API through any available route (${err.message}). Free CORS proxies are occasionally down or rate-limited — this is a known limitation of the browser-only version.`,
@@ -5076,6 +5270,27 @@ function buildToolbarStatics() {
       statusEl.textContent = "⚠️ Couldn't read that file: " + e.message;
     }
     fmAttrInput.value = "";
+  };
+
+  const positionsInput = document.getElementById("positionsCsvInput");
+  if (positionsInput) positionsInput.onchange = async () => {
+    const file = positionsInput.files && positionsInput.files[0];
+    const statusEl = document.getElementById("positionsImportStatus");
+    if (!file) return;
+    statusEl.textContent = "Reading…";
+    try {
+      const text = await file.text();
+      const result = importPlayerPositionsCsv(text);
+      if (result.error) {
+        statusEl.textContent = "⚠️ " + result.error;
+      } else {
+        statusEl.textContent = `✓ Matched ${result.matched} player${result.matched === 1 ? "" : "s"}${result.unmatched ? `, ${result.unmatched} unmatched` : ""}.`;
+        renderStats();
+      }
+    } catch (e) {
+      statusEl.textContent = "⚠️ Couldn't read that file: " + e.message;
+    }
+    positionsInput.value = "";
   };
 
   document.getElementById("tierRankMin").onchange = (e) => { state.filters.rankMin = Number(e.target.value) || 1; renderStats(); };
@@ -6166,6 +6381,11 @@ async function loadDraftsFromStorage() {
     if (d.squadConfirmed === undefined) d.squadConfirmed = d.squad.length === 15;
     if (d.builderCaptainId === undefined) d.builderCaptainId = null;
     if (d.builderViceCaptainId === undefined) d.builderViceCaptainId = null;
+    // Migration for drafts saved before draft.totalBudget existed (bank
+    // desync fix) — lock in the invariant from whatever this draft
+    // currently, correctly has, right now before any new edits happen, so
+    // the very next manual add/remove doesn't get a one-click-stale bank.
+    if (!Number.isFinite(d.totalBudget)) d.totalBudget = squadCost(d.squad) + (d.bank || 0);
   }
   if (state.drafts.length && !state.activeDraftId) state.activeDraftId = state.drafts[0].id;
 }
@@ -6180,6 +6400,10 @@ function seedDraftFromSquad(id, name, playerIds, bankTenths) {
   draft.name = name;
   draft.squad = playerIds;
   draft.bank = bankTenths;
+  // Fix real total (squad value + bank) so future manual add/remove edits
+  // keep this draft's true budget, not an assumed £100m — an imported real
+  // team can have banked more or less than a fresh draft would.
+  draft.totalBudget = squadCost(playerIds) + (bankTenths || 0);
   draft.transfersLog = draft.transfersLog || {};
   draft.chipsUsed = draft.chipsUsed || {};
   draft.squadConfirmed = true;
@@ -8003,7 +8227,13 @@ function warmCaptaincyScoreCache() {
   const gwId = upcoming && upcoming.length ? upcoming[0].id : null;
   if (!gwId) return;
   const pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
-  const CHUNK_SIZE = 20;
+  // Bigger chunks (was 20) so the whole eligible pool warms in fewer idle
+  // slots — still small enough per chunk not to visibly jank the boot
+  // sequence's own rendering, but finishes sooner, which is the actual
+  // lever on "still too much buffer opening Captaincy" for anyone who
+  // clicks the tab shortly after the page loads, before idle time has
+  // fully caught up.
+  const CHUNK_SIZE = 40;
   let i = 0;
   const runChunk = () => {
     const slice = pool.slice(i, i + CHUNK_SIZE);
@@ -9010,6 +9240,12 @@ function renderPlanner() {
     sel.appendChild(opt);
   }
 
+  // Planner-scoped FDR-at-a-glance — see renderFdrFooterBlock's comment.
+  // Called unconditionally here (not just from renderGwSimulator) so it's
+  // still populated in Squad Builder/Compare states, using whatever
+  // gameweek was last selected.
+  renderFdrFooterBlock();
+
   const body = document.getElementById("plannerBody");
   if (state.plannerCompareMode) {
     renderPlannerCompare(body);
@@ -9143,6 +9379,26 @@ function squadCost(playerIds) {
   return playerIds.reduce((sum, id) => sum + (state.players.find(p => p.id === id)?.nowCost || 0), 0);
 }
 
+// Keeps draft.bank honest against draft.squad. Bug fix: the squad-builder's
+// manual add/remove buttons (and Auto Pick) used to mutate draft.squad
+// directly without ever touching draft.bank, so a squad built entirely by
+// hand kept showing whatever bank value the draft started with (usually
+// the full £100.0m) regardless of what was actually spent — "squad value
+// and bank both show £100" instead of summing to £100. draft.totalBudget
+// is the fixed total (squad value + bank) a draft was seeded with — £100m
+// for a fresh draft, or squadCost+bank for a real imported team — and
+// every mutation site now calls this instead of touching draft.bank
+// directly, so the invariant squadCost + bank === totalBudget always holds.
+function syncDraftBank(draft) {
+  if (!Number.isFinite(draft.totalBudget)) {
+    // Legacy draft saved before totalBudget existed — back-fill from
+    // whatever it already has so this doesn't silently rewrite money that
+    // was already correct.
+    draft.totalBudget = squadCost(draft.squad) + (draft.bank || 0);
+  }
+  draft.bank = draft.totalBudget - squadCost(draft.squad);
+}
+
 // Minimum possible spend (in tenths, matching nowCost) to legally fill
 // every squad slot NOT already occupied. Uses the REAL cheapest players
 // actually still available in the current live pool (excluding whoever's
@@ -9252,6 +9508,12 @@ function autoPickSquad(draft, opts) {
   const respectBudget = opts?.respectBudget !== false;
   const respectClub = opts?.respectClub !== false;
   draft.squad = draft.squad || [];
+  // Fix the total-budget invariant BEFORE any picks are added below, from
+  // whatever this draft already correctly has — a legacy draft with no
+  // totalBudget yet gets it backfilled from its current (pre-mutation)
+  // squad+bank, not from the squad this function is about to build, or the
+  // backfill would silently cancel out and leave bank stale again.
+  if (!Number.isFinite(draft.totalBudget)) draft.totalBudget = squadCost(draft.squad) + (draft.bank || 0);
   const newlyAddedIds = [];
   for (const pos of ["GK", "DEF", "MID", "FWD"]) {
     const existingInPos = draft.squad.filter(id => {
@@ -9341,6 +9603,7 @@ function autoPickSquad(draft, opts) {
     draft.squad[worstIdx] = best.id;
     newlyAddedIds[worstListPos] = best.id;
   }
+  syncDraftBank(draft); // bug fix: Auto Pick used to never update draft.bank at all
   draft.builderCaptainId = null; draft.builderViceCaptainId = null; // recomputed fresh by computeGwResult from the new squad
   draft.manualStarterIds = null;
 }
@@ -9377,7 +9640,8 @@ function findBenchBoostSquad(draft) {
   const pool = fullPlayerPoolForOptimizer();
   const valueFor = (p) => (p ? priorityScore(p, "points", "med") : 0);
   draft.squad = jointOptimizeSquad(pool, valueFor, true, BUDGET, []);
-  draft.bank = BUDGET - squadCost(draft.squad);
+  draft.totalBudget = BUDGET;
+  syncDraftBank(draft);
   draft.builderCaptainId = null; draft.builderViceCaptainId = null;
   draft.manualStarterIds = null;
 }
@@ -9411,7 +9675,8 @@ function solveBenchBoostForGw(gwId, budgetCap, lockedIds) {
 // "if I had a completely free hand, who's the best 15 for this GW".
 function findBenchBoostSquadForGw(draft, gwId) {
   draft.squad = solveBenchBoostForGw(gwId, BUDGET, []);
-  draft.bank = BUDGET - squadCost(draft.squad);
+  draft.totalBudget = BUDGET;
+  syncDraftBank(draft);
 }
 // Variant B: constrained to your CURRENT squad's total value (sell value,
 // approximated here by nowCost since sell-price/profit tracking isn't
@@ -9422,7 +9687,8 @@ function findBenchBoostSquadForGwWithinCurrentValue(draft, gwId) {
   const currentValue = squadCost(draft.squad) + (draft.bank || 0);
   const budgetCap = currentValue > 0 ? currentValue : BUDGET;
   draft.squad = solveBenchBoostForGw(gwId, budgetCap, []);
-  draft.bank = budgetCap - squadCost(draft.squad);
+  draft.totalBudget = budgetCap;
+  syncDraftBank(draft);
 }
 function openAutopickModal(draft) {
   state.autopickOptions = state.autopickOptions || { priority: "points", risk: "med" };
@@ -9597,7 +9863,7 @@ function renderSquadBuilder(draft) {
   };
   document.getElementById("builderResetSquad").onclick = () => {
     if (!draft.squad.length || confirm("Clear all picked players?")) {
-      draft.squad = []; draft.bank = BUDGET; draft.builderCaptainId = null; draft.builderViceCaptainId = null; draft.manualStarterIds = null; state.builderSelectedId = null;
+      draft.squad = []; draft.totalBudget = BUDGET; draft.bank = BUDGET; draft.builderCaptainId = null; draft.builderViceCaptainId = null; draft.manualStarterIds = null; state.builderSelectedId = null;
       saveDrafts(); renderPlanner();
     }
   };
@@ -9621,6 +9887,7 @@ function renderSquadBuilder(draft) {
       const snap = draft._editSnapshot;
       draft.squad = snap.squad;
       draft.bank = snap.bank;
+      draft.totalBudget = Number.isFinite(snap.totalBudget) ? snap.totalBudget : (squadCost(snap.squad) + (snap.bank || 0));
       draft.transfersLog = snap.transfersLog;
       draft.squadConfirmed = true;
       draft._editSnapshot = null;
@@ -9712,6 +9979,7 @@ function renderBuilderList(draft) {
         if (draft.builderCaptainId === id) draft.builderCaptainId = null;
         if (draft.builderViceCaptainId === id) draft.builderViceCaptainId = null;
       }
+      syncDraftBank(draft); // bug fix: manual add/remove used to leave draft.bank untouched
       saveDrafts(); renderPlanner();
     };
   });
@@ -10126,6 +10394,7 @@ function renderGwSimulator(draft) {
       draft._editSnapshot = {
         squad: [...draft.squad],
         bank: draft.bank,
+        totalBudget: draft.totalBudget,
         transfersLog: JSON.parse(JSON.stringify(draft.transfersLog)),
       };
       draft.transfersLog = {};
@@ -10238,11 +10507,16 @@ function renderPlannerInBrowseList(draft, gwId, entry, log, horizon) {
 
   const completeTransfer = (targetId, candidateId) => {
     log.out.push(targetId); log.in.push(candidateId);
-    if (log.chip) draft.chipsUsed[log.chip] = true;
+    if (log.chip) draft.chipsUsed[chipUsageKey(log.chip, gwId)] = true;
     state.plannerReplacingId = null;
-    saveDrafts(); renderPlanner();
+    // Perf fix: this used to do a full renderPlanner() render, THEN a
+    // second full renderGwDetail() render right after (needed only because
+    // plannerExpandedGw was set too late for the first render to land on
+    // the right gameweek) — every planner click was doing the whole
+    // gameweek-horizon recompute twice. Setting it first means one render
+    // suffices.
     state.plannerExpandedGw = gwId;
-    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    saveDrafts(); renderPlanner();
   };
 
   listEl.querySelectorAll("[data-action='pick-replace']").forEach(btn => {
@@ -10405,10 +10679,9 @@ function renderRecommendedTransfersPanel(draft, gwId, entry, log, horizon) {
       const rec = recs[key];
       if (!rec) return;
       log.out.push(rec.target.id); log.in.push(rec.candidate.id);
-      if (log.chip) draft.chipsUsed[log.chip] = true;
+      if (log.chip) draft.chipsUsed[chipUsageKey(log.chip, gwId)] = true;
+      state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek — see completeTransfer's comment
       saveDrafts(); renderPlanner();
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
     };
   });
   el.querySelectorAll("[data-rec-decline]").forEach(btn => {
@@ -10438,10 +10711,15 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   const result = computeGwResult(entry.squad, gwId, log.chip, log.captainId, log.manualStarterIds, log.viceCaptainId, log.benchOrder);
 
   const chipsAvailable = ["WC", "FH", "BB", "TC"];
+  // Double chips: each type has an independent GW1-18 use and GW19+ use
+  // (chipUsageKey/DOUBLE_CHIPS_START_GW) — label which one this gameweek
+  // is drawing from so "Wildcard (used)" doesn't read as "no more
+  // Wildcards this season" once the GW19+ copy is still available.
+  const chipHalfLabel = chipHalfForGw(gwId) === 2 ? " (2nd)" : " (1st)";
   const chipRow = chipsAvailable.map(c => {
-    const used = draft.chipsUsed[c] && draft.transfersLog[gwId]?.chip !== c;
+    const used = draft.chipsUsed[chipUsageKey(c, gwId)] && draft.transfersLog[gwId]?.chip !== c;
     const active = log.chip === c;
-    return `<button class="chip-btn ${active ? "active" : ""}" data-chip="${c}" ${used ? "disabled" : ""}>${CHIP_LABELS[c]}${used ? " (used)" : ""}</button>`;
+    return `<button class="chip-btn ${active ? "active" : ""}" data-chip="${c}" ${used ? "disabled" : ""} title="${CHIP_LABELS[c]}${chipHalfLabel} — ${DOUBLE_CHIPS_START_GW <= gwId ? "GW" + DOUBLE_CHIPS_START_GW + "+" : "GW1-" + (DOUBLE_CHIPS_START_GW - 1)} copy">${CHIP_LABELS[c]}${chipHalfLabel}${used ? " (used)" : ""}</button>`;
   }).join("");
   const activeChipBanner = log.chip
     ? `<div style="background:var(--accent-dim,#2d3a4a);border:1px solid var(--accent);border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:12.5px;font-weight:600">⚡ ${CHIP_LABELS[log.chip]} active this gameweek${log.chip === "BB" ? " — bench points count too (highlighted below)" : log.chip === "TC" ? " — captain scores 3× (highlighted below)" : ""}</div>`
@@ -10484,9 +10762,8 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     btn.onclick = () => {
       const c = btn.dataset.chip;
       log.chip = log.chip === c ? null : c;
+      state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek — see completeTransfer's comment
       saveDrafts(); renderPlanner();
-      state.plannerExpandedGw = gwId;
-      renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
     };
   });
 
@@ -10572,12 +10849,38 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
   if (log.out.length) {
     const list = document.createElement("div");
     list.style.marginTop = "10px";
-    list.innerHTML = `<div class="detail-block-title">Planned this gameweek</div>` + log.out.map((outId, i) => {
-      const outP = state.players.find(p => p.id === outId);
-      const inP = state.players.find(p => p.id === log.in[i]);
-      return `<div style="font-size:12.5px;color:var(--ink-dim);margin-bottom:4px">${outP?.webName || "?"} → ${inP?.webName || "?"}</div>`;
-    }).join("");
+    list.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div class="detail-block-title" style="margin-bottom:0">Planned this gameweek</div>
+        <button class="dir-btn" id="plannerClearTransfersBtn-${gwId}" style="padding:2px 8px;font-size:11px" title="Remove every transfer planned for this gameweek">Clear all</button>
+      </div>
+      ${log.out.map((outId, i) => {
+        const outP = state.players.find(p => p.id === outId);
+        const inP = state.players.find(p => p.id === log.in[i]);
+        return `
+          <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-dim);margin-top:6px">
+            <span style="flex:1">${outP?.webName || "?"} → ${inP?.webName || "?"}</span>
+            <button class="dir-btn planner-undo-transfer-btn" data-idx="${i}" style="padding:1px 7px;font-size:11px" title="Undo this transfer">↺ Undo</button>
+          </div>`;
+      }).join("")}
+    `;
     tc.appendChild(list);
+    list.querySelectorAll(".planner-undo-transfer-btn").forEach(btn => {
+      btn.onclick = () => {
+        const idx = Number(btn.dataset.idx);
+        log.out.splice(idx, 1);
+        log.in.splice(idx, 1);
+        state.plannerExpandedGw = gwId;
+        saveDrafts(); renderPlanner();
+      };
+    });
+    const clearBtn = document.getElementById(`plannerClearTransfersBtn-${gwId}`);
+    if (clearBtn) clearBtn.onclick = () => {
+      if (!confirm("Remove all transfers planned for this gameweek?")) return;
+      log.out = []; log.in = [];
+      state.plannerExpandedGw = gwId;
+      saveDrafts(); renderPlanner();
+    };
   }
 
   // Captaincy graphs (item 9 + item 11 share the same charting function).
@@ -10698,11 +11001,10 @@ function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result, entr
           return;
         }
         log.out.push(targetId); log.in.push(candidateId);
-        if (log.chip) draft.chipsUsed[log.chip] = true;
+        if (log.chip) draft.chipsUsed[chipUsageKey(log.chip, gwId)] = true;
         state.plannerReplacingId = null;
+        state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek — see completeTransfer's comment
         saveDrafts(); renderPlanner();
-        state.plannerExpandedGw = gwId;
-        renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
         return;
       }
       const sourceId = dragId != null ? dragId : Number(raw);
@@ -10755,9 +11057,9 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
   document.body.appendChild(modal);
 
   const rerender = () => {
-    closePitchModal(); saveDrafts(); renderPlanner();
-    state.plannerExpandedGw = gwId;
-    renderGwDetail(draft, gwId, horizon, getSquadTimeline(draft, horizon));
+    closePitchModal();
+    state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek — see completeTransfer's comment
+    saveDrafts(); renderPlanner();
   };
 
   const capBtn = document.getElementById("gwModalCaptain");
@@ -12466,39 +12768,32 @@ function renderFdrGrid() {
 // ---- Bottom-of-page FDR reference block (site-wide footer) ----
 // Item: "at the very bottom have a small fdr block to see fixtures like
 // image attached" — a compact, always-visible version of the full FDR
-// grid (all 20 clubs, badge + short name, colour-coded pills), living in
-// the <footer> outside <main> so it's visible under every tab, not just
-// the FDR tab. Reuses the SAME scoring (customFdr) and colour function
-// (fdrGradientColor) the main FDR grid uses, so its numbers/colours are
-// always consistent with the full table — this is a smaller view onto
-// the same real data, not a separate approximation.
-let _fdrFooterResizeWired = false;
-function fdrFooterColumnCount() {
-  const wrap = document.getElementById("fdrFooterGrid");
-  const width = (wrap && wrap.clientWidth) || (window.innerWidth ? window.innerWidth - 80 : 900);
-  // Club column ~128px + each GW pill column needs ~34px to look
-  // uncramped (matches the reference image's pill proportions) — solve
-  // for how many GW columns actually fit that width, clamped to a
-  // sensible range so it never shows just 1-2 (useless) or 20+ (cramped
-  // on a normal screen even if the arithmetic says they'd technically fit).
-  const perGw = 34;
-  const clubCol = 128;
-  const fitCount = Math.floor((width - clubCol) / perGw);
-  // No fixed ceiling beyond the real season length (38 GWs) — "fills the
-  // space it has... aesthetically pleasing in spacing more than a desired
-  // amount" means a very wide monitor should genuinely show more weeks,
-  // not hit an arbitrary cap early. Still floored at 4 so a narrow/mobile
-  // view never collapses to something useless.
-  return Math.max(4, Math.min(38, fitCount || 6));
-}
+// grid (all 20 clubs, badge + short name, colour-coded pills), living
+// inside the Planner tab (moved there from a page-wide footer — it was
+// showing under every tab, which only ever made sense on Planner where
+// you're actually picking gameweeks). Reuses the SAME scoring (customFdr)
+// and colour function (fdrGradientColor) the main FDR grid uses, so its
+// numbers/colours are always consistent with the full table — this is a
+// smaller view onto the same real data, not a separate approximation.
+// Window is a fixed 6 gameweeks starting at whichever gameweek is
+// currently selected in the planner (state.plannerExpandedGw) — e.g.
+// planner on GW20 shows GW20-25 here, planner on GW21 shows GW21-26 —
+// rather than always anchoring to "now". Called from renderPlanner() so
+// it stays in sync with every gameweek navigation automatically.
+const FDR_FOOTER_GW_WINDOW = 6;
 function renderFdrFooterBlock() {
   const wrap = document.getElementById("fdrFooterGrid");
   if (!wrap || !state.teams.length) return;
   const curId = currentEventId();
-  const startId = curId || (state.events.find(e => !e.finished) || {}).id || 1;
+  const startId = state.plannerExpandedGw || curId || (state.events.find(e => !e.finished) || {}).id || 1;
   const allGwIds = state.events.map(e => e.id).filter(id => id >= startId);
-  const gwCount = fdrFooterColumnCount();
-  const gwIds = allGwIds.slice(0, gwCount);
+  const gwIds = allGwIds.slice(0, FDR_FOOTER_GW_WINDOW);
+  const titleEl = document.getElementById("fdrFooterTitle");
+  if (titleEl) {
+    titleEl.textContent = gwIds.length > 1
+      ? `FDR at a glance — GW${gwIds[0]}–${gwIds[gwIds.length - 1]}`
+      : "FDR at a glance";
+  }
   if (!gwIds.length) { wrap.innerHTML = `<p class="foot-note">No upcoming fixtures to show.</p>`; return; }
 
   const teamsSorted = state.teams.slice().sort((a, b) => (a.short_name || "").localeCompare(b.short_name || ""));
@@ -12528,14 +12823,6 @@ function renderFdrFooterBlock() {
 
   wrap.innerHTML = `<table class="fdr-footer-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
 
-  if (!_fdrFooterResizeWired) {
-    _fdrFooterResizeWired = true;
-    let resizeTimer = null;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(renderFdrFooterBlock, 200);
-    });
-  }
 }
 // Fixture run finder always scans the FULL season, independent of whatever
 // GW range / sort / mode / view is currently set on the primary FDR table
@@ -12933,6 +13220,133 @@ function tripleCaptainCandidates(gwIds, squadIds) {
   }
   return results.sort((a, b) => b.best.captaincyScore - a.best.captaincyScore);
 }
+
+// ---------- Chip suggestion (new feature) ----------
+// Situational, whole-season chip planning — not just "which single week
+// scores best" (that's what the Bench Boost/Triple Captain sections above
+// already do) but "is there a moment worth building a WHOLE PLAN around":
+// if a cluster of genuinely strong teams all swing into easier fixtures at
+// the same time, that's the classic "wildcard just before it, then ride it
+// into a Bench Boost or Triple Captain" situation — reuses the exact same
+// clustered-swing detector the FDR tab's own "Fixtures easing" panel uses
+// (computeFixtureSwings), just filtered down to strong teams specifically
+// (a swing among mid-table sides is a fine single transfer, not a reason
+// to burn a Wildcard), then cross-references the existing Bench Boost/
+// Triple Captain scoring above to decide which follow-up chip (if any)
+// actually pays off in that window. No new scoring model — this is a
+// decision layer on top of signals the app already computes elsewhere.
+const CHIP_SUGGESTION_STRONG_RATING_MIN = 3.6; // top tier of the 1-5 overall team rating scale
+const CHIP_SUGGESTION_SWING_THRESHOLD = 0.6; // same default as the FDR tab's own swing panel
+const CHIP_SUGGESTION_SWING_WINDOW = 4;
+const CHIP_SUGGESTION_MIN_CLUSTER = 3; // need at least this many strong teams swinging together to matter
+function strongTeamIds() {
+  return state.teams
+    .filter(t => effectiveFieldRating(t.id, "overall") >= CHIP_SUGGESTION_STRONG_RATING_MIN)
+    .map(t => t.id);
+}
+// Which chip TYPES ("WC"/"FH"/"BB"/"TC") still have an unused copy for the
+// half of the season a given gwId falls in — see chipUsageKey/
+// DOUBLE_CHIPS_START_GW. Without an active draft (nothing played yet in
+// this browser), everything is assumed available rather than hiding
+// suggestions behind a squad that may not exist yet.
+function chipsAvailableForGw(draft, gwId) {
+  const all = ["WC", "FH", "BB", "TC"];
+  if (!draft || !draft.chipsUsed) return all;
+  return all.filter(c => !draft.chipsUsed[chipUsageKey(c, gwId)]);
+}
+function computeChipSuggestions(gwIds, draft, squadIds) {
+  if (!gwIds.length || !state.teams.length) return { swingPick: null, freeHitPick: null };
+  const strongIds = new Set(strongTeamIds());
+  const fromGw = gwIds[0], toGw = gwIds[gwIds.length - 1];
+  const swings = computeFixtureSwings(fromGw, toGw, CHIP_SUGGESTION_SWING_WINDOW, CHIP_SUGGESTION_SWING_THRESHOLD);
+  const strongSwings = swings.map(s => ({
+    gwId: s.gwId,
+    strongEasySwingers: s.easySwingers.filter(sw => strongIds.has(sw.team.id)),
+  })).filter(s => s.strongEasySwingers.length >= CHIP_SUGGESTION_MIN_CLUSTER);
+  strongSwings.sort((a, b) => b.strongEasySwingers.length - a.strongEasySwingers.length || (a.gwId - b.gwId));
+  let swingPick = null;
+  if (strongSwings.length) {
+    const top = strongSwings[0];
+    const available = chipsAvailableForGw(draft, top.gwId);
+    // Look for a Bench Boost double-gameweek payoff or a standout Triple
+    // Captain option within a couple of gameweeks either side of the swing
+    // — the swing itself is when fixtures turn easy, but the actual best
+    // week to CASH IN with a second chip can land a gameweek or two later
+    // once a double shows up, so check a small window rather than only the
+    // exact swing gameweek.
+    const checkWindow = gwIds.filter(g => g >= top.gwId && g <= Math.min(toGw, top.gwId + 2));
+    let bbPick = null;
+    if (available.includes("BB")) {
+      const bbCandidates = squadIds && squadIds.length
+        ? checkWindow.map(g => benchBoostScoreForSquad(squadIds, g)).filter(Boolean).filter(s => s.doubles > 0)
+        : checkWindow.map(g => ({ gwId: g, ...poolWideBenchBoostSignal([g])[0] })).filter(s => s.doubleTeams && s.doubleTeams.length > 0);
+      if (bbCandidates.length) {
+        bbPick = squadIds && squadIds.length
+          ? bbCandidates.sort((a, b) => b.doubles - a.doubles)[0]
+          : bbCandidates.sort((a, b) => b.doubleTeams.length - a.doubleTeams.length)[0];
+      }
+    }
+    let tcPick = null;
+    if (!bbPick && available.includes("TC")) {
+      const tcCandidates = tripleCaptainCandidates(checkWindow, squadIds).slice(0, 1);
+      if (tcCandidates.length) tcPick = tcCandidates[0];
+    }
+    swingPick = {
+      swingGwId: top.gwId,
+      teams: top.strongEasySwingers.map(sw => sw.team),
+      wcAvailable: available.includes("WC"),
+      bbPick, tcPick,
+    };
+  }
+  // Free Hit: a single isolated bad gameweek for the loaded squad — bad
+  // itself, but with a decent week on both sides, which is exactly the
+  // "don't rebuild the whole squad over it, just Free Hit through it"
+  // situation (a Wildcard would be the wrong tool for a one-off).
+  let freeHitPick = null;
+  if (squadIds && squadIds.length) {
+    const scored = gwIds.map(g => benchBoostScoreForSquad(squadIds, g)).filter(Boolean);
+    for (let i = 1; i < scored.length - 1; i++) {
+      const prev = scored[i - 1], cur = scored[i], next = scored[i + 1];
+      const isolatedBad = cur.blanks >= Math.ceil(cur.squadSize * 0.3) && prev.blanks <= 1 && next.blanks <= 1;
+      if (isolatedBad && (!freeHitPick || cur.blanks > freeHitPick.blanks)) {
+        freeHitPick = cur;
+      }
+    }
+    if (freeHitPick && !chipsAvailableForGw(draft, freeHitPick.gwId).includes("FH")) freeHitPick = null;
+  }
+  return { swingPick, freeHitPick };
+}
+function renderChipSuggestionPanel(gwIds, draft, squadIds) {
+  const { swingPick, freeHitPick } = computeChipSuggestions(gwIds, draft, squadIds);
+  const cards = [];
+  if (swingPick) {
+    const gw = state.events.find(e => e.id === swingPick.swingGwId);
+    const teamNames = swingPick.teams.slice(0, 6).map(t => t.short_name).join(", ") + (swingPick.teams.length > 6 ? ` +${swingPick.teams.length - 6} more` : "");
+    let plan, why;
+    if (swingPick.bbPick) {
+      const bbGw = state.events.find(e => e.id === swingPick.bbPick.gwId);
+      plan = `Wildcard around ${gw ? gw.name : "GW" + swingPick.swingGwId} to load up on them, then Bench Boost ${bbGw ? bbGw.name : "GW" + swingPick.bbPick.gwId} once the double gameweek lands.`;
+      why = `${swingPick.teams.length} strong teams (${teamNames}) swing into easier fixtures together here, AND a double gameweek follows shortly after — the classic Wildcard-into-Bench-Boost setup.`;
+    } else if (swingPick.tcPick) {
+      const tcGw = state.events.find(e => e.id === swingPick.tcPick.gwId);
+      const capName = swingPick.tcPick.best?.p ? nameWithPosition(swingPick.tcPick.best.p) : "your best captain option";
+      plan = `Wildcard around ${gw ? gw.name : "GW" + swingPick.swingGwId} to load up on them, then Triple Captain ${capName} in ${tcGw ? tcGw.name : "GW" + swingPick.tcPick.gwId}.`;
+      why = `${swingPick.teams.length} strong teams (${teamNames}) swing into easier fixtures together here, and it sets up an exceptional Triple Captain option nearby.`;
+    } else {
+      plan = `Just a Wildcard around ${gw ? gw.name : "GW" + swingPick.swingGwId} — no double gameweek or standout captain lined up close by, so there's nothing here worth combining with a second chip yet.`;
+      why = `${swingPick.teams.length} strong teams (${teamNames}) swing into easier fixtures together at the same time — a genuine cluster, not just one good transfer.`;
+    }
+    if (!swingPick.wcAvailable) plan += " (Your Wildcard for this half of the season is already used — this is what the pattern would suggest if you had one free.)";
+    cards.push(`<div class="scout-card fdr-swing-card"><div class="fdr-swing-card-head"><span>🧠 Fixture-swing plan</span></div><div style="font-size:12.5px;line-height:1.5"><strong>${plan}</strong><br><span style="color:var(--ink-faint)">${why}</span></div></div>`);
+  }
+  if (freeHitPick) {
+    const gw = state.events.find(e => e.id === freeHitPick.gwId);
+    cards.push(`<div class="scout-card fdr-swing-card"><div class="fdr-swing-card-head"><span>🧠 Free Hit plan</span></div><div style="font-size:12.5px;line-height:1.5"><strong>Free Hit ${gw ? gw.name : "GW" + freeHitPick.gwId}</strong> — ${freeHitPick.blanks} of your ${freeHitPick.squadSize} squad players blank that week, but the gameweeks either side look fine, so it reads as a one-off dip rather than something worth a permanent Wildcard rebuild.<br><span style="color:var(--ink-faint)">Free Hit reverts your squad back afterwards, unlike a Wildcard.</span></div></div>`);
+  }
+  return cards.length
+    ? `<div class="detail-block-title" style="margin-top:4px">Chip suggestion — situational plan</div><div class="scout-card-grid fdr-swing-grid" style="margin-bottom:18px">${cards.join("")}</div>`
+    : `<p class="foot-note" style="margin:0 0 14px">No strong, clustered fixture swing or isolated bad gameweek found in the current horizon worth building a chip plan around right now — check back as fixtures firm up.</p>`;
+}
 function renderChipAdvisorPanel() {
   const el = document.getElementById("chipAdvisorBody");
   if (!el || !state.teams.length) return;
@@ -12983,7 +13397,11 @@ function renderChipAdvisorPanel() {
   }).join("") : `<div class="empty-state">Not enough data yet to rank Triple Captain windows.</div>`;
   const tcSourceNote = squadIds ? "" : `<p class="foot-note" style="margin:0 0 10px">No active squad loaded — showing the best pool-wide captaincy option per gameweek (500+ min players) instead of restricting to your squad.</p>`;
 
+  // ---- Chip suggestion (new: situational whole-plan layer, see comment above computeChipSuggestions) ----
+  const suggestionHtml = renderChipSuggestionPanel(gwIds, draft, squadIds);
+
   el.innerHTML = `
+    ${suggestionHtml}
     <div class="detail-block-title" style="margin-top:4px">Bench Boost — top candidate gameweeks</div>
     <div class="scout-card-grid fdr-swing-grid">${bbHtml}</div>
     <div class="detail-block-title" style="margin-top:18px">Triple Captain — top candidate gameweeks</div>
@@ -14096,15 +14514,42 @@ function h2hBenchPlayers(team, key) {
   const xiIds = new Set(["GK", "DEF", "MID", "FWD"].flatMap(pos => (xi[pos] || []).map(p => p.id)));
   return state.players.filter(p => p.teamId === team.id && !xiIds.has(p.id));
 }
-// A single per-player "bench value" score — reuses totalPoints (proven
-// season output, the same primary sort key every other H2H list already
-// uses for "who's better") blended with form (recent output), so an out-
-// of-form big name doesn't automatically outscore a bench player who's
-// actually playing well right now. Deliberately simple/transparent
-// (unlike Captaincy's fixture-aware score) since this is a lower-priority,
-// lighter-weight comparison per the user's own framing.
+// A single per-player "bench value" score, blending three explicitly
+// requested factors so no one of them can dominate just because it's on a
+// bigger numeric scale — each is rescaled to a 1-100 percentile (vs the
+// same-position player pool) before averaging:
+//  - points: proven season output (totalPoints), the same primary signal
+//    every other H2H list already sorts on.
+//  - stats: real underlying per-90 output (xGI/90 for attacking threat,
+//    defensive contribution/90 for the defensive side) — catches a bench
+//    player who's quietly outputting well even if their raw points/minutes
+//    are still modest, which points alone would miss.
+//  - ability: the app's FC-style 1-99 attribute profile (computeFcAttributes
+//    — Pace/Shooting/Passing/Dribbling/Defending/Physical/Finishing/Decision
+//    making/Work rate, averaged), the same attribute system used on the
+//    Player Stats attribute radar elsewhere in the app.
+let _benchStatsPoolCache = null;
+function h2hBenchStatsPools() {
+  if (_benchStatsPoolCache && _benchStatsPoolCache.n === state.players.length) return _benchStatsPoolCache.byPos;
+  const byPos = {};
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const pool = state.players.filter(x => x.position === pos);
+    byPos[pos] = {
+      points: pool.map(x => x.totalPoints || 0),
+      stats: pool.map(x => (x.xgi90 || 0) * 10 + (x.defensiveContributionPer90 || 0)),
+    };
+  }
+  _benchStatsPoolCache = { n: state.players.length, byPos };
+  return byPos;
+}
 function h2hBenchPlayerValue(p) {
-  return (p.totalPoints || 0) * 0.7 + (p.form || 0) * 10 * 0.3;
+  const pools = h2hBenchStatsPools()[p.position] || { points: [], stats: [] };
+  const pointsPct = percentileRank(p.totalPoints || 0, pools.points);
+  const statsRaw = (p.xgi90 || 0) * 10 + (p.defensiveContributionPer90 || 0);
+  const statsPct = percentileRank(statsRaw, pools.stats);
+  const fcAttrs = computeFcAttributes(p);
+  const abilityPct = fcAttrs.length ? fcAttrs.reduce((s, a) => s + a.value, 0) / fcAttrs.length : 50;
+  return (pointsPct + statsPct + abilityPct) / 3;
 }
 function h2hBenchStrength(teamA, teamB, key) {
   const benchA = h2hBenchPlayers(teamA, key).sort((a, b) => h2hBenchPlayerValue(b) - h2hBenchPlayerValue(a));
@@ -14861,10 +15306,10 @@ function renderH2hFixturesOverview(body) {
     // even matchup (disparityPct=0) shows the midline dead-centre at 50/50;
     // a full 100 blowout pushes it all the way to one edge (100/0).
     const disparityHtml = disparity
-      ? `<div style="margin-top:6px" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
+      ? `<div style="margin:6px auto 0;text-align:center" title="${disparity.aWins}-${disparity.bWins}-${disparity.evens} (${home.short_name} wins–${away.short_name} wins–even) across ${disparity.total} position matchups, weighted by how one-sided each edge is">
           <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,0.08);position:relative">
             <div style="width:${disparity.pctA}%;height:100%;background:var(--gold-bright);transition:width 0.2s"></div>
-            <div style="width:${disparity.pctB}%;height:100%;background:var(--pink);transition:width 0.2s"></div>
+            <div style="width:${disparity.pctB}%;height:100%;background:var(--ink-dim);transition:width 0.2s"></div>
             <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.35)"></div>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink-faint);margin-top:2px">
@@ -14873,7 +15318,7 @@ function renderH2hFixturesOverview(body) {
             <span class="mono">${away.short_name} ${Math.round(disparity.pctB)}%</span>
           </div>
         </div>`
-      : `<div style="font-size:10px;color:var(--ink-faint);margin-top:6px">No player matchups set yet — disparity fills in once you visit Player matchups for this fixture.</div>`;
+      : `<div style="font-size:10px;color:var(--ink-faint);margin-top:6px;text-align:center">No player matchups set yet — disparity fills in once you visit Player matchups for this fixture.</div>`;
     return `
       <div class="card h2h-fixture-row" data-h2h-fixture="${home.id}-${away.id}" style="margin-bottom:10px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -16217,6 +16662,42 @@ const SIM_MATCH_OUTPUT_STATS = [
     per90: (p) => per90Rate(p.dsKeyPasses, p.minutes),
     fallback: (p) => (p.xa90 || 0) * 3,
     fdrScaled: true,
+  },
+  {
+    key: "xg", label: "xG", real: true, kind: "count",
+    // Genuinely real and reliable — FPL's own official expected_goals
+    // field (xg90), not the Understat/FBref scrape the ds* fields below
+    // depend on (that scrape is confirmed unreliable — see the "deeper
+    // stats" caveat elsewhere in this app). No fallback needed since every
+    // player already has this from the bootstrap data.
+    per90: (p) => p.xg90 || 0,
+    fallback: (p) => p.xg90 || 0,
+    fdrScaled: true,
+  },
+  {
+    key: "bigChances", label: "Big chances", real: false, kind: "count",
+    // No free per-player "big chance" (Opta-defined high-probability
+    // chance) data source exists — approximated as a blend of a player's
+    // own high-quality shot volume (xG/90) and quality chance creation
+    // (xA/90), which is what a big chance actually is on either end: a
+    // shot/pass with a high expected conversion rate. Clearly marked ⚠
+    // like the app's other modelled (non-real) stats.
+    per90: () => null,
+    fallback: (p) => (p.xg90 || 0) * 1.3 + (p.xa90 || 0) * 0.7,
+    fdrScaled: true,
+  },
+  {
+    key: "corners", label: "Corners won", real: false, kind: "count",
+    // Corners are a team/set-piece stat, not something FPL or the free
+    // scrape sources expose per player — approximated from wide/attacking
+    // output (crosses into the box and final-third carries are what wins
+    // corners in practice), restricted to the wide/attacking roles that
+    // actually generate them, same honesty convention as crossPct/
+    // dribbleSuccessPct below (⚠, not presented as real).
+    per90: () => null,
+    fallback: (p) => 0.6 + (p.xgi90 || 0) * 1.8,
+    fdrScaled: true,
+    roleEligible: (p) => inferredRole(p) === "WIDE" || inferredRole(p) === "WB" || p.position === "FWD",
   },
   {
     key: "cbit", label: "Interceptions + blocks + clearances", real: true, kind: "count",
