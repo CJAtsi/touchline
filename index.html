@@ -819,6 +819,11 @@
   .cap-mini-badge.fixswing { background: rgba(214,143,255,0.14); color: var(--pink); }
   .cap-mini-badge.template { background: rgba(234,179,8,0.14); color: var(--amber); }
   .cap-pinned-row { outline: 1px solid rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
+  /* Round 23: brief highlight flash on a row just pinned via the Base view
+     search, so a successful pin is visible even when the row lands off
+     the currently-scrolled-to part of a long table (see renderCaptaincyTab). */
+  @keyframes capPinFlash { 0%, 100% { background: rgba(96,165,250,0.06); } 30% { background: rgba(96,165,250,0.35); } }
+  .cap-pin-flash { animation: capPinFlash 1.6s ease-out; }
   /* Compact insight cards (item 1) — replaces dense text tables in the
      Insights tab with a scannable grid of small cards: name/team up top,
      one bold headline number, a couple of tiny secondary stats below. */
@@ -1827,6 +1832,22 @@
     <p class="page-sub">Two separate, independent systems live on this page — they don't affect each other. <strong>Fixture difficulty</strong> (below) colours individual fixtures. <strong>Club rankings</strong> (further down) is a single best-to-worst list of all 20 clubs.</p>
 
     <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Quick calibration questionnaire</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        A faster way to tune club strength than dragging every slider below — answer a continuous stream of "does X have a better attack/defence than Y" questions, and each answer nudges those two clubs' Attack/Defence override up or down slightly. Keep going as long as you like; every answer compounds on the last, so your gut feel converges toward a full set of ratings over time. Skip any question you're unsure about.
+      </p>
+      <div id="rankQuizBody"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="detail-block-title">Player questions</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
+        A separate questionnaire from the club-strength one above — this one asks subjective/contextual questions about an individual PLAYER (preseason sharpness, whether they look nailed on, tactical fit, set-piece role, etc.) and nudges that specific player's own projection up or down slightly, same "answer a stream, skip what you're unsure about" idea. Players from stronger clubs come up more often (weighted by each club's overall rating), since there's usually more genuine signal/attention on them — weaker clubs' players still appear, just less frequently. Goalkeepers are only ever asked GK-relevant questions (never asked "will they get more assists"-style attacking questions). Answers are opt-in and reversible — a player with no answers saved projects exactly as before.
+      </p>
+      <div id="rankPlayerQuizBody"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">1. Fixture difficulty formula</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Controls the colour-coded FDR pills shown next to fixtures everywhere on the site (this tab's fixture list, Player stats detail panel, squad builder, the FDR tab). Each slider is how much one trait of your <em>opponent</em> counts against you when judging how hard a fixture is — higher = that trait matters more.</p>
       <div class="formula-panel" id="fdrFormulaPanel"></div>
@@ -1875,14 +1896,6 @@
         Disagree with FPL's rating for a club? Set Attack, Defence and Overall individually — 1 (weakest) to 5 (strongest). These feed both the FDR formula above (opponent pills, club rankings) <strong>and</strong> the predicted scoreline on the FDR fixture modal — change a club's Attack here and their predicted scorelines update to match. Starts at FPL's own computed rating for each field; hit ↺ Reset to go back to all three.
       </p>
       <div id="teamOverrideList"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:18px">
-      <div class="detail-block-title">Quick calibration questionnaire</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        A faster way to tune club strength than dragging every slider above — answer a continuous stream of "does X have a better attack/defence than Y" questions, and each answer nudges those two clubs' Attack/Defence override up or down slightly. Keep going as long as you like; every answer compounds on the last, so your gut feel converges toward a full set of ratings over time. Skip any question you're unsure about.
-      </p>
-      <div id="rankQuizBody"></div>
     </div>
   </section>
 </main>
@@ -4117,6 +4130,16 @@ let state = {
   // set with no outfield equivalent. Manual-entry only (no free live scout
   // data source), keyed by player id -> { attrKey: 1-20 value }.
   gkAttributes: {},
+  // Round 23: "questions" that adjust an individual player's PROJECTED
+  // stats (not the club-strength questionnaire above them — separate
+  // system, separate store). Keyed by player id -> { questionId: answer },
+  // where answer is one of PLAYER_RANK_QUESTIONS' own option values (see
+  // rankQuestionApplyAnswer/playerRankQuestionMultiplier). Never touches
+  // real FPL data — only nudges the projection multiplier, same pattern as
+  // gkAbilityMultiplier/gkAttributes above.
+  playerRankAnswers: {},
+  rankPlayerQuizCurrent: null,
+  rankPlayerQuizAnswered: 0,
   priorLeagueStats: {},
   playerClubOverrides: {},
   playerPositions: {},
@@ -4832,6 +4855,20 @@ function setBanner(msg, kind, showRetry) {
         `<div class="${d.ok ? "diag-ok" : "diag-fail"}">${d.ok ? "✓" : "✗"} ${d.path} via ${d.source} — ${d.ok ? d.ms + "ms" : d.error}</div>`
       ).join("");
     };
+  }
+  // Round 23 fix ("errors cannot be read" in Planner): the banner lives at
+  // the very top of <main>, above every tab's content — an error fired deep
+  // into a scrolled-down Planner gameweek panel (routine when editing
+  // transfers) rendered a real, correctly-worded message that was
+  // physically off-screen, above the viewport, with nothing scrolling it
+  // into view. It wasn't swallowed, it was just invisible in practice —
+  // this looked identical to "errors get eaten" from the user's side.
+  // Scroll it into view for error banners specifically (not routine
+  // loading/info banners, which shouldn't yank the page around on every
+  // load) so a thrown error is now always physically visible the moment it
+  // happens, not just present somewhere in the DOM.
+  if (kind === "error" && el.scrollIntoView) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
@@ -7042,6 +7079,16 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
     const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
     let finalProj = provenProj * provenW + underlyingProj * (1 - provenW);
+    // Rankings-tab player questionnaire (Round 23): "did they look sharp in
+    // preseason" / "are they nailed on" style answers nudge the projection
+    // via two independently-capped multipliers (attack-tagged questions,
+    // start/nailed-on-tagged questions), each a genuine no-op (1.0) for any
+    // player with no answers saved — same opt-in-only convention as
+    // gkAbilityMultiplier just above. Applied to the whole blended
+    // finalProj (not just one sub-term) so it scales with however much of
+    // this player's projection is actually there to nudge, same shape as
+    // the matchup-boost multiplier just below.
+    finalProj *= playerRankQuestionMultiplier(p.id, "attack") * playerRankQuestionMultiplier(p.id, "start");
     // Matchup boost: who this player is actually likely to face this
     // fixture (pinned Tactical board matchup if set, else same-role
     // inference — see likelyOpponentFor), scored via the same overall
@@ -7121,7 +7168,14 @@ function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAb
       const defConPts = defConProb * 2;
       const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
       const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
-      total += provenProj * provenW + underlyingProj * (1 - provenW);
+      let gwProj = provenProj * provenW + underlyingProj * (1 - provenW);
+      // Same Rankings-tab player questionnaire multiplier as
+      // computeProjectionRow (see there for the full explanation) — kept in
+      // sync deliberately so a player's per-gw projection here and their
+      // season-summed projection there can never disagree about whether a
+      // saved answer is being applied.
+      gwProj *= playerRankQuestionMultiplier(p.id, "attack") * playerRankQuestionMultiplier(p.id, "start");
+      total += gwProj;
     });
     byGw[g] = total;
   }
@@ -9196,6 +9250,27 @@ function renderCaptaincyTab() {
     wireSearchablePlayerPicker("capBaseViewPicker", state.players, (p) => {
       if (!isCaptainPinned(p.id)) toggleCaptainPin(p.id);
       renderCaptaincyTab();
+      // Round 23 fix ("search doesn't work, nothing happens when I click a
+      // player"): the pin itself always worked — reproduced end-to-end in a
+      // Playwright harness and confirmed toggleCaptainPin/renderCaptaincyTab
+      // both fire correctly on click. The REAL bug is that nothing was
+      // visible afterward: the search box clears and its results dropdown
+      // closes (expected), but a pinned player who isn't already in the
+      // current top-N (the exact case this feature exists for — GKs and
+      // low-minute players the default views filter out) gets appended
+      // silently at the very bottom of a table that can run to 25+ rows,
+      // with only a faint outline (.cap-pinned-row) marking it — no scroll,
+      // no flash. From the user's seat that reads as "I clicked and nothing
+      // happened." Scroll the newly-pinned row into view and give it a
+      // brief highlight flash so a successful pin is unmistakable.
+      requestAnimationFrame(() => {
+        const row = document.querySelector(`[data-cap-pin="${p.id}"]`)?.closest("tr");
+        if (row) {
+          row.scrollIntoView({ behavior: "smooth", block: "center" });
+          row.classList.add("cap-pin-flash");
+          setTimeout(() => row.classList.remove("cap-pin-flash"), 1600);
+        }
+      });
     });
   }
   // Button toggle instead of a native <select> for the source picker.
@@ -10494,13 +10569,6 @@ function renderSquadBuilder(draft) {
   const remaining = effectiveBudget - spent;
   const total = draft.squad.length;
   const readyToConfirm = total === 15 && remaining >= 0;
-  // "Usable now" = remaining budget MINUS what still has to be reserved to
-  // legally fill every other still-needed slot at its price floor — the
-  // real ceiling for your next purchase, not just the flat bank balance.
-  // (reserveForPos passed as null since this isn't about one specific
-  // position — it reserves for every slot still open.)
-  const reserveForRest = minReserveForRemainingSlots(draft.squad, null);
-  const usableNow = remaining - reserveForRest;
 
   body.innerHTML = `
     <div class="builder-layout">
@@ -10522,7 +10590,6 @@ function renderSquadBuilder(draft) {
         <div class="builder-topbar">
           <span class="builder-pill">${total} / 15 players</span>
           <span class="builder-pill ${remaining < 0 ? "over" : ""}">${remaining < 0 ? "⚠️ " : ""}${fmtPrice(remaining)} in the bank</span>
-          ${total < 15 ? `<span class="builder-pill ${usableNow < 0 ? "over" : ""}" title="What you can actually spend on your NEXT pick and still be able to legally fill every other still-needed slot at its price floor">${usableNow < 0 ? "⚠️ " : ""}£${(usableNow / 10).toFixed(1)}m usable now</span>` : ""}
           <select id="builderGwSelect" style="margin-left:8px"></select>
           <div class="view-toggle" style="margin-left:0">
             <button id="builderGwPrev" title="Previous gameweek">←</button>
@@ -11129,10 +11196,10 @@ function renderGwSimulator(draft) {
   body.innerHTML = `
     <div class="card" style="margin-bottom:16px">
       <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
-        <div class="stat-block"><div class="stat-label">Squad value</div><div class="stat-value mono">${fmtPrice(squadCost(draft.squad))}</div></div>
-        <div class="stat-block"><div class="stat-label">In the bank</div><div class="stat-value mono">${fmtPrice(draft.bank || 0)}</div></div>
+        <div class="stat-block" title="Your real squad's total value right now, before any planned future transfers"><div class="stat-label">Squad value (today)</div><div class="stat-value mono">${fmtPrice(squadCost(draft.squad))}</div></div>
+        <div class="stat-block" title="Your real bank right now, before any planned future transfers. The per-gameweek panel below shows the projected bank AFTER transfers planned up to that gameweek, which will differ once you've planned any moves — that's expected, not a bug."><div class="stat-label">In the bank (today)</div><div class="stat-value mono">${fmtPrice(draft.bank || 0)}</div></div>
         <div class="stat-block">
-          <div class="stat-label" title="The FPL API doesn't expose your live free-transfer count without logging in — set this to match your real team and the planner rolls it forward automatically (max 5 banked, WC/FH weeks don't cost one)">Free transfers now</div>
+          <div class="stat-label" title="The FPL API doesn't expose your live free-transfer count without logging in — set this to match your real team's count RIGHT NOW and the planner rolls it forward automatically per gameweek (max 5 banked, WC/FH weeks don't cost one). The per-gameweek panel below shows the ROLLED-FORWARD count for that specific future gameweek, which will differ from this seed — that's expected, not a bug.">Free transfers (today's seed)</div>
           <input type="number" id="freeTransfersStartInput" min="1" max="5" step="1" value="${Number.isFinite(draft.freeTransfersStart) ? draft.freeTransfersStart : 1}" class="mono" style="width:52px;font-weight:700" />
         </div>
         <button class="dir-btn" id="rebuildSquadBtn" style="margin-left:auto">Edit squad</button>
@@ -11622,11 +11689,11 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
     <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:18px;align-items:start">
       <div>
         <div class="detail-block-title">Transfers in</div>
-        <div style="font-size:11.5px;color:${entry.bank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:2px">
-          In the bank this gameweek: <span class="mono" style="font-weight:700">${fmtPrice(entry.bank)}</span>${entry.bank < 0 ? " ⚠️ over budget — remove a transfer or pick a cheaper replacement" : ""}
+        <div style="font-size:11.5px;color:${entry.bank < 0 ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:2px" title="Projected bank AFTER any transfers planned for this gameweek and every gameweek before it — will differ from the 'In the bank (today)' figure above once you've planned any moves">
+          In the bank for ${fmtGwName(gwId)}: <span class="mono" style="font-weight:700">${fmtPrice(entry.bank)}</span>${entry.bank < 0 ? " ⚠️ over budget — remove a transfer or pick a cheaper replacement" : ""}
         </div>
-        <div style="font-size:11.5px;color:${log.chip !== "WC" && log.chip !== "FH" && log.out.length > entry.freeTransfersAvailable ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:8px">
-          Free transfers available: <span class="mono" style="font-weight:700">${entry.freeTransfersAvailable}</span>${log.chip === "WC" || log.chip === "FH" ? "" : log.out.length > entry.freeTransfersAvailable ? ` ⚠️ ${log.out.length - entry.freeTransfersAvailable} hit${log.out.length - entry.freeTransfersAvailable === 1 ? "" : "s"} this gameweek (−${(log.out.length - entry.freeTransfersAvailable) * 4}pts)` : ""}
+        <div style="font-size:11.5px;color:${log.chip !== "WC" && log.chip !== "FH" && log.out.length > entry.freeTransfersAvailable ? "var(--rose,#e05d5d)" : "var(--ink-faint)"};margin-bottom:8px" title="Rolled forward from the 'Free transfers (today's seed)' figure above through every gameweek up to this one — will differ from the seed once at least one gameweek has passed">
+          Free transfers available in ${fmtGwName(gwId)}: <span class="mono" style="font-weight:700">${entry.freeTransfersAvailable}</span>${log.chip === "WC" || log.chip === "FH" ? "" : log.out.length > entry.freeTransfersAvailable ? ` ⚠️ ${log.out.length - entry.freeTransfersAvailable} hit${log.out.length - entry.freeTransfersAvailable === 1 ? "" : "s"} this gameweek (−${(log.out.length - entry.freeTransfersAvailable) * 4}pts)` : ""}
         </div>
         <div id="transferControls-${gwId}"></div>
       </div>
@@ -12159,6 +12226,10 @@ async function loadFormulasFromStorage() {
     if (raw) state.gkAttributes = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   try {
+    const raw = await persistGet("playerRankAnswers");
+    if (raw) state.playerRankAnswers = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
     const raw = await persistGet("myTeamId");
     if (raw) {
       state.myTeamId = raw;
@@ -12173,6 +12244,7 @@ function saveTeamOverrides() { persistSet("teamOverrides", JSON.stringify(state.
 function saveModelWeights() { persistSet("modelWeights", JSON.stringify(state.modelWeights)); }
 function saveFixtureRunTiers() { persistSet("fixtureRunTiers", JSON.stringify(state.fixtureRunTiers)); }
 function saveRankingsPresets() { persistSet("rankingsPresets", JSON.stringify(state.rankingsPresets)); }
+function savePlayerRankAnswers() { persistSet("playerRankAnswers", JSON.stringify(state.playerRankAnswers)); }
 
 const FDR_FORMULA_FIELDS = [
   { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1, desc: "How much their goal-scoring threat counts against you." },
@@ -12330,6 +12402,7 @@ function renderRankings() {
   renderOddsStatus();
   renderRankingsPresetList();
   renderRankQuiz();
+  renderRankPlayerQuiz();
 }
 
 // ---------- Premier League table ----------
@@ -12701,6 +12774,229 @@ function renderRankQuiz() {
   });
   const skipBtn = document.getElementById("rankQuizSkip");
   if (skipBtn) skipBtn.onclick = () => { state.rankQuizCurrent = null; renderRankQuiz(); };
+}
+
+// ---------- Rankings: player-level projection-adjusting questionnaire ----------
+// A SEPARATE system from the club-strength questionnaire above — this one
+// answers subjective/contextual questions about an individual PLAYER (not
+// a club-vs-club comparison) and nudges that player's own projection via a
+// small bounded multiplier, same "no-op at neutral, capped magnitude"
+// convention as gkAbilityMultiplier (GK shot-stopping) and the matchup
+// boost in computeProjectionRow. Answers persist in state.playerRankAnswers
+// (keyed by player id -> questionId -> the option's own answer value) and
+// are exported/imported via SETTINGS_EXPORT_KEYS like every other
+// manual-entry feature.
+//
+// Each question declares:
+//   - id: stable key, used both for storage and for the projection lookup
+//   - prompt(p): the question text for this specific player
+//   - options: [{ value, label, delta }] — delta is added directly to the
+//     running multiplier-offset for this question (clamped per-question,
+//     then the whole per-player total is clamped again — see
+//     playerRankQuestionMultiplier) — "About right / no change" is always
+//     value 0 so skipping-by-neutral-answer is a real, distinct choice
+//     from never having answered at all (both read as "no adjustment" on
+//     the projection, but only the latter keeps the question eligible to
+//     be asked again differently later; once answered it's remembered).
+//   - eligiblePositions: which broad positions this question is even asked
+//     about — the GK-exclusion the task calls for is implemented HERE
+//     (the same p.position === "GK" pattern as the Round 21/22 GK
+//     double-guard elsewhere), not as an afterthought filter.
+//   - statTag: which part of the projection this question's answer should
+//     influence — used by playerRankQuestionMultiplier to decide where the
+//     multiplier applies (attacking output vs start-probability/nailed-on
+//     vs a general/all-round nudge).
+const PLAYER_RANK_QUESTIONS = [
+  {
+    id: "preseasonSharp", statTag: "attack", eligiblePositions: ["DEF", "MID", "FWD"],
+    prompt: (p) => `Did ${p.webName} look sharp in preseason / recent training reports?`,
+    options: [
+      { value: "sharp", label: "Yes, looked sharp", delta: 0.08 },
+      { value: "neutral", label: "About normal", delta: 0 },
+      { value: "rusty", label: "No, looked off the pace", delta: -0.08 },
+    ],
+  },
+  {
+    id: "nailedOn", statTag: "start", eligiblePositions: ["GK", "DEF", "MID", "FWD"],
+    prompt: (p) => `Is ${p.webName} nailed on to start when fit?`,
+    options: [
+      { value: "nailed", label: "Yes, first name on the sheet", delta: 0.10 },
+      { value: "unsure", label: "Not sure / rotation risk", delta: 0 },
+      { value: "notNailed", label: "No, fighting for a place", delta: -0.12 },
+    ],
+  },
+  {
+    id: "newSigningFit", statTag: "attack", eligiblePositions: ["DEF", "MID", "FWD"],
+    prompt: (p) => `Does the way ${p.webName}'s new club plays actually suit their game?`,
+    options: [
+      { value: "greatFit", label: "Great tactical fit", delta: 0.10 },
+      { value: "unclear", label: "Too early to tell", delta: 0 },
+      { value: "poorFit", label: "Doesn't suit the system", delta: -0.10 },
+    ],
+  },
+  {
+    id: "injuryConcern", statTag: "start", eligiblePositions: ["GK", "DEF", "MID", "FWD"],
+    prompt: (p) => `Any lingering fitness/injury concern with ${p.webName} beyond what's officially flagged?`,
+    options: [
+      { value: "clean", label: "Fully fit, no concerns", delta: 0.04 },
+      { value: "unsure", label: "Not aware of anything", delta: 0 },
+      { value: "concern", label: "Yes, carrying something", delta: -0.10 },
+    ],
+  },
+  {
+    id: "settPieceRole", statTag: "attack", eligiblePositions: ["DEF", "MID", "FWD"],
+    prompt: (p) => `Do you expect ${p.webName} to be on set-piece duty (corners/free-kicks/penalties) this season?`,
+    options: [
+      { value: "primary", label: "Yes, primary taker", delta: 0.09 },
+      { value: "unsure", label: "Not sure", delta: 0 },
+      { value: "no", label: "No, someone else takes them", delta: -0.03 },
+    ],
+  },
+  {
+    id: "managerTrust", statTag: "start", eligiblePositions: ["GK", "DEF", "MID", "FWD"],
+    prompt: (p) => `Does the manager seem to trust ${p.webName} in big games, not just easy fixtures?`,
+    options: [
+      { value: "trusted", label: "Yes, plays every big game", delta: 0.07 },
+      { value: "unsure", label: "Not sure", delta: 0 },
+      { value: "rotated", label: "No, gets rotated out for big games", delta: -0.08 },
+    ],
+  },
+  {
+    id: "eyeTest", statTag: "attack", eligiblePositions: ["MID", "FWD"],
+    prompt: (p) => `Watching them play, does ${p.webName} look like a bigger goal/assist threat than their numbers show?`,
+    options: [
+      { value: "underrated", label: "Yes, underrated by the stats", delta: 0.09 },
+      { value: "accurate", label: "No, the numbers look right", delta: 0 },
+      { value: "overrated", label: "No, actually looks worse than the stats", delta: -0.09 },
+    ],
+  },
+];
+// Team-strength-weighted player sampling: a player's SELECTION probability
+// (which player the next question is even asked about) is weighted by
+// their club's effective overall rating (1-5, includes any user override —
+// same signal effectiveFieldRating/defaultTeamRating already expose
+// elsewhere), so a stronger team's players surface more often, per the
+// task's explicit spec ("odds of a question appearing... weighted by team
+// strength"). This weights SELECTION FREQUENCY only — it has no effect on
+// which direction an answer nudges the projection once asked.
+function rankPlayerQuizWeight(p) {
+  const rating = effectiveFieldRating(p.teamId, "overall"); // 1-5
+  // Squared so the effect is clearly felt (a 5-rated club's player is ~6x
+  // more likely to be picked than a 2-rated club's, not just 2.5x) while
+  // never reaching zero — even the weakest club's players stay reachable,
+  // just rarer, matching "more, not exclusively" from the task wording.
+  return Math.max(0.15, rating) ** 2;
+}
+// Picks one (player, question) pair via weighted random sampling — GK
+// double-guard #1: eligiblePositions is checked here, on the CANDIDATE
+// POOL, before any player is even considered a candidate for a question
+// that doesn't apply to their position.
+function rankPlayerQuizPick() {
+  if (!state.players || !state.players.length) return null;
+  const question = PLAYER_RANK_QUESTIONS[Math.floor(Math.random() * PLAYER_RANK_QUESTIONS.length)];
+  const pool = state.players.filter(p => question.eligiblePositions.includes(p.position) && (p.minutes || 0) > 0);
+  if (!pool.length) return null;
+  const weights = pool.map(rankPlayerQuizWeight);
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * totalWeight;
+  let chosen = pool[pool.length - 1];
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i];
+    if (r <= 0) { chosen = pool[i]; break; }
+  }
+  return { p: chosen, question };
+}
+// Applies one answer — GK double-guard #2: re-checks the question's own
+// eligiblePositions against THIS player's real position before writing
+// anything, exactly the same "never trust the caller, re-check at the
+// write site" shape as setGkAttributeIfBlank's second guard. A write that
+// fails this check is silently dropped (returns false), not applied.
+function rankPlayerQuizApplyAnswer(playerId, questionId, value) {
+  const player = state.players.find(p => p.id === playerId);
+  const question = PLAYER_RANK_QUESTIONS.find(q => q.id === questionId);
+  if (!player || !question) return false;
+  if (!question.eligiblePositions.includes(player.position)) return false; // second guard
+  const option = question.options.find(o => o.value === value);
+  if (!option) return false;
+  if (!state.playerRankAnswers) state.playerRankAnswers = {};
+  if (!state.playerRankAnswers[playerId]) state.playerRankAnswers[playerId] = {};
+  state.playerRankAnswers[playerId][questionId] = value;
+  savePlayerRankAnswers();
+  return true;
+}
+function rankPlayerQuizClearAnswer(playerId, questionId) {
+  if (state.playerRankAnswers && state.playerRankAnswers[playerId]) {
+    delete state.playerRankAnswers[playerId][questionId];
+    savePlayerRankAnswers();
+  }
+}
+// Converts one player's saved answers into a bounded projection multiplier
+// for the given statTag ("attack" or "start" — see PLAYER_RANK_QUESTIONS).
+// Genuine no-op (returns exactly 1) for a player with no answers at all, or
+// no answers tagged for this statTag, or every answer at its neutral
+// (delta 0) option — matches the same "opt-in only, never silently changes
+// an unanswered player's projection" rule as gkAbilityMultiplier. Summed
+// deltas are capped at ±20% before converting to a multiplier, so a run of
+// several question answers compounds sensibly rather than runaway.
+function playerRankQuestionMultiplier(playerId, statTag) {
+  const answers = (state.playerRankAnswers || {})[playerId];
+  if (!answers) return 1;
+  let sum = 0;
+  for (const q of PLAYER_RANK_QUESTIONS) {
+    if (q.statTag !== statTag) continue;
+    const value = answers[q.id];
+    if (value == null) continue;
+    const option = q.options.find(o => o.value === value);
+    if (option) sum += option.delta;
+  }
+  const clamped = Math.max(-0.20, Math.min(0.20, sum));
+  return 1 + clamped;
+}
+function renderRankPlayerQuiz() {
+  const el = document.getElementById("rankPlayerQuizBody");
+  if (!el || !state.players.length) return;
+  if (!state.rankPlayerQuizCurrent) {
+    state.rankPlayerQuizCurrent = rankPlayerQuizPick();
+  }
+  const cur = state.rankPlayerQuizCurrent;
+  if (!cur) { el.innerHTML = `<div class="empty-state">Not enough player data loaded yet.</div>`; return; }
+  const { p, question } = cur;
+  const team = state.teamsById[p.teamId];
+  const answered = state.rankPlayerQuizAnswered || 0;
+  const existing = (state.playerRankAnswers[p.id] || {})[question.id];
+  el.innerHTML = `
+    <div style="text-align:center;margin-bottom:6px">
+      <span style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em">${answered} answered this session</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
+      ${playerAvatarHtml(p, 30)}
+      <div>
+        <div style="font-weight:700">${nameWithPosition(p)}</div>
+        <div style="font-size:10.5px;color:var(--ink-faint)">${team ? team.short_name : ""}</div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:14px;font-weight:600;margin-bottom:14px">${question.prompt(p)}</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      ${question.options.map(o => `<button class="chip-btn${existing === o.value ? " active" : ""}" data-player-quiz-answer="${o.value}" style="padding:8px 14px">${o.label}</button>`).join("")}
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <button class="dir-btn small" id="rankPlayerQuizSkip">Skip this one →</button>
+    </div>
+  `;
+  el.querySelectorAll("[data-player-quiz-answer]").forEach(btn => {
+    btn.onclick = () => {
+      try {
+        rankPlayerQuizApplyAnswer(p.id, question.id, btn.dataset.playerQuizAnswer);
+        state.rankPlayerQuizAnswered = (state.rankPlayerQuizAnswered || 0) + 1;
+        state.rankPlayerQuizCurrent = null; // force a fresh pick next render
+        renderRankPlayerQuiz();
+      } catch (err) {
+        setBanner(`Couldn't save that answer (${err.message}). Try again.`, "error");
+      }
+    };
+  });
+  const skipBtn = document.getElementById("rankPlayerQuizSkip");
+  if (skipBtn) skipBtn.onclick = () => { state.rankPlayerQuizCurrent = null; renderRankPlayerQuiz(); };
 }
 
 function renderFixtureList() {
@@ -14744,8 +15040,18 @@ function renderProjAccuracyPanel() {
 // finishing" -> top-left corner) rather than one label per quadrant, per
 // the "combine if necessary" instruction — four independently-meaningful
 // extremes read more clearly than trying to name every quadrant uniquely.
+// Round 23: upgraded from plain colour-by-position dots to club-coloured
+// player-name label boxes, matching the reference "Wanalyst-style" layout
+// (named quadrant labels in each corner, dashed gridlines, each player's
+// name in a small box coloured by their club) — same underlying renderer,
+// same points/opts contract every INSIGHT_GRAPHS entry already builds, so
+// every existing and new graph gets the upgraded look with no per-graph
+// changes required. Each point now carries clubColor (primary/secondary,
+// from clubColors()) instead of a plain position colour; falls back to the
+// old dot rendering automatically if a point has no clubColor (keeps this
+// backward-compatible with any caller that still only sets `color`).
 function scatterPlotSvg(points, opts) {
-  const W = 720, H = 440, PAD_L = 54, PAD_R = 20, PAD_T = 34, PAD_B = 46;
+  const W = 760, H = 460, PAD_L = 54, PAD_R = 20, PAD_T = 34, PAD_B = 46;
   const xs = points.map(p => p.x), ys = points.map(p => p.y);
   const dataXMin = xs.length ? Math.min(...xs) : 0, dataXMax = xs.length ? Math.max(...xs) : 1;
   const dataYMin = ys.length ? Math.min(...ys) : 0, dataYMax = ys.length ? Math.max(...ys) : 1;
@@ -14757,39 +15063,116 @@ function scatterPlotSvg(points, opts) {
   const sy = (v) => H - PAD_B - ((Math.max(yMin, Math.min(yMax, v)) - yMin) / ((yMax - yMin) || 1)) * (H - PAD_T - PAD_B);
   const zx = sx(Math.max(xMin, Math.min(xMax, 0)));
   const zy = sy(Math.max(yMin, Math.min(yMax, 0)));
-  const dots = points.map(p => `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="4.5" fill="${p.color}" fill-opacity="0.88" stroke="rgba(255,255,255,0.35)" stroke-width="0.6" style="cursor:pointer" data-plot-player="${p.id}"><title>${p.label} — ${opts.xLabel}: ${p.x.toFixed(2)}, ${opts.yLabel}: ${p.y.toFixed(2)}</title></circle>`).join("");
-  const cornerStyle = "font-size:10px;fill:var(--ink-faint)";
+  // Extra dashed reference lines at the MIDPOINT of the data range (not
+  // just zero) — the reference image's quadrant split is "median-ish", not
+  // always literally zero/zero, e.g. a plot like Price vs Points where 0
+  // isn't a meaningful split point for price. Zero-line stays too when it
+  // falls inside the domain (kept for y-axes like Goals−xG where zero IS
+  // the meaningful split), so a metric with a real zero baseline still
+  // shows it distinctly from the plain data-midpoint split.
+  const midX = sx((xMin + xMax) / 2), midY = sy((yMin + yMax) / 2);
+  const zeroInRangeX = xMin < 0 && xMax > 0, zeroInRangeY = yMin < 0 && yMax > 0;
+  const gridLines = `
+    <line x1="${PAD_L}" y1="${midY}" x2="${W - PAD_R}" y2="${midY}" stroke="rgba(255,255,255,0.22)" stroke-dasharray="3,3" />
+    <line x1="${midX}" y1="${PAD_T}" x2="${midX}" y2="${H - PAD_B}" stroke="rgba(255,255,255,0.22)" stroke-dasharray="3,3" />
+    ${zeroInRangeY && Math.abs(zy - midY) > 3 ? `<line x1="${PAD_L}" y1="${zy}" x2="${W - PAD_R}" y2="${zy}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="2,4" />` : ""}
+    ${zeroInRangeX && Math.abs(zx - midX) > 3 ? `<line x1="${zx}" y1="${PAD_T}" x2="${zx}" y2="${H - PAD_B}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="2,4" />` : ""}
+  `;
+  const escXml = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const markers = points.map(p => {
+    const cx = sx(p.x), cy = sy(p.y);
+    if (!p.clubColor) {
+      // Backward-compatible plain-dot fallback for any caller that hasn't
+      // been upgraded to pass clubColor.
+      return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" fill="${p.color || "#999"}" fill-opacity="0.88" stroke="rgba(255,255,255,0.35)" stroke-width="0.6" style="cursor:pointer" data-plot-player="${p.id}"><title>${escXml(p.label)} — ${escXml(opts.xLabel)}: ${p.x.toFixed(2)}, ${escXml(opts.yLabel)}: ${p.y.toFixed(2)}</title></circle>`;
+    }
+    // Club-coloured name-label box: short name (truncated so a long
+    // webName can't blow out the box width), text colour picked for
+    // contrast against the club's own primary colour (falls back to the
+    // club's secondary, e.g. Fulham/Spurs' white primary needs a dark
+    // label rather than white-on-white).
+    const short = (p.label || "").length > 11 ? p.label.slice(0, 10) + "…" : (p.label || "");
+    const boxW = Math.max(34, short.length * 6.2 + 10);
+    const boxH = 15;
+    const textColor = p.clubTextColor || "#fff";
+    return `<g style="cursor:pointer" data-plot-player="${p.id}">
+      <rect x="${(cx - boxW / 2).toFixed(1)}" y="${(cy - boxH / 2).toFixed(1)}" width="${boxW.toFixed(1)}" height="${boxH}" rx="3.5" fill="${p.clubColor}" fill-opacity="0.92" stroke="rgba(255,255,255,0.3)" stroke-width="0.6" />
+      <text x="${cx.toFixed(1)}" y="${(cy + 3.6).toFixed(1)}" text-anchor="middle" style="font-size:9.5px;font-weight:700;fill:${textColor};pointer-events:none">${escXml(short)}</text>
+      <title>${escXml(p.label)} — ${escXml(opts.xLabel)}: ${p.x.toFixed(2)}, ${escXml(opts.yLabel)}: ${p.y.toFixed(2)}</title>
+    </g>`;
+  }).join("");
+  const cornerStyle = "font-size:10px;fill:var(--ink-faint);font-weight:600";
   return `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:520px;max-width:760px;height:auto;font-family:inherit">
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:520px;max-width:800px;height:auto;font-family:inherit;background:var(--panel-2,#12181a);border-radius:8px">
       <rect x="${PAD_L}" y="${PAD_T}" width="${W - PAD_L - PAD_R}" height="${H - PAD_T - PAD_B}" fill="var(--panel-3)" opacity="0.35" rx="6" />
-      <line x1="${PAD_L}" y1="${zy}" x2="${W - PAD_R}" y2="${zy}" stroke="rgba(255,255,255,0.22)" stroke-dasharray="3,3" />
-      <line x1="${zx}" y1="${PAD_T}" x2="${zx}" y2="${H - PAD_B}" stroke="rgba(255,255,255,0.22)" stroke-dasharray="3,3" />
-      <text x="${PAD_L + 6}" y="${PAD_T + 12}" style="${cornerStyle}">${[opts.lowXLabel, opts.highYLabel].filter(Boolean).join(" & ")}</text>
-      <text x="${W - PAD_R - 6}" y="${PAD_T + 12}" text-anchor="end" style="${cornerStyle}">${[opts.highXLabel, opts.highYLabel].filter(Boolean).join(" & ")}</text>
-      <text x="${PAD_L + 6}" y="${H - PAD_B - 8}" style="${cornerStyle}">${[opts.lowXLabel, opts.lowYLabel].filter(Boolean).join(" & ")}</text>
-      <text x="${W - PAD_R - 6}" y="${H - PAD_B - 8}" text-anchor="end" style="${cornerStyle}">${[opts.highXLabel, opts.lowYLabel].filter(Boolean).join(" & ")}</text>
-      ${dots}
-      <text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 10}" text-anchor="middle" style="font-size:11px;fill:var(--ink-dim)">${opts.xLabel}</text>
-      <text x="14" y="${(PAD_T + H - PAD_B) / 2}" text-anchor="middle" transform="rotate(-90 14 ${(PAD_T + H - PAD_B) / 2})" style="font-size:11px;fill:var(--ink-dim)">${opts.yLabel}</text>
+      ${gridLines}
+      <text x="${PAD_L + 6}" y="${PAD_T + 13}" style="${cornerStyle}">${escXml([opts.lowXLabel, opts.highYLabel].filter(Boolean).join(" & "))}</text>
+      <text x="${W - PAD_R - 6}" y="${PAD_T + 13}" text-anchor="end" style="${cornerStyle}">${escXml([opts.highXLabel, opts.highYLabel].filter(Boolean).join(" & "))}</text>
+      <text x="${PAD_L + 6}" y="${H - PAD_B - 8}" style="${cornerStyle}">${escXml([opts.lowXLabel, opts.lowYLabel].filter(Boolean).join(" & "))}</text>
+      <text x="${W - PAD_R - 6}" y="${H - PAD_B - 8}" text-anchor="end" style="${cornerStyle}">${escXml([opts.highXLabel, opts.lowYLabel].filter(Boolean).join(" & "))}</text>
+      ${markers}
+      <text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 10}" text-anchor="middle" style="font-size:11px;fill:var(--ink-dim)">${escXml(opts.xLabel)}</text>
+      <text x="14" y="${(PAD_T + H - PAD_B) / 2}" text-anchor="middle" transform="rotate(-90 14 ${(PAD_T + H - PAD_B) / 2})" style="font-size:11px;fill:var(--ink-dim)">${escXml(opts.yLabel)}</text>
     </svg>
   `;
+}
+// Picks a readable text colour (black/white) against a club's primary
+// colour via a standard relative-luminance threshold — needed since some
+// clubs' primary colour is very light (Fulham/Spurs white, Man City sky
+// blue) where white label text would be unreadable.
+function contrastTextColor(hex) {
+  if (!hex || hex[0] !== "#") return "#fff";
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  if ([r, g, b].some(Number.isNaN)) return "#fff";
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#14181a" : "#fff";
 }
 const INSIGHT_GRAPHS = {
   finishing: {
     label: "Finishing — xG vs Goals−xG", minMinutes: 450,
+    posFilter: p => p.position === "MID" || p.position === "FWD",
     x: p => p.expectedGoals || 0, y: p => (p.goalsScored || 0) - (p.expectedGoals || 0),
     xLabel: "xG (season)", yLabel: "Goals − xG", yDomain: [-10, 10],
     lowXLabel: "Low chance magnets", highXLabel: "High volume",
     lowYLabel: "Poor finishing", highYLabel: "Great finishing",
-    desc: "Each dot: a player's total expected goals (how many good chances they got) vs how many goals they actually scored above/below that. Right = gets lots of good chances; up = converts better than expected.",
+    rankBy: p => p.expectedGoals || 0,
+    desc: "Each box: a player's total expected goals (how many good chances they got) vs how many goals they actually scored above/below that. Right = gets lots of good chances; up = converts better than expected.",
   },
+  // Round 23 fairness fix (Task 6): kept, not removed — but with an
+  // explicit caveat, since xA/actual-assists both depend heavily on the
+  // finishing quality of whoever the player passes to, which this graph
+  // alone can make look like a personal failing ("wasteful final ball")
+  // when it's really "plays for strikers having a bad finishing spell."
+  // See creativityVolume below for a less-confounded companion metric
+  // (raw creative output, not compared against a finisher-dependent
+  // outcome) rather than just deleting the concern.
   creativity: {
     label: "Creativity — xA vs Assists−xA", minMinutes: 450,
+    posFilter: p => p.position !== "GK",
     x: p => p.expectedAssists || 0, y: p => (p.assists || 0) - (p.expectedAssists || 0),
     xLabel: "xA (season)", yLabel: "Assists − xA", yDomain: [-10, 10],
     lowXLabel: "Low creative volume", highXLabel: "High creative volume",
     lowYLabel: "Wasteful final ball", highYLabel: "Clinical creator",
+    rankBy: p => p.expectedAssists || 0,
     desc: "Same idea as Finishing, for the final ball instead of the shot: expected assists (chance creation volume) vs actual assists above/below that.",
+    caveat: "The Y-axis here (Assists − xA) is confounded by finisher quality — a player creates the chance, but whoever they pass to has to score it. A low reading can mean \"wasteful final ball\" OR just \"plays for strikers who are missing good chances right now,\" and this graph alone can't tell the two apart. See \"Creative volume — Key passes vs xA p90\" below for a reading of the player's OWN creative output that doesn't depend on a teammate's finishing.",
+  },
+  // New companion graph (Task 6): both axes here are the player's OWN
+  // output — real key-passes/90 (from the ds* deeper-stats source, how
+  // often they actually put a teammate in a good position) against xA/90
+  // (the quality of those chances) — neither depends on whether the
+  // teammate actually finished, so this reads as "is this player
+  // creating for others" without penalizing them for someone else's
+  // finishing form.
+  creativityVolume: {
+    label: "Creative volume — Key passes vs xA p90", minMinutes: 450,
+    posFilter: p => p.position !== "GK", requiresField: "dsKeyPasses",
+    x: p => per90Rate(p.dsKeyPasses, p.minutes) || 0, y: p => p.xa90 || 0,
+    xLabel: "Key passes p90", yLabel: "xA p90", yDomain: null,
+    lowXLabel: "Low chance creation", highXLabel: "High chance creation",
+    lowYLabel: "Lower-quality chances", highYLabel: "Higher-quality chances",
+    rankBy: p => per90Rate(p.dsKeyPasses, p.minutes) || 0,
+    desc: "A fairer read of creativity than xA-vs-actual-assists: both axes are the player's OWN contribution (how often they set up a teammate, and how good those chances were), with no dependence on whether the teammate actually scored. Real key-passes data only exists for matched players (see the data note above the graph).",
   },
   value: {
     label: "Value — Price vs Points", minMinutes: 450,
@@ -14797,6 +15180,7 @@ const INSIGHT_GRAPHS = {
     xLabel: "Price (£m)", yLabel: "Total points", yDomain: null,
     lowXLabel: "Cheap", highXLabel: "Expensive",
     lowYLabel: "Low output", highYLabel: "High output",
+    rankBy: p => p.totalPoints || 0,
     desc: "Top-left is the sweet spot — high points for low price. Bottom-right is the trap — expensive for what you get back.",
   },
   defensive: {
@@ -14806,7 +15190,128 @@ const INSIGHT_GRAPHS = {
     xLabel: "Minutes played", yLabel: "Defensive contribution /90", yDomain: null,
     lowXLabel: "Fringe", highXLabel: "Nailed",
     lowYLabel: "Low defensive output", highYLabel: "High defensive output",
+    rankBy: p => p.defensiveContributionPer90 || 0,
     desc: "Defenders and midfielders only. Top-right: nailed starters racking up real defensive-contribution points every week.",
+  },
+  // ---- Round 23: broader set of Wanalyst-style quadrant plots ----
+  shootingVolume: {
+    label: "Shooting — Shots p90 vs xG p90", minMinutes: 450,
+    posFilter: p => p.position === "MID" || p.position === "FWD", requiresField: "dsShots",
+    x: p => per90Rate(p.dsShots, p.minutes) || 0, y: p => p.xg90 || 0,
+    xLabel: "Shots p90", yLabel: "xG p90", yDomain: null,
+    lowXLabel: "Low shot volume", highXLabel: "High shot volume",
+    lowYLabel: "Speculative shooter", highYLabel: "Great chances",
+    rankBy: p => p.xg90 || 0,
+    desc: "Right = shoots a lot. Up = the shots they do take are genuinely good chances, not pot-shots from distance. Top-right is the complete shooting threat; bottom-right is a volume shooter taking mostly low-quality efforts.",
+  },
+  buildupInvolvement: {
+    label: "Build-up — xG Buildup vs xG Chain p90", minMinutes: 450,
+    posFilter: p => p.position === "MID" || p.position === "FWD", requiresField: "dsXGBuildup",
+    x: p => per90Rate(p.dsXGBuildup, p.minutes) || 0, y: p => per90Rate(p.dsXGChain, p.minutes) || 0,
+    xLabel: "xG Buildup p90", yLabel: "xG Chain p90", yDomain: null,
+    lowXLabel: "Peripheral to build-up", highXLabel: "Central to build-up",
+    lowYLabel: "Low overall involvement", highYLabel: "High overall involvement",
+    rankBy: p => per90Rate(p.dsXGChain, p.minutes) || 0,
+    desc: "xG Buildup credits a player for possessions leading to a shot even without a shot/key pass themselves (pure link-up play); xG Chain adds shots/assists back in. A player high on both is genuinely involved in most of their team's good moves, not just finishing them off.",
+  },
+  tacklesVsInterceptions: {
+    label: "Defending style — Tackles vs Interceptions p90", minMinutes: 450,
+    posFilter: p => p.position === "DEF" || p.position === "MID", requiresField: "dsTackles",
+    x: p => per90Rate(p.dsTackles, p.minutes) || 0, y: p => per90Rate(p.dsInterceptions, p.minutes) || 0,
+    xLabel: "Tackles p90", yLabel: "Interceptions p90", yDomain: null,
+    lowXLabel: "Rarely dives in", highXLabel: "Frequent tackler",
+    lowYLabel: "Reactive defending", highYLabel: "Reads the game well",
+    rankBy: p => (per90Rate(p.dsTackles, p.minutes) || 0) + (per90Rate(p.dsInterceptions, p.minutes) || 0),
+    desc: "Two different defensive styles, not a good/bad axis — high tackles/low interceptions is a combative ball-winner; low tackles/high interceptions is a positional reader who cuts passing lanes before a tackle is even needed. Top-right does both.",
+  },
+  progressiveDefending: {
+    label: "Defensive actions vs discipline", minMinutes: 450,
+    posFilter: p => p.position === "DEF" || p.position === "MID", requiresField: "dsTackles",
+    x: p => per90Rate((p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0), p.minutes) || 0,
+    y: p => -per90Rate((p.yellowCards || 0) + (p.redCards || 0) * 2, p.minutes) || 0,
+    xLabel: "Combined defensive actions p90 (tkl+int+blk+clr)", yLabel: "Cards p90 (inverted — up is fewer)", yDomain: null,
+    lowXLabel: "Low defensive workload", highXLabel: "High defensive workload",
+    lowYLabel: "Card-prone", highYLabel: "Rarely booked",
+    rankBy: p => per90Rate((p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0), p.minutes) || 0,
+    desc: "How much defensive work a player does, against how often that work costs a card — top-right is a high-volume defender who stays disciplined doing it; bottom-right racks up the same defensive numbers but picks up cards (and BPS/points risk) along the way.",
+  },
+  aerialThreat: {
+    label: "Aerial ability — Aerials won p90 vs win%", minMinutes: 450,
+    posFilter: p => p.position !== "GK", requiresField: "dsAerialsWon",
+    x: p => per90Rate(p.dsAerialsWon, p.minutes) || 0, y: p => p.dsAerialWinPct || 0,
+    xLabel: "Aerials won p90", yLabel: "Aerial win %", yDomain: [0, 100],
+    lowXLabel: "Rarely contests", highXLabel: "Contests often",
+    lowYLabel: "Loses most duels", highYLabel: "Dominant in the air",
+    rankBy: p => per90Rate(p.dsAerialsWon, p.minutes) || 0,
+    desc: "Right = regularly gets into aerial duels (set pieces, long balls, crosses). Up = actually wins them. Top-right is a genuine aerial focal point — useful both for judging attacking set-piece threat and defensive resilience.",
+  },
+  bonusMagnet: {
+    label: "Bonus magnet — BPS/90 vs Bonus/90", minMinutes: 450,
+    x: p => p.bpsPer90 || 0, y: p => p.bonusPer90 || 0,
+    xLabel: "BPS p90", yLabel: "Bonus points p90", yDomain: null,
+    lowXLabel: "Low match influence", highXLabel: "High match influence",
+    lowYLabel: "Rarely in the bonus frame", highYLabel: "Regular bonus earner",
+    rankBy: p => p.bonusPer90 || 0,
+    desc: "BPS (Bonus Points System score) measures overall match influence; actual bonus points only pay out to the top 3 in a match. A player high on BPS but lower on actual bonus is unlucky — regularly influential but getting edged out by someone else's big match.",
+  },
+  involvementEfficiency: {
+    label: "Involvement — Minutes vs xGI/90", minMinutes: 270,
+    posFilter: p => p.position === "MID" || p.position === "FWD",
+    x: p => p.minutes || 0, y: p => p.xgi90 || 0,
+    xLabel: "Minutes played", yLabel: "xG Involvement p90 (xG+xA)", yDomain: null,
+    lowXLabel: "Fringe / rotation risk", highXLabel: "Nailed on",
+    lowYLabel: "Low attacking involvement", highYLabel: "High attacking involvement",
+    rankBy: p => p.xgi90 || 0,
+    desc: "Top-right is the complete attacking captaincy pick — nailed AND heavily involved. Top-left is a genuine differential: huge output when they do play, just not (yet) guaranteed minutes.",
+  },
+  ictBalance: {
+    label: "ICT balance — Influence vs Creativity p90", minMinutes: 450,
+    posFilter: p => p.position !== "GK",
+    x: p => p.influencePer90 || 0, y: p => p.creativityPer90 || 0,
+    xLabel: "Influence p90", yLabel: "Creativity p90", yDomain: null,
+    lowXLabel: "Low match impact", highXLabel: "High match impact",
+    lowYLabel: "Low chance creation", highYLabel: "High chance creation",
+    rankBy: p => (p.influencePer90 || 0) + (p.creativityPer90 || 0),
+    desc: "FPL's own Influence and Creativity ICT sub-scores plotted against each other — top-right is a genuine all-round game-changer (affects the match AND creates chances); either single axis alone can hide which type of player you're actually looking at.",
+  },
+  cleanSheetForm: {
+    label: "Clean sheet form — Minutes vs CS/90", minMinutes: 450,
+    posFilter: p => p.position === "GK" || p.position === "DEF",
+    x: p => p.minutes || 0, y: p => p.cleanSheetsPer90 || 0,
+    xLabel: "Minutes played", yLabel: "Clean sheets p90", yDomain: [0, 1],
+    lowXLabel: "Fringe / rotation risk", highXLabel: "Nailed on",
+    lowYLabel: "Leaky", highYLabel: "Shuts out often",
+    rankBy: p => p.cleanSheetsPer90 || 0,
+    desc: "Goalkeepers and defenders only. Top-right is exactly what a defensive FPL pick needs — a nailed starter at a club that keeps clean sheets regularly.",
+  },
+  goalkeeperShotStopping: {
+    label: "Goalkeepers — Saves p90 vs xGC p90", minMinutes: 450,
+    posFilter: p => p.position === "GK",
+    x: p => p.saves90 || 0, y: p => -(p.xgc90 || 0),
+    xLabel: "Saves p90", yLabel: "Expected goals conceded p90 (inverted — up is fewer)", yDomain: null,
+    lowXLabel: "Quiet games / strong defence in front", highXLabel: "Busy keeper",
+    lowYLabel: "Leaky defence in front of them", highYLabel: "Tight defence in front of them",
+    rankBy: p => p.saves90 || 0,
+    desc: "Goalkeepers only. Right = faces a lot of shots (either a busy defence or genuinely exposed). Up = the defence in front of them concedes few good chances. A keeper high on both saves AND low xGC (top-right, since the axis is inverted) is both busy and well-shielded — the shot-stopping-quality read (are the SAVES themselves good) needs the save% column on Player Stats, since xGC is about chance quality faced, not save quality.",
+  },
+  penaltyBoxThreat: {
+    label: "Penalty-box threat — xG vs xGI p90", minMinutes: 450,
+    posFilter: p => p.position === "MID" || p.position === "FWD",
+    x: p => p.xg90 || 0, y: p => p.xgi90 || 0,
+    xLabel: "xG p90", yLabel: "xG Involvement p90 (xG+xA)", yDomain: null,
+    lowXLabel: "Not a goal threat", highXLabel: "Regular goal threat",
+    lowYLabel: "Low overall involvement", highYLabel: "High overall involvement",
+    rankBy: p => p.xgi90 || 0,
+    desc: "xGI is always ≥ xG (it includes it), so distance above the diagonal (not shown, but visually: how far up-and-left a dot sits relative to how far right it is) shows how much of a player's involvement is creating FOR others vs shooting himself. A player near the top edge but not far right is more creator than scorer; on this graph specifically, top-right (high on both) is the complete attacking threat.",
+  },
+  rotationRisk: {
+    label: "Rotation risk — Starts/90 vs Mins/start", minMinutes: 90,
+    x: p => p.startsPer90 || 0, y: p => p.minsPerStart || 0,
+    xLabel: "Starts p90 (start rate)", yLabel: "Minutes per start", yDomain: [0, 95],
+    lowXLabel: "Rarely starts", highXLabel: "Starts regularly",
+    lowYLabel: "Subbed off early when starting", highYLabel: "Plays full 90 when starting",
+    rankBy: p => p.minutes || 0,
+    desc: "Top-right is the safest FPL pick from a minutes-risk perspective — starts regularly AND stays on the full match once selected. Bottom-left is a genuine rotation/impact-sub risk regardless of how good their underlying numbers look elsewhere.",
   },
 };
 function renderInsightGraphPanel() {
@@ -14820,11 +15325,36 @@ function renderInsightGraphPanel() {
   const key = INSIGHT_GRAPHS[state.insightGraphKey] ? state.insightGraphKey : "finishing";
   sel.value = key;
   const g = INSIGHT_GRAPHS[key];
-  const pool = state.players.filter(p => (p.minutes || 0) >= g.minMinutes && (!g.posFilter || g.posFilter(p)));
-  const points = pool.map(p => ({ id: p.id, x: g.x(p), y: g.y(p), color: POS_COLOR[p.position] || "#999", label: p.webName }));
-  if (countEl) countEl.textContent = `${points.length} players (450+ mins)`;
+  // Round 23: extra data-availability filter — a graph built on ds* fields
+  // (real per-90 defensive/creative stats from the deeper-stats source,
+  // see the ds* field note near SIM_MATCH_OUTPUT_STATS) only makes sense
+  // for players that source actually matched; without this a plot like
+  // "Tackles vs Interceptions" would show a wall of players sitting at
+  // (0,0) for anyone the scrape never matched, which reads as "this player
+  // has zero defensive output" rather than "no data" — genuinely
+  // different and misleading claims. requiresField lets a graph declare
+  // which real field it needs present (non-null) to even be plotted.
+  let pool = state.players.filter(p => (p.minutes || 0) >= g.minMinutes && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null));
+  // Round 23: cap to the most relevant N players (default 60, matching the
+  // "Elite Wingers" reference image's curated, not league-wide, pool) —
+  // name-label boxes (vs the old small dots) get unreadable well before
+  // hitting the 400-700 players many of these filters would otherwise
+  // return. rankBy picks who's "most relevant" per graph (usually total
+  // output on the more important axis) so the cap keeps the players worth
+  // looking at, not an arbitrary slice.
+  const cap = g.topN || 60;
+  if (pool.length > cap) {
+    const rank = g.rankBy || g.y;
+    pool = pool.slice().sort((a, b) => (rank(b) || 0) - (rank(a) || 0)).slice(0, cap);
+  }
+  const points = pool.map(p => {
+    const team = state.teamsById[p.teamId];
+    const { primary } = clubColors(team);
+    return { id: p.id, x: g.x(p), y: g.y(p), color: POS_COLOR[p.position] || "#999", clubColor: primary, clubTextColor: contrastTextColor(primary), label: p.webName };
+  });
+  if (countEl) countEl.textContent = `${points.length} of ${state.players.filter(p => (p.minutes || 0) >= g.minMinutes && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null)).length} qualifying players shown (${g.minMinutes}+ mins${g.requiresField ? ", real underlying data only" : ""})`;
   panel.innerHTML = `
-    <p class="foot-note" style="margin-bottom:8px">${g.desc}</p>
+    <p class="foot-note" style="margin-bottom:8px">${g.desc}${g.caveat ? `<br/><span style="color:var(--gold-bright)">⚠ ${g.caveat}</span>` : ""}</p>
     ${points.length ? scatterPlotSvg(points, g) : `<p class="empty-state">No qualifying players yet.</p>`}
   `;
   panel.querySelectorAll("[data-plot-player]").forEach(dot => {
@@ -15726,6 +16256,34 @@ function h2hTeamXiForBoard(team, key) {
   }
   return h2hAutoDraftXi(team);
 }
+// Round 23 (Tactical Board item: "import from Ability Draft"): populates a
+// MANUAL board's roster (state.h2hBoardManual) from whatever XI
+// h2hTeamXiForBoard resolves for each club right now — the exact same
+// source AUTO mode already renders live (Ability Draft XI override if one
+// exists, else the saved flashcard-draft XI, else the auto top-points
+// fallback), just materialized into manual tokens the user can then drag
+// around freely instead of staying tied to auto mode's live-recompute
+// behaviour. Returns how many players were imported per side so the
+// caller can report a real count rather than a generic "done".
+function tacImportAbilityDraftXi(teamA, teamB, key) {
+  const roster = state.h2hBoardManual[key] || (state.h2hBoardManual[key] = { A: [], B: [] });
+  const xiA = h2hTeamXiForBoard(teamA, key), xiB = h2hTeamXiForBoard(teamB, key);
+  const toTokens = (xi, isA) => {
+    const out = [];
+    let n = 0;
+    ["GK", "DEF", "MID", "FWD"].forEach(pos => {
+      (xi[pos] || []).forEach((p, idx) => {
+        const def = h2hDefaultTokenPos(pos, idx, (xi[pos] || []).length, isA);
+        out.push({ tokId: `m${Date.now()}_${isA ? "a" : "b"}_${n++}`, playerId: p.id, x: def.x, y: def.y });
+      });
+    });
+    return out;
+  };
+  roster.A = toTokens(xiA, true);
+  roster.B = toTokens(xiB, false);
+  saveH2hBoardManual();
+  return { countA: roster.A.length, countB: roster.B.length };
+}
 // ---- Bench strength (new sub-tab: "who has the stronger bench") ----
 // Per user: bench = whatever's left of the squad AFTER the starting XI is
 // settled — reuses h2hTeamXiForBoard (the exact same 11-a-side source the
@@ -16001,6 +16559,7 @@ function renderH2hDraggablePitchBoard(teamA, teamB, matchups) {
       <div class="toolbar" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
         <select id="tacAddA"><option value="">+ Add ${teamA.short_name} player…</option>${h2hSquadOptionsHtml(teamA.id)}</select>
         <select id="tacAddB"><option value="">+ Add ${teamB.short_name} player…</option>${h2hSquadOptionsHtml(teamB.id)}</select>
+        <button class="dir-btn small" id="tacImportAbilityDraft" title="Populate the board's tokens from the Ability draft XI you built for ${teamA.short_name} vs ${teamB.short_name} in Head-to-head — replaces whatever's currently on this manual board.">⬇ Import Ability draft XI</button>
         <button class="dir-btn small" id="tacClearBoard">🧹 Clear board</button>
       </div>
     ` : ""}
@@ -16433,6 +16992,28 @@ function wireH2hDraggablePitchBoard(body, teamA, teamB) {
   if (clearBtn) clearBtn.onclick = () => {
     roster.A = []; roster.B = [];
     saveH2hBoardManual();
+    activeBoardRerender();
+  };
+  // Round 23 (Tactical Board item: "import from Ability Draft") — pulls
+  // whatever XI h2hTeamXiForBoard resolves right now (Ability Draft
+  // override > saved flashcard draft > auto top-points fallback, same
+  // priority order Auto mode already renders live) into this MANUAL
+  // board's token roster, so a manual board doesn't have to be rebuilt
+  // player-by-player from the "+ Add player" dropdowns. Confirms first
+  // when the manual board already has tokens on it, since this replaces
+  // the whole roster rather than merging into it.
+  const importAbilityDraftBtn = body.querySelector("#tacImportAbilityDraft");
+  if (importAbilityDraftBtn) importAbilityDraftBtn.onclick = () => {
+    const hasExisting = (roster.A && roster.A.length) || (roster.B && roster.B.length);
+    if (hasExisting && !confirm("This replaces the players currently on this manual board with the Ability draft XI. Continue?")) return;
+    try {
+      const { countA, countB } = tacImportAbilityDraftXi(teamA, teamB, key);
+      if (!countA && !countB) {
+        setBanner(`Couldn't find any ${teamA.short_name}/${teamB.short_name} squad players to import — player data may not be loaded yet. Try again once the app has finished loading, or use "+ Add player" to build this board manually.`, "error");
+      }
+    } catch (err) {
+      setBanner(`Couldn't import the Ability draft XI (${err.message}). The board's previous state is unaffected.`, "error");
+    }
     activeBoardRerender();
   };
 
@@ -17851,7 +18432,7 @@ const SETTINGS_EXPORT_KEYS = [
   "fdrFormula", "rankFormula", "modelWeights", "rankingsPresets",
   "playerAttributes", "attributeDefs", "gkAttributes", "priorLeagueStats",
   "playerClubOverrides", "playerPositions", "teamOverrides",
-  "fixtureRunTiers", "shortlist", "shortlistGroups",
+  "fixtureRunTiers", "shortlist", "shortlistGroups", "playerRankAnswers",
 ];
 // ---------- default seed for first-time visitors ----------
 // cjatsi's own rankings/customizations, baked in as the starting point
