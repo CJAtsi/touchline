@@ -807,10 +807,41 @@
   .table-scroll-arrow.left { left: -4px; }
   .table-scroll-arrow.right { right: -4px; }
   .table-scroll-arrow.show { display: flex; }
-  @media (max-width: 900px) {
-    table { font-size: 10.5px; }
-    thead th { font-size: 8.5px; padding: 6px 4px; }
-    tbody td { padding: 6px 4px; font-size: 10px; }
+  /* Round 27: this used to SHRINK text/padding at <900px (down to 8.5px
+     headers, 6px×4px cells) - the opposite of "optimised for mobile". That
+     made sense as a "fit more columns without scrolling" move on a tablet,
+     but on an actual phone it produced near-illegible header text and tap
+     targets under the ~44px touch-target guideline, which is what "tables
+     etc are not optimised" was describing. Split into two tiers instead:
+     tablet (641-900px, real hover/mouse or a large enough touch surface)
+     keeps a mild compaction; phone (<=640px, matching the sidebar's own
+     mobile breakpoint) now goes the other way - readable text and taller
+     tap targets, leaning on the existing horizontal-scroll + sticky label
+     column + floating scroll arrows (enlarged below) rather than trying to
+     cram every column into a shrunk font. */
+  @media (min-width: 641px) and (max-width: 900px) {
+    table { font-size: 11px; }
+    thead th { font-size: 9px; padding: 7px 5px; }
+    tbody td { padding: 7px 5px; font-size: 10.5px; }
+  }
+  @media (max-width: 640px) {
+    table { font-size: 13px; }
+    thead th { font-size: 11px; padding: 11px 9px; }
+    tbody td { padding: 13px 9px; font-size: 13px; }
+    /* Sticky name column needs to stay wide enough to read a full surname
+       at this font size, and the star/compare controls need real tap
+       targets, not the desktop-density defaults. */
+    .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child { min-width: 132px; }
+    .star-btn { font-size: 20px; padding: 4px; }
+    td.label-col input[type="checkbox"] { width: 18px; height: 18px; }
+    /* Floating scroll arrows are the primary way to move a wide table
+       sideways on a phone (no scrollbar, imprecise touch dragging over a
+       small target) - bigger circle, bigger glyph, pulled fully onto
+       screen instead of overlapping the edge by 4px like the desktop
+       version does. */
+    .table-scroll-arrow { width: 44px; height: 44px; font-size: 20px; }
+    .table-scroll-arrow.left { left: 2px; }
+    .table-scroll-arrow.right { right: 2px; }
   }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
@@ -1237,7 +1268,16 @@
     nav#tabs button { flex: 0 0 auto; padding: 7px 10px; font-size: 12.5px; }
     h1, .page-title { font-size: 19px; }
     .page-sub { font-size: 12.5px; max-width: 100%; }
-    table { min-width: 640px; font-size: 12px; }
+    /* font-size intentionally NOT set here any more (Round 27) - this rule
+       used to pin it back down to 12px, silently overriding the more
+       deliberate phone-readability sizing set earlier in the stylesheet's
+       own <=640px table block (same breakpoint, later source order used to
+       win the cascade). min-width:640px stays: it guarantees the table
+       never gets crushed narrower than that even with few columns, so the
+       existing horizontal-scroll + sticky label + floating arrows pattern
+       always has room to do its job instead of the browser trying to fit
+       everything into the actual (much narrower) viewport. */
+    table { min-width: 640px; }
     .pitch-slot { max-width: 58px; }
     .pitch-slot img, .pitch-slot svg { width: 30px !important; height: 30px !important; }
     .name-tag { font-size: 9px; max-width: 56px; padding: 1px 4px; }
@@ -1881,7 +1921,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Data mode - Legacy vs Live</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> weighs this season up to 80% / last season down to 20% - but only once a player actually has a real (270+ minute, roughly 3-game) sample this season; below that, the this-season share ramps down toward 0 and last season's full year fills the gap, so a couple of games can't outweigh a whole proven season. <strong>Legacy</strong> flips the ceiling toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for leaning harder on proven history even once the season is fully underway.
+        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> (default) weighs last season up to 80% / this season up to 20% - a full proven year outweighs this season's own early sample by design. That 20% this-season share is itself a ceiling, only reached once a player actually has a real (270+ minute, roughly 3-game) sample; below that, this season counts for even less and last season fills the rest, so a couple of games can't move a projection much either way. <strong>Legacy</strong> pushes further still toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for treating this season's numbers as close to irrelevant even once it's underway.
       </p>
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div class="blend-toggle" id="dataBlendToggle" role="group">
@@ -4654,30 +4694,38 @@ function sampleRampFactor(minutesThisSeason) {
   if (m >= FULL_SAMPLE_MINUTES) return 1;
   return RAMP_FLOOR + (1 - RAMP_FLOOR) * (m / FULL_SAMPLE_MINUTES);
 }
-// Round 25: single global blend-weight source of truth for every
-// prediction-style model (Projections/Captaincy's provenAbility AND
-// attacking-rate blend, p.form, Club rankings' squadNorm) - see
-// state.dataMode/state.dataLegacyWeight for the toggle+slider this reads.
-//   - "live" mode: up to 80% this-season / 20%+ last-season - 80% is now a
-//     CEILING reached once a player has a real (270+ minute) this-season
-//     sample; before that, minutesThisSeason (Round 26) tapers the
-//     this-season share down toward last season's full proven year, since
-//     a 90-minute sample genuinely shouldn't count for as much as a full
-//     season did. Previously a flat 80/20 regardless of sample size, which
-//     is exactly what over-weighted this season's earliest, noisiest data.
+// Round 27: user explicitly asked for last season to weigh 80% by default,
+// not just as an opt-in "Legacy mode" the toggle above it. Previously "live"
+// mode's ceiling was 20% last-season / 80% this-season (the ORIGINAL
+// pre-Round-25 convention) - exactly backwards from what's wanted here.
+// Live's ceiling is now 80% last-season / 20% this-season, i.e. the same
+// default ratio "Legacy" mode already offered at the bottom of its slider -
+// so this is now the out-of-the-box behavior with no toggle to find/flip.
+// "Legacy" mode still exists for pushing even further toward last season
+// (up to 100%, slider) when wanted.
+//
+// Single global blend-weight source of truth for every prediction-style
+// model (Projections/Captaincy's provenAbility AND attacking-rate blend,
+// p.form, Club rankings' squadNorm) - see state.dataMode/state.dataLegacyWeight
+// for the toggle+slider this reads.
+//   - "live" mode (default): 80% last-season / 20% this-season ceiling.
 //   - "legacy" mode: last season weighs dataLegacyWeight% (user-adjustable
 //     80-100 via the slider) as a floor - the ramp can only push last
 //     season's share UP from there (toward 100%) when this-season sample
 //     is thin, never below the slider's own setting.
+// Round 26's minutesThisSeason ramp still applies underneath this ceiling -
+// even 80% is only reached once a player has a real (270+ minute)
+// this-season sample; below that, the this-season share tapers down further
+// still (last season counts for even MORE), since a couple of games
+// shouldn't outweigh a full proven season even at this now-lower ceiling.
 //   - Pass minutesThisSeason for a per-player blend (Projections, Captaincy,
 //     form). Omit it (or pass null) for the global, no-single-player call
 //     sites (Club rankings' composite note, the toggle's UI copy) - these
-//     fall back to the un-ramped ceiling ratio, matching pre-Round-26
-//     behavior, since there's no one player's minutes to ramp against.
+//     fall back to the un-ramped ceiling ratio.
 function legacyBlendWeights(minutesThisSeason) {
   const legacyCeilingPct = state.dataMode === "legacy"
     ? Math.max(80, Math.min(100, state.dataLegacyWeight ?? 80))
-    : 20;
+    : 80;
   const thisSeasonCeiling = (100 - legacyCeilingPct) / 100;
   const thisWeight = minutesThisSeason == null
     ? thisSeasonCeiling
@@ -7555,25 +7603,62 @@ function sumProj(arr) { return arr.reduce((s, x) => s + x.proj, 0); }
 // `assume90` (the "if they got 90 minutes" ceiling mode) bypasses all of
 // this and just returns 1 - for sizing up players who haven't had the
 // opportunity yet (new signings, guys returning from injury, etc).
+// Round 27: fixed a real bug behind "the tool recommends players who only
+// played a few minutes" - two separate issues, both here.
+//   1. The p.status === "a" branch gave a FLAT 0.92 base to anyone with
+//      starts>0 OR minutes>0 - including someone with a single 3-minute
+//      substitute cameo. Since the shave below only fired when
+//      p.starts > 0, a player who has NEVER STARTED (sub appearances only)
+//      got no shave applied AT ALL and kept the full 0.92, as if they were
+//      a nailed-on starter. Now split into three tiers: has actually
+//      started (0.92, shaved below by how long they last when they do
+//      start), sub-appearances only (0.25 - a fringe/impact-sub role, not
+//      a presumed starter), and genuinely untested/no minutes at all (0.5 -
+//      real uncertainty, e.g. a new signing who could break in).
+//   2. Math.max(0.6, ...) floored the minsPerStart shave at 60% no matter
+//      how small minsPerStart actually was - a player averaging 5 minutes
+//      per start before being subbed off still kept a 60%-of-base start
+//      chance. Floor removed: the shave now scales all the way down for a
+//      genuinely fringe, quickly-substituted player instead of bottoming
+//      out at a number that still reads as "likely to start".
 function projStartProb(p, assume90, rotationThreshold) {
   if (assume90) return 1;
   const floor = rotationThreshold || 70;
   let base;
   if (typeof p.chanceOfPlaying === "number") base = p.chanceOfPlaying / 100;
-  else if (p.status === "a") base = p.starts > 0 || p.minutes > 0 ? 0.92 : 0.5;
+  else if (p.status === "a") {
+    if (p.starts > 0) base = 0.92;
+    else if (p.minutes > 0) base = 0.25; // sub-only appearances so far - fringe, not a presumed starter
+    else base = 0.5; // genuinely untested - no minutes at all yet
+  }
   else if (p.status === "d") base = 0.5;
   else base = 0.03; // injured/suspended/unavailable
   if (p.starts > 0 && p.minsPerStart < floor) {
-    const shave = Math.max(0.6, p.minsPerStart / floor);
+    const shave = Math.min(1, p.minsPerStart / floor);
     base *= shave;
   }
   return Math.max(0, Math.min(1, base));
 }
+// Round 27: same bug, minutes-share side. p.starts === 0 (sub-only) used to
+// return a flat 0.4 regardless of whether that player's cameos average 30
+// seconds or 30 minutes - treating any impact sub as worth over a third of
+// a nailed starter's attacking output. Now scaled by their actual average
+// minutes per gameweek played so far (minutes ÷ gameweeks finished), capped
+// at the same 0.4 ceiling a real fringe sub role would realistically hit -
+// so a player who's had one 2-minute cameo in 6 gameweeks scores close to
+// 0, not 0.4. The p.starts > 0 branch's own Math.max(0.35, ...) floor is
+// removed for the same reason as projStartProb's shave floor above: a
+// player averaging a handful of minutes per start shouldn't be guaranteed
+// a third of a full appearance's worth of output.
 function projMinsFactor(p, assume90, rotationThreshold) {
   if (assume90) return 1;
   const floor = rotationThreshold || 70;
-  if (p.starts === 0) return p.minutes > 0 ? 0.4 : 0;
-  return Math.max(0.35, Math.min(1, p.minsPerStart / (floor + 10)));
+  if (p.starts === 0) {
+    if (!(p.minutes > 0)) return 0;
+    const gwsPlayed = Math.max(1, state.events.filter(e => e.finished).length);
+    return Math.max(0, Math.min(0.4, (p.minutes / gwsPlayed) / 90));
+  }
+  return Math.min(1, p.minsPerStart / (floor + 10));
 }
 function projAppearancePts(startProb, minsFactor) {
   const fullGameShare = minsFactor >= 0.75 ? 1 : minsFactor;
@@ -9943,9 +10028,25 @@ function renderCaptaincyTab() {
     // Full remaining season (up to GW38), not just a rolling 10-GW window.
     const upcoming = getHorizonGws(38);
     gwSelect.innerHTML = upcoming.map(id => `<option value="${id}">GW${id}</option>`).join("");
-    state.capGwId = upcoming[0];
+    // Round 27: same fix as Projections' own default - prefer the NEXT
+    // gameweek that hasn't started yet (is_next) over upcoming[0], which
+    // could be the currently-live gameweek (is_current, finished:false
+    // while matches are still being played) - not useful to default a
+    // captaincy pick into once it may already be locked in.
+    const nextEvent = state.events.find(e => e.is_next);
+    state.capGwId = (nextEvent && upcoming.includes(nextEvent.id)) ? nextEvent.id : upcoming[0];
     gwSelect.value = state.capGwId;
     gwSelect.onchange = () => { state.capGwId = Number(gwSelect.value); renderCaptaincyTab(); };
+  }
+  // Round 27: same stale-selection safety net as Projections - if the
+  // season has moved past the currently-selected GW (long-lived tab left
+  // open), snap forward instead of continuing to show a finished gameweek.
+  if (state.capGwId != null) {
+    const selectedEvent = state.events.find(e => e.id === state.capGwId);
+    if (selectedEvent && selectedEvent.finished) {
+      const nextEvent = state.events.find(e => e.is_next) || state.events.find(e => !e.finished);
+      if (nextEvent) { state.capGwId = nextEvent.id; if (gwSelect) gwSelect.value = state.capGwId; }
+    }
   }
   // Base view: search for literally any player - including goalkeepers
   // and low-minutes players, which both the "My team" and "Any player"
@@ -10406,11 +10507,36 @@ function renderProjectionsTab() {
     const all = getHorizonGws(38);
     fromSelect.innerHTML = all.map(id => `<option value="${id}">GW${id}</option>`).join("");
     toSelect.innerHTML = all.map(id => `<option value="${id}">GW${id}</option>`).join("");
-    const defaultSpan = all.slice(0, 8);
-    state.projFromGw = defaultSpan[0];
-    state.projToGw = defaultSpan[0];
+    // Round 27: default "From" to the NEXT gameweek that hasn't started yet
+    // (FPL's own is_next flag), not just the first !finished one - all[0]
+    // could be the CURRENTLY LIVE gameweek (is_current, finished:false while
+    // some/all of its matches are still being played), which isn't useful
+    // to default into since transfers/captaincy for it may already be
+    // locked. Falls back to all[0] near the very end of the season, when
+    // there's no "next" gameweek left for is_next to point to.
+    const nextEvent = state.events.find(e => e.is_next);
+    const defaultFromId = (nextEvent && all.includes(nextEvent.id)) ? nextEvent.id : all[0];
+    state.projFromGw = defaultFromId;
+    state.projToGw = defaultFromId;
     fromSelect.value = state.projFromGw;
     toSelect.value = state.projToGw;
+  }
+  // Round 27: safety net for a long-lived tab left open across a gameweek
+  // boundary (or any other stale-state path) - if the currently-selected
+  // "From" has since finished, snap forward to the next one that hasn't,
+  // same as a fresh load would pick. Never overrides a still-valid,
+  // deliberately-chosen future GW.
+  if (state.projFromGw != null) {
+    const selectedEvent = state.events.find(e => e.id === state.projFromGw);
+    if (selectedEvent && selectedEvent.finished) {
+      const nextEvent = state.events.find(e => e.is_next) || state.events.find(e => !e.finished);
+      if (nextEvent) {
+        if (state.projToGw === state.projFromGw) state.projToGw = nextEvent.id;
+        state.projFromGw = nextEvent.id;
+        if (fromSelect) fromSelect.value = state.projFromGw;
+        if (toSelect && state.projToGw < state.projFromGw) { state.projToGw = state.projFromGw; toSelect.value = state.projToGw; }
+      }
+    }
   }
   let fromGw = state.projFromGw || Number(fromSelect?.value);
   let toGw = Math.max(fromGw, state.projToGw || Number(toSelect?.value));
