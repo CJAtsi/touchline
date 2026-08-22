@@ -1894,6 +1894,7 @@
         </div>
       </div>
       <p class="foot-note" id="dataBlendModeNote" style="margin-top:8px"></p>
+      <p class="foot-note" id="dataBlendStatus" style="margin-top:4px"></p>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -4524,13 +4525,30 @@ async function fetchLegacyStatsForAllPlayers(onProgress) {
 async function ensureLegacyStatsCache() {
   if (state.legacyStatsCache || state.legacyStatsCacheLoading) return;
   state.legacyStatsCacheLoading = true;
+  state.legacyLoadProgress = { done: 0, total: state.players.length };
   try {
-    state.legacyStatsCache = await fetchLegacyStatsForAllPlayers();
+    // onProgress (Round 25 addition): this background fetch previously ran
+    // with no progress reporting at all - unlike applyLegacyStatsScope's
+    // own manual fetch (Player Stats tab's "Legacy" scope button), which
+    // always passed one. That silence made a real problem invisible: if
+    // this ~700-call fetch is slow, or largely failing (Worker down, rate
+    // limited, etc.), the Legacy/Live toggle on Rankings would show ZERO
+    // effect with no indication why - reading as "not connected to last
+    // season data" when the real cause is just "hasn't loaded / didn't
+    // load". Wiring the same progress callback through here so
+    // syncDataBlendControls (Rankings tab) can show real status instead of
+    // silence. Cheap no-op when that tab isn't the one currently visible
+    // (syncDataBlendControls itself no-ops if its DOM isn't present).
+    state.legacyStatsCache = await fetchLegacyStatsForAllPlayers((done, total) => {
+      state.legacyLoadProgress = { done, total };
+      if (typeof syncDataBlendControls === "function") syncDataBlendControls();
+    });
   } catch (e) {
     console.error("Background last-season fetch failed:", e.message);
   }
   state.legacyStatsCacheLoading = false;
   applyFormBlend();
+  if (typeof syncDataBlendControls === "function") syncDataBlendControls();
   // Re-render the views whose numbers change once real last-season data is
   // in (they rendered with the pre-cache fallback right after boot).
   renderRankingsList();
@@ -19261,6 +19279,38 @@ function syncDataBlendControls() {
     note.textContent = state.dataMode === "legacy"
       ? `Legacy mode active: Projections, Captaincy and Club rankings now blend ${legacyPct}% last season / ${livePct}% this season.`
       : `Live mode active: Projections, Captaincy and Club rankings blend ${livePct}% this season / ${legacyPct}% last season.`;
+  }
+  // Real-data readiness status (Round 25 addition): the blend above is only
+  // as real as state.legacyStatsCache - a ~700-call background fetch (see
+  // ensureLegacyStatsCache) that can be slow, or fail outright (Worker
+  // down/rate-limited), with NOTHING else in the UI showing that. Without
+  // this, a failed/incomplete fetch looks identical to "the toggle doesn't
+  // do anything" - exactly the confusing symptom this line exists to rule
+  // in or out at a glance.
+  const statusEl = document.getElementById("dataBlendStatus");
+  if (statusEl) {
+    if (state.legacyStatsCacheLoading) {
+      const p = state.legacyLoadProgress;
+      statusEl.style.color = "var(--ink-faint)";
+      statusEl.textContent = p ? `Loading last season's data… ${p.done}/${p.total} players checked.` : "Loading last season's data…";
+    } else if (!state.legacyStatsCache) {
+      statusEl.style.color = "var(--red, #e05252)";
+      statusEl.textContent = "Last season's data hasn't loaded yet - both modes will look the same until it does. It fetches automatically in the background; if this doesn't clear after a minute or two, try reloading the page.";
+    } else {
+      const totalPlayers = state.players.length;
+      const matched = state.players.filter(p => lastSeasonStats(p.id)).length;
+      const pct = totalPlayers ? Math.round((matched / totalPlayers) * 100) : 0;
+      if (matched === 0) {
+        statusEl.style.color = "var(--red, #e05252)";
+        statusEl.textContent = "Last season's data finished loading but matched 0 players - the fetch likely failed (check your Worker/proxy setup). Both modes will look identical until this is fixed.";
+      } else if (pct < 30) {
+        statusEl.style.color = "var(--red, #e05252)";
+        statusEl.textContent = `Last season's data only matched ${matched}/${totalPlayers} players (${pct}%) - lower than expected, so most players won't show any Legacy/Live difference. Worth checking your Worker/proxy setup.`;
+      } else {
+        statusEl.style.color = "var(--ink-faint)";
+        statusEl.textContent = `Last season's data loaded for ${matched}/${totalPlayers} players (${pct}%) - the rest (new signings, promoted-club players) have no last-season Prem record, so they blend at 100% this-season regardless of mode.`;
+      }
+    }
   }
 }
 // Applies a mode/weight change everywhere it needs to take effect: persists
