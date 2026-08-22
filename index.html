@@ -1881,7 +1881,7 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Data mode - Legacy vs Live</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> weighs this season 80% / last season 20% (last season still smooths out an early small sample). <strong>Legacy</strong> flips the bias toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for leaning harder on proven history early in the season when this season's own sample is still tiny and noisy.
+        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> weighs this season up to 80% / last season down to 20% - but only once a player actually has a real (270+ minute, roughly 3-game) sample this season; below that, the this-season share ramps down toward 0 and last season's full year fills the gap, so a couple of games can't outweigh a whole proven season. <strong>Legacy</strong> flips the ceiling toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for leaning harder on proven history even once the season is fully underway.
       </p>
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div class="blend-toggle" id="dataBlendToggle" role="group">
@@ -4562,10 +4562,10 @@ async function ensureLegacyStatsCache() {
 // second toggle would compound the wrong number.
 function applyFormBlend() {
   if (!state.legacyStatsCache) return;
-  const { thisWeight } = legacyBlendWeights();
   state.players.forEach(p => {
     const lastRate = lastSeasonPointsPer90(p.id);
     if (lastRate == null) return; // no legacy record - leave FPL's own this-season form untouched
+    const { thisWeight } = legacyBlendWeights(p.minutes); // Round 26: ramped per-player by this-season minutes, not a flat global rate
     if (p.rawForm == null) p.rawForm = p.form; // capture the pristine this-season rate once
     p.form = Math.round(seasonBlend(p.rawForm, lastRate, thisWeight, true) * 10) / 10;
   });
@@ -4626,26 +4626,63 @@ function seasonBlend(thisVal, lastVal, thisWeight, playedThisSeason) {
   if (thisVal == null) return lastVal;
   return thisVal * thisWeight + lastVal * (1 - thisWeight);
 }
+// Round 26: minutes needed this season before a player's blend reaches the
+// FULL this-season weight below (Live's 80%, or Legacy's user-set slider
+// value). Roughly 3 full appearances - enough that this-season minutes stop
+// being pure noise. Below this, RAMP_FLOOR is the most this-season weight
+// can count for, sliding down toward 0 as minutes approach 0 - see
+// sampleRampFactor().
+const FULL_SAMPLE_MINUTES = 270;
+// Round 26: even at literally 0 minutes this season, don't floor the
+// this-season weight all the way to 0 - a hard 0 would make seasonBlend's
+// own playedThisSeason gate (already 100% last-season at 0 minutes) the
+// only thing doing any work, and would make the ramp read as a step
+// function right at 1 minute played. Small non-zero floor keeps the ramp
+// smooth; the real "0 minutes = last season only" behavior still comes
+// from seasonBlend/playedThisSeason, not from this ramp.
+const RAMP_FLOOR = 0.15;
+// How much of the FULL this-season weight (see legacyBlendWeights) actually
+// applies right now, given how little of this season's own sample exists
+// yet. 1.0 once a player has FULL_SAMPLE_MINUTES+ this season (full weight,
+// unchanged from before this ramp existed); scales down toward RAMP_FLOOR
+// as minutes approach 0, so a two-game, 180-minute sample can't outweigh a
+// full proven year of last-season data just because Live mode's fixed
+// ratio says "80% this season" - that fixed ratio is now the CEILING this
+// ramps up to, not a flat rate applied from minute one.
+function sampleRampFactor(minutesThisSeason) {
+  const m = Math.max(0, minutesThisSeason || 0);
+  if (m >= FULL_SAMPLE_MINUTES) return 1;
+  return RAMP_FLOOR + (1 - RAMP_FLOOR) * (m / FULL_SAMPLE_MINUTES);
+}
 // Round 25: single global blend-weight source of truth for every
 // prediction-style model (Projections/Captaincy's provenAbility AND
 // attacking-rate blend, p.form, Club rankings' squadNorm) - see
 // state.dataMode/state.dataLegacyWeight for the toggle+slider this reads.
-//   - "live" mode: fixed 80% this-season / 20% last-season - the
-//     convention every one of these blends already used before this
-//     control existed, kept as the default so nothing changes until the
-//     user opts into Legacy mode.
+//   - "live" mode: up to 80% this-season / 20%+ last-season - 80% is now a
+//     CEILING reached once a player has a real (270+ minute) this-season
+//     sample; before that, minutesThisSeason (Round 26) tapers the
+//     this-season share down toward last season's full proven year, since
+//     a 90-minute sample genuinely shouldn't count for as much as a full
+//     season did. Previously a flat 80/20 regardless of sample size, which
+//     is exactly what over-weighted this season's earliest, noisiest data.
 //   - "legacy" mode: last season weighs dataLegacyWeight% (user-adjustable
-//     80-100 via the slider), this season gets the rest (0-20%) - for
-//     leaning harder on a full proven season over a small, noisy in-season
-//     sample. At the slider's 100% end, this season is ignored entirely
-//     for these blends (seasonBlend's own playedThisSeason/null-value
-//     fallbacks still apply beneath this).
-function legacyBlendWeights() {
-  const legacyPct = state.dataMode === "legacy"
+//     80-100 via the slider) as a floor - the ramp can only push last
+//     season's share UP from there (toward 100%) when this-season sample
+//     is thin, never below the slider's own setting.
+//   - Pass minutesThisSeason for a per-player blend (Projections, Captaincy,
+//     form). Omit it (or pass null) for the global, no-single-player call
+//     sites (Club rankings' composite note, the toggle's UI copy) - these
+//     fall back to the un-ramped ceiling ratio, matching pre-Round-26
+//     behavior, since there's no one player's minutes to ramp against.
+function legacyBlendWeights(minutesThisSeason) {
+  const legacyCeilingPct = state.dataMode === "legacy"
     ? Math.max(80, Math.min(100, state.dataLegacyWeight ?? 80))
     : 20;
-  const lastWeight = legacyPct / 100;
-  return { lastWeight, thisWeight: 1 - lastWeight };
+  const thisSeasonCeiling = (100 - legacyCeilingPct) / 100;
+  const thisWeight = minutesThisSeason == null
+    ? thisSeasonCeiling
+    : thisSeasonCeiling * sampleRampFactor(minutesThisSeason);
+  return { lastWeight: 1 - thisWeight, thisWeight };
 }
 async function applyLegacyStatsScope() {
   if (state.legacyStatsCache) { state.scopedStats = state.legacyStatsCache; renderStats(); return; }
@@ -7686,7 +7723,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
   // suddenly read as a rotation risk purely because real minutes now
   // technically exist.
   const priorLeague = getPriorLeagueStats(p.id) ? estimatePriorLeagueProjection(p.id) : null;
-  const { thisWeight: legacyThisWeight } = legacyBlendWeights();
+  const { thisWeight: legacyThisWeight } = legacyBlendWeights(p.minutes); // Round 26: ramped by this player's own this-season minutes
   // Attacking-rate blend (Round 25): xg90/xa90 previously came straight off
   // this season's live FPL rate with no legacy fallback at all, regardless
   // of any ability/form blending happening elsewhere in this function - the
@@ -7812,8 +7849,9 @@ function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAb
   // see the Player pairs table, which is this function's only caller).
   // Brought in line with computeProjectionRow: same seasonBlend call, same
   // global Legacy/Live weight, same attacking-rate (xg90/xa90) blend via
-  // effP - see legacyBlendWeights().
-  const { thisWeight: legacyThisWeight } = legacyBlendWeights();
+  // effP - see legacyBlendWeights(). Round 26: ramped by this player's own
+  // this-season minutes, same as computeProjectionRow.
+  const { thisWeight: legacyThisWeight } = legacyBlendWeights(p.minutes);
   const thisSeasonRate = p.pointsPerGame || p.pointsPer90 || 0;
   const lastSeasonRate = lastSeasonPointsPer90(p.id);
   const provenAbility = seasonBlend(thisSeasonRate, lastSeasonRate, legacyThisWeight, (p.minutes || 0) > 0);
@@ -13003,9 +13041,6 @@ function computeClubRankings() {
   for (const t of state.teams) perTeam[t.id] = [];
   for (const p of state.players) (perTeam[p.teamId] ||= []).push(p);
 
-  const seasonUnderway = state.players.some(p => p.totalPoints > 0);
-  const gwsPlayed = state.events.filter(e => e.finished).length;
-
   const rows = state.teams.map(t => {
     const players = perTeam[t.id] || [];
     const byPoints = [...players].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 11);
@@ -13024,7 +13059,14 @@ function computeClubRankings() {
     const teamStrength = override !== null
       ? override * (state.strengthRanges.overall.max / 5) // put the 1-5 rating on the same rough scale as raw strength values
       : (t.strength_overall_home + t.strength_overall_away) / 2;
-    return { team: t, pointsScore, priceScore, lastSeasonScore, teamStrength };
+    // Round 26: team-level stand-in for a single player's minutes, so this
+    // squad's own composite ramps the same way an individual player's blend
+    // does (see legacyBlendWeights/sampleRampFactor) instead of the old
+    // binary "any GW finished yet" gate below, which jumped straight to the
+    // fixed ceiling ratio after just one gameweek regardless of how few
+    // minutes these players had actually racked up by then.
+    const avgMinutes = byPoints.length ? byPoints.reduce((s, p) => s + (p.minutes || 0), 0) / byPoints.length : 0;
+    return { team: t, pointsScore, priceScore, lastSeasonScore, teamStrength, avgMinutes };
   });
 
   const norm = (v, arr) => {
@@ -13036,18 +13078,20 @@ function computeClubRankings() {
   const w = state.rankFormula;
   const wSum = w.squadWeight + w.strengthWeight || 1;
 
-  // Ability-style blend, weight now driven by the global Legacy/Live
-  // control (Round 25) instead of a fixed 80/20 - see legacyBlendWeights().
-  // Live mode's default (80% last season / 20% this season) matches the
-  // original fixed blend this always used before the toggle existed;
-  // Legacy mode can push last season up to 100% via the slider. 100%
-  // ability-based before any gameweek has finished either way, since
-  // there's no "this season" signal to blend in yet.
-  const { lastWeight: legacyLastWeight, thisWeight: legacyThisWeight } = legacyBlendWeights();
+  // Ability-style blend, weight driven by the global Legacy/Live control
+  // (Round 25) - see legacyBlendWeights(). Live mode's ceiling (80% this
+  // season / 20% last season) matches the original fixed blend this always
+  // used before the toggle existed; Legacy mode can push last season up to
+  // 100% via the slider. Round 26: that ceiling is now reached per-team via
+  // each squad's own avgMinutes (see above) rather than applied flat the
+  // moment any gameweek has finished - a team one game into the season gets
+  // ramped much closer to last season's full-year ability score, the same
+  // early-season correction now applied to individual player projections.
   return rows.map(r => {
+    const { lastWeight: legacyLastWeight, thisWeight: legacyThisWeight } = legacyBlendWeights(r.avgMinutes);
     const pointsNorm = norm(r.pointsScore, pointsVals);
     const abilityNorm = norm(r.lastSeasonScore ?? r.priceScore, abilityVals);
-    const squadNorm = gwsPlayed > 0 ? (pointsNorm * legacyThisWeight + abilityNorm * legacyLastWeight) : abilityNorm;
+    const squadNorm = r.avgMinutes > 0 ? (pointsNorm * legacyThisWeight + abilityNorm * legacyLastWeight) : abilityNorm;
     const strengthNorm = norm(r.teamStrength, tsVals);
     return { ...r, squadNorm, strengthNorm, composite: (w.squadWeight * squadNorm + w.strengthWeight * strengthNorm) / wSum };
   }).sort((a, b) => b.composite - a.composite);
@@ -13058,11 +13102,11 @@ function renderRankingsList() {
   const { lastWeight: legacyLastWeight, thisWeight: legacyThisWeight } = legacyBlendWeights();
   const legacyPct = Math.round(legacyLastWeight * 100), livePct = Math.round(legacyThisWeight * 100);
   const modeNote = state.dataMode === "legacy"
-    ? ` Currently in Legacy mode (${legacyPct}% last season / ${livePct}% this season) - see the toggle above.`
-    : ` Currently in Live mode (${livePct}% this season / ${legacyPct}% last season) - see the toggle above.`;
+    ? ` Currently in Legacy mode (up to ${legacyPct}% last season / ${livePct}% this season once a squad has a real sample - see the toggle above).`
+    : ` Currently in Live mode (up to ${livePct}% this season / ${legacyPct}% last season once a squad has a real sample - see the toggle above).`;
   document.getElementById("rankingsNote").textContent = (seasonUnderway
-    ? `Squad quality blends this season's actual points (${livePct}%) with last season's real points as a steadier baseline (${legacyPct}%, squad value until that data finishes loading), so one early result can't swing a club's rank too far; team strength comes from FPL's own longer-run ratings (plus any manual edits you've made below).`
-    : "No gameweeks have been played yet this season, so squad quality is 100% last season's real points (or squad value until that data finishes loading) - this season's points blend in once the season is underway.") + modeNote;
+    ? `Squad quality blends this season's actual points with last season's real points as a steadier baseline, so one early result can't swing a club's rank too far - each squad ramps toward the this-season share above as its own players rack up real minutes, rather than jumping straight there after one gameweek; team strength comes from FPL's own longer-run ratings (plus any manual edits you've made below).`
+    : "No gameweeks have been played yet this season, so squad quality is 100% last season's real points (or squad value until that data finishes loading) - this season's points blend in gradually as squads build up real minutes, not all at once.") + modeNote;
 
   const rankings = computeClubRankings();
   const maxComposite = Math.max(...rankings.map(r => r.composite), 1);
@@ -19296,8 +19340,8 @@ function syncDataBlendControls() {
     const { lastWeight, thisWeight } = legacyBlendWeights();
     const legacyPct = Math.round(lastWeight * 100), livePct = Math.round(thisWeight * 100);
     note.textContent = state.dataMode === "legacy"
-      ? `Legacy mode active: Projections, Captaincy and Club rankings now blend ${legacyPct}% last season / ${livePct}% this season.`
-      : `Live mode active: Projections, Captaincy and Club rankings blend ${livePct}% this season / ${legacyPct}% last season.`;
+      ? `Legacy mode active: Projections, Captaincy and Club rankings blend up to ${legacyPct}% last season / ${livePct}% this season (each player/squad ramps toward this once they have a real this-season sample - see the card above).`
+      : `Live mode active: Projections, Captaincy and Club rankings blend up to ${livePct}% this season / ${legacyPct}% last season (each player/squad ramps toward this once they have a real this-season sample - see the card above).`;
   }
   // Real-data readiness status (Round 25 addition): the blend above is only
   // as real as state.legacyStatsCache - a ~700-call background fetch (see
