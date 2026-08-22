@@ -4595,6 +4595,25 @@ function lastSeasonXaPer90(playerId) {
   if (!s || !s.minutes) return null;
   return (s.expected_assists || 0) / (s.minutes / 90);
 }
+// Early-season eligibility fallback. The various "established player" pools
+// (Captaincy, Theoretical Best, Triple Captain, Projections) all gate on a
+// minutes threshold so small-sample players don't get ranked on a handful
+// of minutes. That's the right call once the season is under way, but taken
+// literally in GW1-2 it excludes EVERY player (nobody has 450+ minutes yet)
+// and makes those tabs look broken/empty - even though last season's data
+// (which the Legacy/Live blend is designed to use) could easily tell us a
+// player is "established". So: pass on this-season minutes as normal: once
+// the season is far enough along (8+ finished GWs) that this-season minutes
+// are a meaningful signal on their own, stop granting the last-season
+// fallback - by then, genuinely fringe/rotation players should have to earn
+// eligibility on this season's minutes, not ride on last year's forever.
+function passesEstablishedThreshold(p, minMinutesRequired) {
+  if ((p.minutes || 0) >= minMinutesRequired) return true;
+  const gwsPlayed = state.events.filter(e => e.finished).length;
+  if (gwsPlayed >= 8) return false;
+  const legacy = lastSeasonStats(p.id);
+  return !!(legacy && legacy.minutes >= minMinutesRequired);
+}
 // thisWeight = how much of the blend goes to THIS season, per the current
 // global Legacy/Live setting - see legacyBlendWeights() just below. 100%
 // last season whenever the player/club genuinely hasn't played this season
@@ -9628,7 +9647,7 @@ function warmCaptaincyScoreCache() {
   const upcoming = state.events && state.events.filter(e => !e.finished).sort((a, b) => a.id - b.id);
   const gwId = upcoming && upcoming.length ? upcoming[0].id : null;
   if (!gwId) return;
-  const pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
+  const pool = state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
   // Bigger chunks (was 20) so the whole eligible pool warms in fewer idle
   // slots - still small enough per chunk not to visibly jank the boot
   // sequence's own rendering, but finishes sooner, which is the actual
@@ -9965,7 +9984,7 @@ function renderCaptaincyTab() {
   if (source === "myteam") {
     pool = state.myTeamSquadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean);
   } else {
-    pool = state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
+    pool = state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
   }
   // The top-N cut for "Any player" is made using whichever mode is active -
   // Explosive's whole point is surfacing a hidden gem that wouldn't crack a
@@ -10237,7 +10256,7 @@ function _capPoolSignature(pool) {
   return "sq:" + pool.map(p => p.id).sort((a, b) => a - b).join(",");
 }
 function computeTheoreticalBestCaptaincy(gwIds, pool) {
-  const candidates = pool || state.players.filter(p => (p.minutes || 0) >= 450 && p.position !== "GK");
+  const candidates = pool || state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
   const sig = _capPoolSignature(pool);
   return gwIds.map(gwId => {
     const cacheKey = sig + "|" + gwId;
@@ -10372,7 +10391,7 @@ function renderProjectionsTab() {
   // so it ignores the position filter specifically (all other filters -
   // min minutes, price, form - still apply, same pool logic otherwise).
   const pairsView = (state.projView || "table") === "pairs";
-  let pool = state.players.filter(p => p.minutes >= minMinutes && (pitchView || posFilter === "ALL" || p.position === posFilter));
+  let pool = state.players.filter(p => passesEstablishedThreshold(p, minMinutes) && (pitchView || posFilter === "ALL" || p.position === posFilter));
   // In Pairs view, "Max £" is the combined budget for the pair, not a
   // per-player cap - so we don't prune individual players out of the pool
   // here; renderProjectionsPairs applies it to the pair's combined price
@@ -15291,7 +15310,7 @@ function poolWideBenchBoostSignal(gwIds) {
 function tripleCaptainCandidates(gwIds, squadIds) {
   const pool = squadIds && squadIds.length
     ? squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
-    : state.players.filter(p => p.minutes >= 450 && p.position !== "GK");
+    : state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
   const results = [];
   for (const gwId of gwIds) {
     const scored = pool.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => b.captaincyScore - a.captaincyScore);
