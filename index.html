@@ -2591,7 +2591,7 @@ function computeFcAttributes(p) {
   // exists. This does NOT touch players with an established FPL sample;
   // their numbers are unchanged.
   const useFmFallback = (p.minutes || 0) < 90;
-  const posPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 450);
+  const posPool = state.players.filter(x => x.elementType === p.elementType && passesEstablishedThreshold(x, 450));
   const fallbackPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
   const pool = posPool.length >= 5 ? posPool : fallbackPool;
   const pick = (key) => pool.map(x => x[key] || 0);
@@ -2683,7 +2683,7 @@ const FM12_ATTR_DEFS = [
 // out 1s and 20s except for genuine outliers.
 function pctTo20(pct) { return Math.max(4, Math.min(19, Math.round(4 + (pct / 99) * 15))); }
 function computeFmAttributes12Estimate(p) {
-  const posPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 450);
+  const posPool = state.players.filter(x => x.elementType === p.elementType && passesEstablishedThreshold(x, 450));
   const fallbackPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
   const pool = posPool.length >= 5 ? posPool : fallbackPool;
   const per90 = (pl, key) => pl.minutes > 0 ? (pl[key] || 0) / (pl.minutes / 90) : 0;
@@ -3445,7 +3445,7 @@ function buildComparisonTableHtml(players, tab, colMinWidth) {
     // clears the green bar, so the row is never empty.
     const GREEN_PCT = 70;
     const standout = players.map(p => {
-      const posPool = state.players.filter(x => x.position === p.position && x.minutes >= 300);
+      const posPool = state.players.filter(x => x.position === p.position && passesEstablishedThreshold(x, 300));
       const metrics = scoutMetricsFor(p.position, "base");
       const scored = metrics.map(([key, label, dir]) => {
         const v = scoutMetricValue(p, key);
@@ -16189,7 +16189,7 @@ function renderInsightGraphPanel() {
   // has zero defensive output" rather than "no data" - genuinely
   // different and misleading claims. requiresField lets a graph declare
   // which real field it needs present (non-null) to even be plotted.
-  let pool = state.players.filter(p => (p.minutes || 0) >= g.minMinutes && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null));
+  let pool = state.players.filter(p => passesEstablishedThreshold(p, g.minMinutes) && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null));
   // Round 23: cap to the most relevant N players (default 60, matching the
   // "Elite Wingers" reference image's curated, not league-wide, pool) -
   // name-label boxes (vs the old small dots) get unreadable well before
@@ -16207,7 +16207,7 @@ function renderInsightGraphPanel() {
     const { primary } = clubColors(team);
     return { id: p.id, x: g.x(p), y: g.y(p), color: POS_COLOR[p.position] || "#999", clubColor: primary, clubTextColor: contrastTextColor(primary), label: p.webName };
   });
-  if (countEl) countEl.textContent = `${points.length} of ${state.players.filter(p => (p.minutes || 0) >= g.minMinutes && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null)).length} qualifying players shown (${g.minMinutes}+ mins${g.requiresField ? ", real underlying data only" : ""})`;
+  if (countEl) countEl.textContent = `${points.length} of ${state.players.filter(p => passesEstablishedThreshold(p, g.minMinutes) && (!g.posFilter || g.posFilter(p)) && (!g.requiresField || p[g.requiresField] != null)).length} qualifying players shown (${g.minMinutes}+ mins${g.requiresField ? ", real underlying data only" : ""})`;
   panel.innerHTML = `
     <p class="foot-note" style="margin-bottom:8px">${g.desc}${g.caveat ? `<br/><span style="color:var(--gold-bright)">⚠ ${g.caveat}</span>` : ""}</p>
     ${points.length ? scatterPlotSvg(points, g) : `<p class="empty-state">No qualifying players yet.</p>`}
