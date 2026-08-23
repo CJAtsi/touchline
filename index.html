@@ -31,6 +31,12 @@
     --gold-soft: rgba(255,255,255,0.12);
     --emerald: #34d399;
     --emerald-dim: rgba(52,211,153,0.16);
+    /* Simulation tab's two comparison-side colours (duel bars, match-mode
+       matchup bars, stat bars) - deliberately separate from --emerald so
+       recolouring the Simulation tab doesn't touch the app-wide "positive
+       stat" green used elsewhere. White for side A, grey for side B. */
+    --sim-a: #ffffff;
+    --sim-b: #8a8a9a;
     --red: #f5556c;
     --red-soft: rgba(245,85,108,0.14);
     --amber: #eab308;
@@ -77,6 +83,8 @@
     --gold-soft: rgba(23,23,29,0.16);
     --emerald: #047857;
     --emerald-dim: rgba(4,120,87,0.16);
+    --sim-a: #17171d;
+    --sim-b: #8b8b95;
     --red: #b91c1c;
     --red-soft: rgba(185,28,28,0.14);
     --amber: #92400e;
@@ -111,6 +119,8 @@
     --gold-soft: rgba(20,20,26,0.08);
     --emerald: #059669;
     --emerald-dim: rgba(5,150,105,0.14);
+    --sim-a: #16161d;
+    --sim-b: #8f8f9c;
     --red: #dc2626;
     --red-soft: rgba(220,38,38,0.12);
     --amber: #b45309;
@@ -1342,6 +1352,7 @@
   <button data-tab="tacboard"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5v17M12 9.5a3 3 0 010 5"/></svg></span><span class="tb-label">Tactical board</span></button>
   <button data-tab="simulation"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h3l2-6 4 12 2-6h5"/></svg></span><span class="tb-label">Simulation</span></button>
   <button data-tab="table"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8.5 9.5v10"/></svg></span><span class="tb-label">Clubs</span></button>
+  <button data-tab="managers"><span class="tb-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6a3 3 0 106 0 3 3 0 00-6 0z"/><path d="M4 19c0-3.3 2.2-5.5 5-6M20 19c0-3.3-2.2-5.5-5-6"/><path d="M9 6l3 3 3-3"/></svg></span><span class="tb-label">Managers</span></button>
 </nav>
 
 <header>
@@ -1639,6 +1650,23 @@
         <thead><tr id="clubStatsHeadRow"></tr></thead>
         <tbody id="clubStatsBody"></tbody>
       </table></div>
+    </div>
+  </section>
+
+  <section id="tab-managers" style="display:none">
+    <h1 class="page-title">Managers</h1>
+    <p class="page-sub">Managers make a real difference - the same squad plays differently under a different head coach. There's no real data source for manager ability anywhere public, so this is a user-editable ranking (same "notepad you fill in yourself" convention as the Tactical board's club-philosophy notes) seeded from a defensible proxy - time in the job - rather than a guess at who's "good". Ability nudges every one of that manager's players' projections (±15% cap, see the Managers tab - Projections/Captaincy/My Team all read it), and the two playstyle sliders (Attacking intent / Defensive solidity) are a separate descriptive read, not a quality score on their own.</p>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="detail-block-title">Ranked by ability</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Sorted by a combined score (ability weighted 70%, the stronger of the two playstyle axes 30%) - adjust any slider below and the ranking updates live.</p>
+      <div id="managerRankList"></div>
+    </div>
+
+    <div class="card">
+      <div class="detail-block-title">Rate each manager</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">Ability seeds from time-in-the-job; both playstyle sliders start neutral (3). Adjusting Ability is what actually feeds the projection multiplier used across Projections, Captaincy, and My Team - the playstyle sliders are for your own reference and rank sort only.</p>
+      <div id="managerRatingList"></div>
     </div>
   </section>
 
@@ -1943,14 +1971,6 @@
         A faster way to tune club strength than dragging every slider below - answer a continuous stream of "does X have a better attack/defence than Y" questions, and each answer nudges those two clubs' Attack/Defence override up or down slightly. Keep going as long as you like; every answer compounds on the last, so your gut feel converges toward a full set of ratings over time. Skip any question you're unsure about.
       </p>
       <div id="rankQuizBody"></div>
-    </div>
-
-    <div class="card" style="margin-bottom:18px">
-      <div class="detail-block-title">Player questions</div>
-      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        A separate questionnaire from the club-strength one above - this one asks subjective/contextual questions about an individual PLAYER (preseason sharpness, whether they look nailed on, tactical fit, set-piece role, etc.) and nudges that specific player's own projection up or down slightly, same "answer a stream, skip what you're unsure about" idea. Players from stronger clubs come up more often (weighted by each club's overall rating), since there's usually more genuine signal/attention on them - weaker clubs' players still appear, just less frequently. Goalkeepers are only ever asked GK-relevant questions (never asked "will they get more assists"-style attacking questions). Answers are opt-in and reversible - a player with no answers saved projects exactly as before.
-      </p>
-      <div id="rankPlayerQuizBody"></div>
     </div>
 
     <div class="card" style="margin-bottom:18px">
@@ -2868,6 +2888,20 @@ function hasRealFmAttribute(playerId, key) {
   const manual = state.playerAttributes[playerId];
   return !!(manual && manual[key] != null);
 }
+// True if this OUTFIELD player has ANY real FM-exported attribute at all
+// (manual entry or CSV/FM26 export import) - as opposed to running
+// entirely on computeFmAttributes12Estimate's derived-from-thin-FPL-data
+// fallback for every single attribute. Used by playerHasNoExportedData
+// below to flag a player in the stats table whose "FM attributes" are
+// 100% estimated, not real - e.g. a summer signing/transfer who missed
+// the last FM26 Player Export snapshot (BUILTIN_POSITIONS/the attribute
+// import are both point-in-time snapshots, not a live feed - see their
+// own comments).
+function hasAnyRealFmAttribute(playerId) {
+  const manual = state.playerAttributes[playerId];
+  if (!manual) return false;
+  return FM12_ATTR_DEFS.some(def => manual[def.key] != null);
+}
 // Rescales an FM 1-20 attribute value onto the radar's 1-99 percentile
 // scale, so a real FM stat can stand in directly for a percentile-ranked
 // axis without the two scales visibly clashing.
@@ -2925,6 +2959,33 @@ function getGkAttributeValue(playerId, key) {
 function hasAnyGkAttributes(playerId) {
   const manual = getGkAttributes(playerId);
   return Object.keys(manual).length > 0;
+}
+// Round: user noticed several players (several Man City players named
+// specifically) never picked up real exported data - root cause is that
+// BUILTIN_POSITIONS/BUILTIN_GK_ATTRIBUTES/the FM26 attribute import are all
+// point-in-time SNAPSHOTS matched by name+club (matchPlayerByNameClub) -
+// a summer transfer, a name spelled differently in the export, or a player
+// simply not in that snapshot at all silently leaves them with zero real
+// data and no visible sign of it, running entirely on generic estimates.
+// Confirmed concretely for goalkeepers: BUILTIN_GK_ATTRIBUTES is missing
+// EVERY Man City senior keeper (Ederson, Stefan Ortega, Gianluigi
+// Donnarumma, James Trafford all absent - only academy keepers plus
+// Bettinelli are present), even though those same four are all correctly
+// position-tagged "GK" in BUILTIN_POSITIONS. That's WHY position-tagged
+// alone isn't enough for a goalkeeper here: a GK's tagged position is just
+// their already-known broad FPL position repeated back, not new
+// information - the attribute export (shot-stopping numbers) is the real
+// data a keeper needs, so a GK with no gkAttributes is flagged regardless
+// of position-tag status. Outfield players keep the "either is enough"
+// rule, since a real specific position (RW/CDM/etc, genuinely finer than
+// FPL's own broad MID/DEF/FWD) IS meaningful data on its own for them.
+// Used by the Player Stats table's 🚩 badge below.
+function playerHasNoExportedData(p) {
+  if (!p) return false;
+  if (p.position === "GK") return !hasAnyGkAttributes(p.id);
+  const hasPosition = !!getSpecificPosition(p.id);
+  const hasAttrs = hasAnyRealFmAttribute(p.id);
+  return !hasPosition && !hasAttrs;
 }
 // Shot-stopping ability index (1-20 scale, matches the attribute inputs) -
 // the subset of the 10 keeper attributes that most directly affect whether
@@ -3041,10 +3102,36 @@ const FM26_CSV_COLUMN_MAP = {
   passing: ["Passing"],
   penaltyTaking: ["Penalty Taking"],
 };
+// GK-specific columns some exports carry alongside the outfield set above
+// (e.g. the "moneyball" export - one CSV with both outfield AND keeper
+// attributes, unlike BUILTIN_GK_ATTRIBUTES which was keeper-only). Maps
+// onto GK_ATTR_DEFS' own keys 1:1 by name - written to state.gkAttributes,
+// NEVER state.playerAttributes, and only for a row whose matched player is
+// actually position GK (same "no outfield writes, ever" guard as
+// setGkAttributeIfBlank). Two of GK_ATTR_DEFS' 9 keys (communication,
+// kicking/throwing/rushingOut) still have no clean column match in this
+// export either - same "don't invent a mapping" rule as the original
+// BUILTIN_GK_ATTRIBUTES comment, left unset rather than guessed.
+const FM26_GK_CSV_COLUMN_MAP = {
+  aerialReach: ["Aerial Reach"],
+  commandOfArea: ["Command Of Area"],
+  eccentricity: ["Eccentricity"],
+  handling: ["Handling"],
+  oneOnOnes: ["One On Ones"],
+  reflexes: ["Reflexes"],
+};
 function stripDiacritics(s) { return (s || "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
-function parseCsvLine(line) {
+// Round: a real-world attribute export ("moneyball" tool export) showed up
+// semicolon-delimited, not comma-delimited like the FM26 Player Export
+// plugin this app was originally built against - and it silently failed to
+// parse at all (every row read as one giant first cell). delimiter is
+// optional and defaults to "," (unchanged behavior for every existing
+// caller - the position importer, and manual comma-separated paste); pass
+// ";" explicitly for a semicolon export.
+function parseCsvLine(line, delimiter) {
   // Minimal CSV cell splitter handling quoted fields with embedded commas -
   // FM export CSVs quote any field containing a comma (e.g. "Smith, John").
+  const delim = delimiter || ",";
   const cells = []; let cur = ""; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
@@ -3054,17 +3141,32 @@ function parseCsvLine(line) {
       else cur += c;
     } else {
       if (c === '"') inQuotes = true;
-      else if (c === ",") { cells.push(cur); cur = ""; }
+      else if (c === delim) { cells.push(cur); cur = ""; }
       else cur += c;
     }
   }
   cells.push(cur);
   return cells;
 }
+// Sniffs whether a CSV's header row is semicolon- or comma-delimited -
+// some export tools (the FM26 Player Export plugin this app documents)
+// use commas, others (a "moneyball"-style export seen in the wild) use
+// semicolons instead. Picks whichever delimiter yields MORE cells on the
+// header row, which is a reliable signal either way (a genuinely comma-
+// delimited file has ~0 semicolons in its header, and vice versa).
+function sniffCsvDelimiter(headerLine) {
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  const semiCount = (headerLine.match(/;/g) || []).length;
+  return semiCount > commaCount ? ";" : ",";
+}
 function importFmAttributesCsv(csvText) {
   const lines = csvText.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return { matched: 0, unmatched: 0, error: "CSV appears empty." };
-  const header = parseCsvLine(lines[0]).map(h => h.trim());
+  // Auto-detect comma vs semicolon (see sniffCsvDelimiter) - some export
+  // tools use one, some the other, and a mismatch used to silently produce
+  // a single giant unmatched cell per row instead of a clear error.
+  const delim = sniffCsvDelimiter(lines[0]);
+  const header = parseCsvLine(lines[0], delim).map(h => h.trim());
   // FM26 Player Export (the plugin this importer targets) titles its name
   // column "Player", not "Name" - accept both so a straight export from
   // that tool isn't rejected outright.
@@ -3080,10 +3182,19 @@ function importFmAttributesCsv(csvText) {
   };
   const attrColIdx = {};
   for (const key of Object.keys(FM26_CSV_COLUMN_MAP)) attrColIdx[key] = colIdxFor(FM26_CSV_COLUMN_MAP[key]);
+  // GK columns (see FM26_GK_CSV_COLUMN_MAP) - some exports (e.g. the
+  // "moneyball" export) carry both outfield AND keeper attributes in one
+  // file, unlike the original FM26 Player Export convention this importer
+  // was first built against (which only ever carried the outfield set).
+  // Detected independently so a file with no GK columns at all still
+  // imports its outfield data exactly as before.
+  const gkColIdx = {};
+  for (const key of Object.keys(FM26_GK_CSV_COLUMN_MAP)) gkColIdx[key] = colIdxFor(FM26_GK_CSV_COLUMN_MAP[key]);
+  const hasGkColumns = Object.values(gkColIdx).some(idx => idx !== -1);
   const norm = (s) => stripDiacritics(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  let matched = 0, unmatched = 0;
+  let matched = 0, unmatched = 0, gkMatched = 0;
   for (let i = 1; i < lines.length; i++) {
-    const cells = parseCsvLine(lines[i]);
+    const cells = parseCsvLine(lines[i], delim);
     const rawName = cells[nameIdx];
     if (!rawName) continue;
     const rawClub = clubIdx !== -1 ? cells[clubIdx] : "";
@@ -3104,10 +3215,30 @@ function importFmAttributesCsv(csvText) {
       setPlayerAttribute(player.id, key, raw);
       any = true;
     }
+    // GK attributes: only ever written for a player whose OWN position is
+    // GK (same "no outfield writes, ever" guard setGkAttributeIfBlank
+    // uses) - a keeper row also carries outfield-shaped columns in this
+    // export (Pace, Dribbling, etc, all real per-player FM values but not
+    // meaningful for judging a goalkeeper), which are still imported into
+    // playerAttributes above like any other player's row; they're simply
+    // never read for a GK (getGkAttributeValue/GK_ATTR_DEFS are a fully
+    // separate system - see the goalkeeper stats section).
+    if (hasGkColumns && player.position === "GK") {
+      let anyGk = false;
+      for (const key of Object.keys(FM26_GK_CSV_COLUMN_MAP)) {
+        const idx = gkColIdx[key];
+        if (idx === -1) continue;
+        const raw = Number(cells[idx]);
+        if (!Number.isFinite(raw) || raw <= 0) continue;
+        setGkAttribute(player.id, key, raw);
+        anyGk = true;
+      }
+      if (anyGk) { gkMatched++; any = true; }
+    }
     if (any) matched++; else unmatched++;
   }
   _fm12EstimateCache = new Map(); // stale after an import touches state.playerAttributes broadly
-  return { matched, unmatched, error: null };
+  return { matched, unmatched, gkMatched, error: null };
 }
 // Bulk specific-position import (item: "grab positions... even wikipedia
 // would do"). Confirmed this round: Wikipedia's per-CLUB "Current squad"
@@ -4290,13 +4421,18 @@ let state = {
   // real FPL data - only nudges the projection multiplier, same pattern as
   // gkAbilityMultiplier/gkAttributes above.
   playerRankAnswers: {},
-  rankPlayerQuizCurrent: null,
-  rankPlayerQuizAnswered: 0,
   playerFormCompare: {},
   rankPlayerCompareCurrent: null,
   priorLeagueStats: {},
   playerClubOverrides: {},
   playerPositions: {},
+  // Manager Multiplier tab (new): user-editable manager ability/playstyle
+  // ratings, keyed by team id -> { ability: 1-5|null, attacking: 1-5|null,
+  // defensive: 1-5|null }. null means "use the seeded default" (tenure-
+  // based ability, neutral 3 for the two playstyle sliders) - same
+  // null-means-unset convention as state.teamOverrides. See
+  // getManagerRating/managerAbilityMultiplier.
+  managerRatings: {},
   // ---- Insights tab state (differentials / price watch / squad news / rivals / projection accuracy) ----
   diffOwnershipCeiling: 10, diffPosFilter: "ALL", diffMinMinutes: 270,
   insightGraphKey: "finishing", // Player plots menu selection - see INSIGHT_GRAPHS
@@ -4611,6 +4747,25 @@ function applyFormBlend() {
   });
 }
 function lastSeasonStats(playerId) { return state.legacyStatsCache ? state.legacyStatsCache[playerId] : null; }
+// Blended TOTAL points (not per-90) for a player - this season's real
+// p.totalPoints weighted against last season's real total_points, using
+// the SAME global Legacy/Live blend (legacyBlendWeights/seasonBlend) as
+// every other prediction in the app, so it respects the Rankings tab's
+// Data Mode toggle and Legacy-mode slider as a built-in override rather
+// than a separate setting. Used by the H2H "Combined XI (by points)"
+// feature so a squad picked "by points" isn't 100% this-season-only
+// (which unfairly buries proven players during a slow start/early
+// season) - see Round 28+ user ask. Falls back to pure this-season points
+// when no legacy record exists (e.g. a new signing/promoted club).
+function h2hBlendedPoints(p) {
+  const thisPts = p.totalPoints || 0;
+  const legacy = lastSeasonStats(p.id);
+  if (!legacy || !legacy.minutes) return thisPts;
+  const { thisWeight, lastWeight } = legacyBlendWeights(p.minutes);
+  const playedThisSeason = (p.minutes || 0) > 0;
+  if (!playedThisSeason) return legacy.total_points; // no this-season signal yet - pure last-season, same convention as seasonBlend
+  return thisPts * thisWeight + legacy.total_points * lastWeight;
+}
 // Last season's points-per-90 - the same rate shape as p.pointsPerGame/
 // p.form, so it can be blended directly against them without a unit fix.
 function lastSeasonPointsPer90(playerId) {
@@ -6160,7 +6315,7 @@ function buildToolbarStatics() {
       if (result.error) {
         statusEl.textContent = "⚠️ " + result.error;
       } else {
-        statusEl.textContent = `✓ Matched ${result.matched} player${result.matched === 1 ? "" : "s"}${result.unmatched ? `, ${result.unmatched} unmatched` : ""}.`;
+        statusEl.textContent = `✓ Matched ${result.matched} player${result.matched === 1 ? "" : "s"}${result.gkMatched ? ` (${result.gkMatched} goalkeeper${result.gkMatched === 1 ? "" : "s"})` : ""}${result.unmatched ? `, ${result.unmatched} unmatched` : ""}.`;
         renderStats();
       }
     } catch (e) {
@@ -6685,9 +6840,20 @@ function renderStats() {
             ? `<span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No 2025/26 season data on record for this player - likely a new signing from outside the Prem, a promoted-team player, or an FPL debut since then. There's simply no last-season number to show.">no 2025/26 data</span>`
             : `<span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No minutes or points recorded in the Prem this season yet - could be a new signing from outside the league, on loan, or simply unused so far. Treat any season-long stats for them with caution until they've actually played.">new / no Prem data</span>`)
         : "";
+      // Round: flags a player with NO real exported data at all - no
+      // tagged specific position AND no real FM/GK attribute import (see
+      // playerHasNoExportedData). The position/attribute datasets are
+      // point-in-time snapshots matched by name+club, so a summer transfer
+      // or a name the matcher couldn't resolve silently falls through with
+      // zero real data and no visible sign of it otherwise - several
+      // Man City players were exactly this case after this summer's
+      // business. Small 🚩 flag, title explains what's actually missing.
+      const noExportBadge = playerHasNoExportedData(p)
+        ? `<span class="pos-pill" style="color:var(--red);border:1px dashed var(--red)" title="No exported data on file for this player - no tagged specific position and no real FM${p.position === "GK" ? "/GK" : ""} attribute import. Running entirely on generic estimates. Fix via the General tab's position/attribute importers, or the player's own detail panel.">🚩 no export</span>`
+        : "";
       tr.innerHTML = `
         <td class="label-col">
-          <div class="name-cell">${nameWithPosition(p)}${unprovenBadge}${(p.minutes || 0) >= 450 ? captaincyBadgeHtml(p, currentEventId()) : ""}</div>
+          <div class="name-cell">${nameWithPosition(p)}${unprovenBadge}${noExportBadge}${(p.minutes || 0) >= 450 ? captaincyBadgeHtml(p, currentEventId()) : ""}</div>
           ${statusInfo ? `<div class="status-tag" style="color:${statusInfo[1]}">${statusInfo[0]}</div>` : ""}
         </td>
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
@@ -7582,14 +7748,28 @@ function fdrToMultiplier(score) {
   // formula's weights feeds straight through into the projections.
   return FDR_MULT[1] + (score - 1) / 4 * (FDR_MULT[5] - FDR_MULT[1]);
 }
+// Round: user asked for My Team's predicted points to use the same
+// Legacy/Live 80/20 blend (last-season vs this-season) as the rest of the
+// app for FUTURE gameweeks, with real actual points used once a gameweek
+// has been played. The "actual points for played GWs" half was already
+// correct (renderMyTeamPitchForGw branches on isFinished and pulls real
+// live.total_points for finished weeks) - but the FUTURE-gameweek half
+// (computeGwResult, used by My Team's forward view, the Planner's XI
+// builder, and the Bench Boost/squad-building views) was quietly running
+// on THIS simple function, which only ever used this-season pointsPerGame
+// x fixture-difficulty - no legacy blend, no start-probability/minutes
+// modelling, no attacking-rate blend, nothing from Rounds 25-28's work.
+// That's a real divergence from the Projections tab's own richer model
+// (computeProjectionRow), which already fully respects legacyBlendWeights.
+// Delegating to computeProjectionRow here (single-gameweek range, same
+// default assume90/rotationThreshold/provenAbilityWeight already used by
+// bestXiPointsForSquad for the same "compare fairly against the real
+// model" reason) fixes My Team, the Planner, and every other caller of
+// projectPoints/computeGwResult in one place rather than one at a time.
 function projectPoints(player, gwId) {
   const fixtures = (state.fixturesByTeam[player.teamId] || []).filter(f => f.event === gwId);
   if (fixtures.length === 0) return 0; // blank gameweek for this player's team
-  const base = player.pointsPerGame || 0;
-  return fixtures.reduce((sum, f) => {
-    const score = customFdr(player.teamId, f.oppId, f.isHome);
-    return sum + base * fdrToMultiplier(score);
-  }, 0);
+  return computeProjectionRow(player, gwId, gwId, false, 70, 0.8).proj;
 }
 
 function topN(arr, n) { return [...arr].sort((a, b) => b.proj - a.proj).slice(0, n); }
@@ -7869,6 +8049,12 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // this player's projection is actually there to nudge, same shape as
     // the matchup-boost multiplier just below.
     finalProj *= playerRankQuestionMultiplier(p.id, "attack") * playerRankQuestionMultiplier(p.id, "start") * playerFormCompareMultiplier(p.id);
+    // Manager Multiplier (Managers tab): the player's OWN club manager's
+    // ability rating nudges the whole projection, same opt-in/capped shape
+    // as the multipliers just above - neutral 1.0 until the user actually
+    // sets a manager's rating away from the seeded default on the Managers
+    // tab. See managerAbilityMultiplier.
+    finalProj *= managerAbilityMultiplier(p.teamId);
     // Matchup boost: who this player is actually likely to face this
     // fixture (pinned Tactical board matchup if set, else same-role
     // inference - see likelyOpponentFor), scored via the same overall
@@ -7969,6 +8155,8 @@ function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAb
       // season-summed projection there can never disagree about whether a
       // saved answer is being applied.
       gwProj *= playerRankQuestionMultiplier(p.id, "attack") * playerRankQuestionMultiplier(p.id, "start") * playerFormCompareMultiplier(p.id);
+      // Same Manager Multiplier as computeProjectionRow - see there.
+      gwProj *= managerAbilityMultiplier(p.teamId);
       total += gwProj;
     });
     byGw[g] = total;
@@ -9829,7 +10017,17 @@ function captaincyScoreForGw(p, gwId) {
   // capped - rewards genuine multi-route floor without letting route
   // count alone outweigh a much higher raw projection.
   const routeBonus = row.proj * Math.min(0.3, Math.max(0, breakdown.routes - 1) * 0.06);
-  const boostBonus = row.proj * boost * 0.15; // playstyle boost capped at +15% of base proj
+  // Round: user asked for greater emphasis on playstyle/matchup in the
+  // default (Balanced) captaincy score specifically - this cap was only
+  // 15% of base proj, well below the same signal's own 30% weight in
+  // Explosive mode (captaincyExplosiveScore's "weighted heaviest" boost
+  // term) and even below routeBonus's own 30% ceiling just above. Raised
+  // to match those - playstyleMatchupBoost is a real 0-1 read on team
+  // openness/mobility, low-block/technique fit, AND direct attribute-edge
+  // vs the likely marker (see playstyleMatchupBoost), so doubling its
+  // ceiling here lets a genuinely favourable matchup meaningfully move the
+  // primary captaincy sort, not just the Explosive re-scoring mode.
+  const boostBonus = row.proj * boost * 0.30; // playstyle/matchup boost capped at +30% of base proj (was 15%)
   let captaincyScore = row.proj + routeBonus + boostBonus;
   // Knock deficit: applied to the FINAL score (after route/playstyle
   // bonuses), not the base projection, so a flagged player's whole
@@ -13069,6 +13267,10 @@ async function loadFormulasFromStorage() {
     if (raw) state.playerFormCompare = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   try {
+    const raw = await persistGet("managerRatings");
+    if (raw) state.managerRatings = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
     const raw = await persistGet("myTeamId");
     if (raw) {
       state.myTeamId = raw;
@@ -13094,6 +13296,7 @@ function saveFixtureRunTiers() { persistSet("fixtureRunTiers", JSON.stringify(st
 function saveRankingsPresets() { persistSet("rankingsPresets", JSON.stringify(state.rankingsPresets)); }
 function savePlayerRankAnswers() { persistSet("playerRankAnswers", JSON.stringify(state.playerRankAnswers)); }
 function savePlayerFormCompare() { persistSet("playerFormCompare", JSON.stringify(state.playerFormCompare)); }
+function saveManagerRatings() { persistSet("managerRatings", JSON.stringify(state.managerRatings)); }
 
 const FDR_FORMULA_FIELDS = [
   { key: "attackWeight", label: "Opponent attack weight", min: 0, max: 3, step: 0.1, desc: "How much their goal-scoring threat counts against you." },
@@ -13280,7 +13483,6 @@ function renderRankings() {
   renderOddsStatus();
   renderRankingsPresetList();
   renderRankQuiz();
-  renderRankPlayerQuiz();
   renderRankPlayerCompare();
 }
 
@@ -13584,9 +13786,42 @@ function renderTeamOverrides() {
 // directions, clamped to the 1-5 scale, so repeated answers about the
 // same pair converge rather than oscillating or running away.
 const RANK_QUIZ_STEP = 0.15;
+// Same "prefer is_next over is_current" pattern as Projections/Captaincy
+// (Round 27/28) - the gameweek that's about to be analysed, not one that
+// may already be live/locked. Shared here so the club and player
+// questionnaires below both anchor to the same gameweek.
+function nextUpcomingEventId() {
+  const ev = state.events.find(e => e.is_next) || state.events.find(e => !e.finished);
+  return ev ? ev.id : null;
+}
+// Real fixture pairs (team id tuples) kicking off in a given gameweek -
+// used to bias both questionnaires toward matchups that are actually
+// about to happen, so answering a question doubles as calibration for the
+// fixture you're about to analyse instead of a fully unrelated pair.
+function fixturePairsForGw(gwId) {
+  if (gwId == null) return [];
+  return (state.allFixtures || [])
+    .filter(f => f.event === gwId && state.teamsById[f.team_h] && state.teamsById[f.team_a])
+    .map(f => [f.team_h, f.team_a]);
+}
+// 75% of the time, if the next gameweek has real fixtures loaded, pick a
+// pair that's actually facing off then - makes the questionnaire double as
+// prep for the matchups coming up, per the user's ask. Falls back to a
+// fully random pair the rest of the time (keeps the questionnaire useful
+// for calibrating the wider pool, not just next week's 10 fixtures) and
+// whenever no fixture data is available yet.
+const RANK_QUIZ_UPCOMING_BIAS = 0.75;
 function rankQuizPickPair(field) {
   const teams = state.teams;
   if (teams.length < 2) return null;
+  if (Math.random() < RANK_QUIZ_UPCOMING_BIAS) {
+    const pairs = fixturePairsForGw(nextUpcomingEventId());
+    if (pairs.length) {
+      const [aId, bId] = pairs[Math.floor(Math.random() * pairs.length)];
+      const a = state.teamsById[aId], b = state.teamsById[bId];
+      if (a && b) return { a, b, field, isUpcomingFixture: true };
+    }
+  }
   const a = teams[Math.floor(Math.random() * teams.length)];
   let b = teams[Math.floor(Math.random() * teams.length)];
   let guard = 0;
@@ -13624,6 +13859,7 @@ function renderRankQuiz() {
     <div style="animation:questionIn .35s cubic-bezier(.22,.68,0,1)">
     <div style="text-align:center;margin-bottom:6px">
       <span style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em">${answered} answered this session</span>
+      ${q.isUpcomingFixture ? `<span class="fdr-pill" style="width:auto;padding:0 6px;font-size:9.5px;margin-left:6px;background:rgba(224,169,79,0.18);color:var(--gold-bright)" title="These two face off in the next gameweek">📅 next GW matchup</span>` : ""}
     </div>
     <div style="text-align:center;font-size:14px;font-weight:600;margin-bottom:14px">${fieldIcon} Does <span style="color:var(--gold-bright)">${q.a.name}</span> have a better ${fieldLabel} than <span style="color:var(--gold-bright)">${q.b.name}</span>?</div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center">
@@ -13760,6 +13996,9 @@ const PLAYER_RANK_QUESTIONS = [
 // task's explicit spec ("odds of a question appearing... weighted by team
 // strength"). This weights SELECTION FREQUENCY only - it has no effect on
 // which direction an answer nudges the projection once asked.
+// Still used by playerFormComparePick below for its own team-strength
+// weighting, even though the subjective player-questions quiz that
+// originally used this alongside it has been removed.
 function rankPlayerQuizWeight(p) {
   const rating = effectiveFieldRating(p.teamId, "overall"); // 1-5
   // Squared so the effect is clearly felt (a 5-rated club's player is ~6x
@@ -13768,67 +14007,13 @@ function rankPlayerQuizWeight(p) {
   // just rarer, matching "more, not exclusively" from the task wording.
   return Math.max(0.15, rating) ** 2;
 }
-// Picks one (player, question) pair via weighted random sampling - GK
-// double-guard #1: eligiblePositions is checked here, on the CANDIDATE
-// POOL, before any player is even considered a candidate for a question
-// that doesn't apply to their position.
-//
-// Team-strength-squared weighting (rankPlayerQuizWeight) means a handful of
-// top-club players are individually far more likely than any one weaker-
-// club player - fine in principle, but with no recency guard the same
-// ~10-15 star names kept resurfacing question after question, which reads
-// as "not actually random" even though the sampling itself was working as
-// designed. Fixed the same way playerFormComparePick (below) already
-// solves the identical problem: exclude players shown in the last N picks
-// from the pool before weighting, falling back to the unrestricted pool
-// only if that exclusion would empty it out (e.g. a question with very few
-// eligible players). This keeps the team-strength bias but forces genuine
-// variety across the whole eligible list over a session, not just the
-// same small cluster.
-const RANK_PLAYER_QUIZ_RECENT_WINDOW = 12;
-function rankPlayerQuizPick() {
-  if (!state.players || !state.players.length) return null;
-  const question = PLAYER_RANK_QUESTIONS[Math.floor(Math.random() * PLAYER_RANK_QUESTIONS.length)];
-  const pool = state.players.filter(p => question.eligiblePositions.includes(p.position) && (p.minutes || 0) > 0);
-  if (!pool.length) return null;
-  const recent = state.rankPlayerQuizRecent || [];
-  const fresh = pool.filter(p => !recent.includes(p.id));
-  const drawFrom = fresh.length > 0 ? fresh : pool;
-  const weights = drawFrom.map(rankPlayerQuizWeight);
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * totalWeight;
-  let chosen = drawFrom[drawFrom.length - 1];
-  for (let i = 0; i < drawFrom.length; i++) {
-    r -= weights[i];
-    if (r <= 0) { chosen = drawFrom[i]; break; }
-  }
-  state.rankPlayerQuizRecent = [chosen.id, ...recent].slice(0, RANK_PLAYER_QUIZ_RECENT_WINDOW);
-  return { p: chosen, question };
-}
-// Applies one answer - GK double-guard #2: re-checks the question's own
-// eligiblePositions against THIS player's real position before writing
-// anything, exactly the same "never trust the caller, re-check at the
-// write site" shape as setGkAttributeIfBlank's second guard. A write that
-// fails this check is silently dropped (returns false), not applied.
-function rankPlayerQuizApplyAnswer(playerId, questionId, value) {
-  const player = state.players.find(p => p.id === playerId);
-  const question = PLAYER_RANK_QUESTIONS.find(q => q.id === questionId);
-  if (!player || !question) return false;
-  if (!question.eligiblePositions.includes(player.position)) return false; // second guard
-  const option = question.options.find(o => o.value === value);
-  if (!option) return false;
-  if (!state.playerRankAnswers) state.playerRankAnswers = {};
-  if (!state.playerRankAnswers[playerId]) state.playerRankAnswers[playerId] = {};
-  state.playerRankAnswers[playerId][questionId] = value;
-  savePlayerRankAnswers();
-  return true;
-}
-function rankPlayerQuizClearAnswer(playerId, questionId) {
-  if (state.playerRankAnswers && state.playerRankAnswers[playerId]) {
-    delete state.playerRankAnswers[playerId][questionId];
-    savePlayerRankAnswers();
-  }
-}
+// Player questions (subjective questionnaire) removed per user request -
+// only the stats-based "Player form comparison" quiz below remains.
+// playerRankQuestionMultiplier is kept so any PREVIOUSLY saved answers
+// (state.playerRankAnswers, still loaded/persisted) keep quietly
+// influencing projections exactly as before; there's just no more UI to
+// answer new ones. rankPlayerQuizWeight is kept too - playerFormComparePick
+// below still uses it for its own team-strength weighting.
 // Converts one player's saved answers into a bounded projection multiplier
 // for the given statTag ("attack" or "start" - see PLAYER_RANK_QUESTIONS).
 // Genuine no-op (returns exactly 1) for a player with no answers at all, or
@@ -13851,55 +14036,6 @@ function playerRankQuestionMultiplier(playerId, statTag) {
   const clamped = Math.max(-0.20, Math.min(0.20, sum));
   return 1 + clamped;
 }
-function renderRankPlayerQuiz() {
-  const el = document.getElementById("rankPlayerQuizBody");
-  if (!el || !state.players.length) return;
-  if (!state.rankPlayerQuizCurrent) {
-    state.rankPlayerQuizCurrent = rankPlayerQuizPick();
-  }
-  const cur = state.rankPlayerQuizCurrent;
-  if (!cur) { el.innerHTML = `<div class="empty-state">Not enough player data loaded yet.</div>`; return; }
-  const { p, question } = cur;
-  const team = state.teamsById[p.teamId];
-  const answered = state.rankPlayerQuizAnswered || 0;
-  const existing = (state.playerRankAnswers[p.id] || {})[question.id];
-  el.innerHTML = `
-    <div style="animation:questionIn .35s cubic-bezier(.22,.68,0,1)">
-    <div style="text-align:center;margin-bottom:6px">
-      <span style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em">${answered} answered this session</span>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">
-      ${playerAvatarHtml(p, 30)}
-      <div>
-        <div style="font-weight:700">${nameWithPosition(p)}</div>
-        <div style="font-size:10.5px;color:var(--ink-faint)">${team ? team.short_name : ""}</div>
-      </div>
-    </div>
-    <div style="text-align:center;font-size:14px;font-weight:600;margin-bottom:14px">${question.prompt(p)}</div>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      ${question.options.map(o => `<button class="chip-btn${existing === o.value ? " active" : ""}" data-player-quiz-answer="${o.value}" style="padding:8px 14px">${o.label}</button>`).join("")}
-    </div>
-    <div style="text-align:center;margin-top:12px">
-      <button class="dir-btn small" id="rankPlayerQuizSkip">Skip this one →</button>
-    </div>
-    </div>
-  `;
-  el.querySelectorAll("[data-player-quiz-answer]").forEach(btn => {
-    btn.onclick = () => {
-      try {
-        rankPlayerQuizApplyAnswer(p.id, question.id, btn.dataset.playerQuizAnswer);
-        state.rankPlayerQuizAnswered = (state.rankPlayerQuizAnswered || 0) + 1;
-        state.rankPlayerQuizCurrent = null; // force a fresh pick next render
-        renderRankPlayerQuiz();
-      } catch (err) {
-        setBanner(`Couldn't save that answer (${err.message}). Try again.`, "error");
-      }
-    };
-  });
-  const skipBtn = document.getElementById("rankPlayerQuizSkip");
-  if (skipBtn) skipBtn.onclick = () => { state.rankPlayerQuizCurrent = null; renderRankPlayerQuiz(); };
-}
-
 // ---------- Rankings: player form comparison (FM-attribute-style) ----------
 // A third, separate opt-in nudge alongside the club-strength and player
 // questionnaires above: shows two same-position players' real underlying
@@ -14138,6 +14274,172 @@ function managerTenureRating5(teamId) {
   const mgr = team && MANAGER_BY_SHORT[team.short_name];
   const months = mgr ? Math.min(60, monthsInChargeFromStr(mgr.since)) : 0;
   return 1 + 4 * (months / 60);
+}
+
+// ---------- Manager Multiplier tab ----------
+// User's own steer: "managers make all the difference, they can make a
+// team or a player play worse" - a dedicated ranking of the 20 PL
+// managers on ABILITY (their general tactical/man-management quality) and
+// PLAYSTYLE (attacking intent vs defensive solidity - two separate axes,
+// since a manager can be excellent AND defensively-minded, or mediocre
+// AND gung-ho). Same "no real data source, so it's a user-editable
+// override with a defensible seeded default" convention as the club-
+// strength Rankings sliders (getTeamOverride/defaultFieldRating) - here
+// the seed is managerTenureRating5 for ability (time in the job is the
+// same defensible tenure proxy already used elsewhere in this file) and a
+// neutral 3/5 for both playstyle axes (no real signal to seed those from,
+// so they start exactly neutral rather than guessing).
+function getManagerRating(teamId) {
+  const v = state.managerRatings ? state.managerRatings[teamId] : null;
+  if (!v) return { ability: null, attacking: null, defensive: null };
+  return { ability: v.ability ?? null, attacking: v.attacking ?? null, defensive: v.defensive ?? null };
+}
+function defaultManagerAbility5(teamId) {
+  return Math.round(managerTenureRating5(teamId) * 10) / 10;
+}
+// Effective 1-5 rating for one field - the user's override if set, else
+// the seeded default (tenure for ability, neutral 3 for playstyle axes).
+function effectiveManagerRating(teamId, field) {
+  const ov = getManagerRating(teamId);
+  if (ov[field] !== null) return ov[field];
+  return field === "ability" ? defaultManagerAbility5(teamId) : 3;
+}
+// The actual multiplier applied to a player's projection (see
+// computeProjectionRow/computeProjPerGw) - a manager's ABILITY rating
+// nudges every one of their players' projections up or down a little,
+// capped at ±15% (same order of magnitude as the other opt-in projection
+// nudges - playerRankQuestionMultiplier, playstyle matchup boost - so no
+// single soft signal can dominate the underlying stats-based model). A
+// perfectly neutral 3/5 rating (the default for every manager until the
+// user actually opens the Managers tab and adjusts something) always
+// returns exactly 1 - genuinely opt-in, never silently changes anyone's
+// projection before the user has looked at this tab.
+function managerAbilityMultiplier(teamId) {
+  const rating = effectiveManagerRating(teamId, "ability"); // 1-5
+  const delta = (rating - 3) / 2; // -1 (rating 1) .. 0 (rating 3) .. +1 (rating 5)
+  return 1 + Math.max(-0.15, Math.min(0.15, delta * 0.15));
+}
+// Playstyle read used by the Managers tab UI and (lightly) by attacking-
+// rate projections: how much a manager's system leans attacking vs
+// defensive, expressed as -1 (very defensive) to +1 (very attacking) from
+// the two playstyle sliders. Small, capped nudge to blendedXg90/xa90 in
+// computeProjectionRow (separate from managerAbilityMultiplier, which
+// covers the OVERALL points multiplier) - an attacking manager's players
+// get a small attacking-rate lift, a defensive manager's a small dampener,
+// on top of whatever ability multiplier already applies.
+function managerPlaystyleTilt(teamId) {
+  const attacking = effectiveManagerRating(teamId, "attacking"); // 1-5
+  const defensive = effectiveManagerRating(teamId, "defensive"); // 1-5
+  return Math.max(-1, Math.min(1, ((attacking - 3) - (defensive - 3)) / 4));
+}
+// Ranking list for the Managers tab - all 20 current PL managers sorted by
+// a combined score (ability weighted higher than playstyle, since
+// "ability" is the closer read of "good manager" while playstyle is
+// orthogonal/descriptive rather than a quality axis on its own).
+function rankedManagerList() {
+  return state.teams.map(t => {
+    const mgr = MANAGER_BY_SHORT[t.short_name] || null;
+    const ability = effectiveManagerRating(t.id, "ability");
+    const attacking = effectiveManagerRating(t.id, "attacking");
+    const defensive = effectiveManagerRating(t.id, "defensive");
+    const ov = getManagerRating(t.id);
+    const isOverridden = ov.ability !== null || ov.attacking !== null || ov.defensive !== null;
+    return { team: t, mgr, ability, attacking, defensive, isOverridden,
+      combined: ability * 0.7 + Math.max(attacking, defensive) * 0.3 };
+  }).sort((a, b) => b.combined - a.combined);
+}
+function managerStyleLabel(attacking, defensive) {
+  const diff = attacking - defensive;
+  if (Math.abs(diff) < 0.4) return "Balanced";
+  return diff > 0 ? "Attacking" : "Defensive";
+}
+function renderManagerRankList() {
+  const el = document.getElementById("managerRankList");
+  if (!el || !state.teams.length) return;
+  const ranked = rankedManagerList();
+  el.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr><th class="label-col">#</th><th class="label-col">Club</th><th class="label-col">Manager</th><th>Ability</th><th>Style</th><th>Combined</th></tr></thead>
+      <tbody>
+        ${ranked.map((r, i) => `
+          <tr>
+            <td class="mono">${i + 1}</td>
+            <td class="label-col"><div style="display:flex;align-items:center;gap:6px">${kitSvg(r.team.id, 18)}${r.team.name}</div></td>
+            <td class="label-col">${r.mgr ? `${r.mgr.name} <span class="foot-note">(since ${r.mgr.since})</span>` : `<span class="foot-note">Not on file</span>`}</td>
+            <td class="mono" style="${r.isOverridden ? "color:var(--gold-bright)" : ""}">${r.ability.toFixed(1)}</td>
+            <td class="foot-note">${managerStyleLabel(r.attacking, r.defensive)}</td>
+            <td class="mono" style="font-weight:700">${r.combined.toFixed(2)}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table></div>
+  `;
+}
+function renderManagerRatingList() {
+  const el = document.getElementById("managerRatingList");
+  if (!el || !state.teams.length) return;
+  const sorted = [...state.teams].sort((a, b) => a.name.localeCompare(b.name));
+  const FIELDS = [
+    ["ability", "Ability"],
+    ["attacking", "Attacking intent"],
+    ["defensive", "Defensive solidity"],
+  ];
+  el.innerHTML = sorted.map(t => {
+    const ov = getManagerRating(t.id);
+    const mgr = MANAGER_BY_SHORT[t.short_name] || null;
+    const anyOverride = ov.ability !== null || ov.attacking !== null || ov.defensive !== null;
+    return `
+      <div class="rank-row" data-mgr-team="${t.id}" style="flex-direction:column;align-items:stretch;gap:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${kitSvg(t.id, 22)}
+          <div style="width:150px;font-weight:600;font-size:13px">${t.name}</div>
+          <span style="font-size:12px;color:var(--ink-dim)">${mgr ? `${mgr.name} · since ${mgr.since}` : "No manager on file"}</span>
+          <button class="dir-btn" data-mgr-reset="${t.id}" style="margin-left:auto;${anyOverride ? "" : "visibility:hidden"}" title="Reset all fields to seeded defaults">↺ Reset</button>
+        </div>
+        ${FIELDS.map(([field, label]) => {
+          const shown = ov[field] !== null ? ov[field] : effectiveManagerRating(t.id, field);
+          return `
+            <div style="display:flex;align-items:center;gap:8px;padding-left:30px">
+              <span style="width:130px;font-size:11.5px;color:var(--ink-faint)">${label}</span>
+              <input type="range" min="1" max="5" step="0.1" value="${shown}" data-mgr-rating="${t.id}" data-mgr-field="${field}" style="flex:1" />
+              <span class="rank-score mono" style="width:34px;text-align:right;${ov[field] !== null ? "color:var(--gold-bright)" : ""}" data-mgr-val="${t.id}-${field}">${shown.toFixed(1)}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }).join("");
+  el.querySelectorAll("input[type=range]").forEach(input => {
+    input.oninput = () => {
+      const id = Number(input.dataset.mgrRating);
+      const field = input.dataset.mgrField;
+      const v = Number(input.value);
+      const current = getManagerRating(id);
+      if (!state.managerRatings) state.managerRatings = {};
+      state.managerRatings[id] = { ...current, [field]: v };
+      const valEl = el.querySelector(`[data-mgr-val="${id}-${field}"]`);
+      valEl.textContent = v.toFixed(1);
+      valEl.style.color = "var(--gold-bright)";
+      el.querySelector(`[data-mgr-reset="${id}"]`).style.visibility = "visible";
+      saveManagerRatings();
+      invalidateCaptaincyScoreCache();
+      renderManagerRankList();
+    };
+  });
+  el.querySelectorAll("[data-mgr-reset]").forEach(btn => {
+    btn.onclick = () => {
+      const id = Number(btn.dataset.mgrReset);
+      delete state.managerRatings[id];
+      saveManagerRatings();
+      invalidateCaptaincyScoreCache();
+      renderManagerRankList();
+      renderManagerRatingList();
+    };
+  });
+}
+function renderManagersTab() {
+  renderManagerRankList();
+  renderManagerRatingList();
 }
 // This season's actual meetings between these two clubs, if any - surfaces
 // head-to-head anomalies a pure ratings formula would miss (a team that
@@ -16623,7 +16925,7 @@ function saveTeamFormations() { persistSet("teamFormations", JSON.stringify(stat
 // ability-draft XI so both look and behave the same way. When `opts` is
 // passed (draft mode), every slot becomes clickable via
 // data-h2h-pitch-slot, and the slot currently being edited is highlighted.
-function h2hPitchSlotHtml(entry, teamA, pos, idx, opts) {
+function h2hPitchSlotHtml(entry, teamA, pos, idx, opts, showBlendedPts) {
   const editable = !!opts;
   const isEditing = editable && opts.editPos === pos && opts.editSlot === idx;
   const dragAttrs = editable ? `draggable="true" data-h2h-drag-pos="${pos}" data-h2h-drag-idx="${idx}"` : "";
@@ -16634,17 +16936,21 @@ function h2hPitchSlotHtml(entry, teamA, pos, idx, opts) {
   const { p } = entry;
   const isA = p.teamId === teamA.id;
   const outline = isEditing ? "3px solid var(--gold-bright)" : `2px solid ${isA ? "var(--gold-bright)" : "var(--blue, #4a9eff)"}`;
+  // Combined XI (by points) mode shows the blended legacy/live points total
+  // (see h2hBlendedPoints) instead of the raw this-season-only totalPoints,
+  // so the number on the pitch matches what actually drove the pick.
+  const ptsLabel = showBlendedPts ? Math.round(h2hBlendedPoints(p)) : (p.totalPoints ?? 0);
   return `
     <div class="pitch-slot" ${clickAttrs} ${dragAttrs} style="${editable ? "cursor:grab;" : ""}outline:${outline};border-radius:8px">
       ${playerAvatarHtml(p, 40)}
       <div class="name-tag">${p.webName}</div>
-      <div class="pts-tag mono">${p.totalPoints ?? 0}pts</div>
+      <div class="pts-tag mono">${ptsLabel}pts</div>
     </div>
   `;
 }
-function h2hPitchHtml(picksByPos, teamA, opts) {
+function h2hPitchHtml(picksByPos, teamA, opts, showBlendedPts) {
   const rows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${(picksByPos[pos] || []).map((entry, idx) => h2hPitchSlotHtml(entry, teamA, pos, idx, opts)).join("")}</div>`
+    `<div class="pitch-row">${(picksByPos[pos] || []).map((entry, idx) => h2hPitchSlotHtml(entry, teamA, pos, idx, opts, showBlendedPts)).join("")}</div>`
   ).join("");
   return `<div class="pitch">${rows}</div>`;
 }
@@ -16668,10 +16974,10 @@ function h2hBestFormationByPoints(teamA, teamB) {
     ["GK", "DEF", "MID", "FWD"].forEach(pos => {
       const pool = h2hEligiblePlayers(pos)(teamA).concat(h2hEligiblePlayers(pos)(teamB))
         .filter((p, i, arr) => arr.indexOf(p) === i && !used.has(p.id))
-        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+        .sort((a, b) => h2hBlendedPoints(b) - h2hBlendedPoints(a));
       for (let i = 0; i < need[pos]; i++) {
         const p = pool.find(x => !used.has(x.id));
-        if (p) { used.add(p.id); picks[pos].push(p.id); total += p.totalPoints || 0; } else picks[pos].push(null);
+        if (p) { used.add(p.id); picks[pos].push(p.id); total += h2hBlendedPoints(p); } else picks[pos].push(null);
       }
     });
     if (!best || total > best.total) best = { formationKey: fKey, picks, total };
@@ -16717,7 +17023,7 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
     ["GK", "DEF", "MID", "FWD"].forEach(pos => {
       const pool = h2hEligiblePlayers(pos)(teamA).concat(h2hEligiblePlayers(pos)(teamB))
         .filter((p, i, arr) => arr.indexOf(p) === i && !used.has(p.id))
-        .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+        .sort((a, b) => h2hBlendedPoints(b) - h2hBlendedPoints(a));
       saved.picks[pos] = [];
       for (let i = 0; i < need[pos]; i++) {
         const p = pool.find(x => !used.has(x.id));
@@ -16755,12 +17061,12 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
     const currentId = saved.picks[pos][slotIdx];
     const eligible = h2hEligiblePlayers(pos);
     const listFor = (team) => eligible(team).filter(p => p.id === currentId || !pickedIds.has(p.id))
-      .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+      .sort((a, b) => isCombined ? h2hBlendedPoints(b) - h2hBlendedPoints(a) : (b.totalPoints || 0) - (a.totalPoints || 0));
     const row = (p) => `
       <div class="builder-row" data-draft-pick="${p.id}" style="cursor:pointer;${p.id === currentId ? "outline:2px solid var(--gold-bright);border-radius:6px" : ""}">
         ${playerAvatarHtml(p, 26)}
         <span class="b-name">${nameWithPosition(p)}${p.position !== pos ? ` <span class="b-sub">(${p.position})</span>` : ""}${p.id === currentId ? " ✓" : ""}</span>
-        <span class="b-pts mono" title="Total points">${p.totalPoints ?? 0}pts</span>
+        <span class="b-pts mono" title="${isCombined ? "Blended points (this + last season, weighted by the Data Mode toggle)" : "Total points"}">${isCombined ? Math.round(h2hBlendedPoints(p)) : (p.totalPoints ?? 0)}pts</span>
         <span class="b-pts mono" title="Form">${(p.form ?? 0).toFixed(1)} form</span>
       </div>
     `;
@@ -16779,7 +17085,7 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
   }
 
   const intro = isCombined
-    ? `Best combined XI by real season points - click any player on the pitch, or use the position/slot buttons below, to override the pick for that spot. Drag a player onto another slot to swap them. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`
+    ? `Best combined XI by blended points - this season's real total points weighted against last season's, using the same Legacy/Live blend as the rest of the app (see Data Mode on the Rankings tab to override the ratio) - click any player on the pitch, or use the position/slot buttons below, to override the pick for that spot. Drag a player onto another slot to swap them. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`
     : `Click any player on the pitch - or use the position/slot buttons below - to pick or change who fills that spot. Drag a player onto another slot to swap them, and use the Formation dropdown to change shape. Midfield and forward pools overlap, since some "MID"-tagged players really play as forwards.`;
   const resetLabel = isCombined ? "Reset to auto (by points)" : "Reset draft";
   const formationSelectId = isCombined ? "h2hFormationSelect" : "h2hDraftFormationSelect";
@@ -16794,7 +17100,7 @@ function renderH2hXiBuilder(body, teamA, teamB, mode) {
         ${isCombined ? `<button class="chip-btn" id="h2hBestFormationBtn" title="Tries every formation shape and keeps whichever produces the highest combined total - different shapes fit different squads' depth differently.">🏆 Best formation (highest points)</button>` : ""}
       </div>
       <p class="foot-note" style="margin-bottom:10px">${intro}</p>
-      ${h2hPitchHtml(picksByPos, teamA, { editPos, editSlot })}
+      ${h2hPitchHtml(picksByPos, teamA, { editPos, editSlot }, isCombined)}
     </div>
     <div class="card">
       <div class="chip-btn-row" style="margin-bottom:8px">${tabsHtml}</div>
@@ -16954,13 +17260,26 @@ function h2hFlashcardAlternates(team, role, currentId, usedIds) {
   // broader position pool - so a thin squad with no tagged alternates
   // still gets a usable, if less precise, swap list instead of an empty
   // dropdown.
+  //
+  // Round: user asked to be able to "switch a player for anyone else, for
+  // some players play out of position" - real players sometimes deputise
+  // well outside their tagged position (a winger moved to wing-back, a
+  // midfielder filling in at CB), and the old exact/broad-only pool made
+  // those genuinely useful swaps impossible to reach. Added a third tier:
+  // the REST of the squad (any position, including crossing GK/outfield),
+  // sorted by points, appended after the exact and broad-position matches
+  // - so the natural, position-appropriate options still surface first,
+  // but every other squad player remains reachable a bit further down the
+  // same dropdown instead of a hard wall. isOutOfPosition flags entries in
+  // this third tier so the UI can label them, rather than presenting a
+  // goalkeeper-as-striker swap as if it were a normal like-for-like one.
   const broad = FLASHCARD_BROAD_POS[role] || "MID";
   const squad = state.players.filter(p => p.teamId === team.id && p.id !== currentId && !usedIds.has(p.id));
-  const exact = squad.filter(p => getSpecificPosition(p.id) === role)
-    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-  if (exact.length) return exact;
-  return squad.filter(p => p.position === broad)
-    .sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const byPoints = (a, b) => (b.totalPoints || 0) - (a.totalPoints || 0);
+  const exact = squad.filter(p => getSpecificPosition(p.id) === role).sort(byPoints);
+  const inBroad = squad.filter(p => p.position === broad && getSpecificPosition(p.id) !== role).sort(byPoints);
+  const rest = squad.filter(p => p.position !== broad).sort(byPoints).map(p => ({ ...p, isOutOfPosition: true }));
+  return [...exact, ...inBroad, ...rest];
 }
 function h2hFlashcardPairs(teamA, teamB, fc) {
   const usedA = new Set(), usedB = new Set();
@@ -17067,9 +17386,9 @@ function renderH2hFlashcardDraft(body, teamA, teamB) {
     if (!p) return `<div class="foot-note">No eligible ${pair.role} on file for this club.</div>`;
     const alternates = h2hFlashcardAlternates(side === "A" ? teamA : teamB, pair.role, p.id, new Set());
     if (!alternates.length) return "";
-    return `<select data-fc-swap="${side}" data-fc-slot="${idx}" style="font-size:10.5px;margin-top:4px;width:100%">
-      <option value="">↻ Swap out (injury/news)…</option>
-      ${alternates.map(a => `<option value="${a.id}">${a.webName} (${a.totalPoints ?? 0}pts)</option>`).join("")}
+    return `<select data-fc-swap="${side}" data-fc-slot="${idx}" style="font-size:10.5px;margin-top:4px;width:100%" title="Any squad player can be swapped in, not just ones tagged at this position - useful when someone plays out of position">
+      <option value="">↻ Swap out (injury/news, or pick anyone)…</option>
+      ${alternates.map(a => `<option value="${a.id}">${a.webName} (${a.position}${a.isOutOfPosition ? " · out of position" : ""}, ${a.totalPoints ?? 0}pts)</option>`).join("")}
     </select>`;
   };
   body.innerHTML = `
@@ -18376,7 +18695,8 @@ function h2hMatchupsAutoWinner(teamA, teamB) {
 // made on either tab the moment you switch back here, with no separate
 // manual "who won this category" click needed for these two rows.
 function h2hXiAutoWinner(mode, teamA, teamB) {
-  const store = mode === "combined" ? state.h2hCombined : state.h2hDraft;
+  const isCombined = mode === "combined";
+  const store = isCombined ? state.h2hCombined : state.h2hDraft;
   const key = h2hMatchupKey(teamA.id, teamB.id);
   const saved = store[key];
   if (!saved) return { winner: null, a: 0, b: 0 };
@@ -18386,11 +18706,17 @@ function h2hXiAutoWinner(mode, teamA, teamB) {
       if (!id) return;
       const p = state.players.find(x => x.id === id);
       if (!p) return;
-      if (p.teamId === teamA.id) a += p.totalPoints || 0;
-      else if (p.teamId === teamB.id) b += p.totalPoints || 0;
+      // Combined XI totals use the same blended (legacy/live) points that
+      // built the XI in the first place (h2hBlendedPoints), so the
+      // scoreboard total matches the number shown on the pitch. Draft mode
+      // (ability-based) keeps raw this-season totalPoints - unaffected.
+      const pts = isCombined ? h2hBlendedPoints(p) : (p.totalPoints || 0);
+      if (p.teamId === teamA.id) a += pts;
+      else if (p.teamId === teamB.id) b += pts;
     });
   });
   if (!a && !b) return { winner: null, a, b };
+  a = Math.round(a); b = Math.round(b);
   return { winner: a === b ? "DRAW" : (a > b ? "A" : "B"), a, b };
 }
 // Non-mutating scoreboard tally (item: "showcase scores from scoreboard"
@@ -19569,7 +19895,7 @@ const SETTINGS_EXPORT_KEYS = [
   "playerAttributes", "attributeDefs", "gkAttributes", "priorLeagueStats",
   "playerClubOverrides", "playerPositions", "teamOverrides",
   "fixtureRunTiers", "shortlist", "shortlistGroups", "playerRankAnswers",
-  "dataBlendMode",
+  "dataBlendMode", "managerRatings",
 ];
 // ---------- default seed for first-time visitors ----------
 // cjatsi's own rankings/customizations, baked in as the starting point
@@ -20028,8 +20354,8 @@ function simDuelBarHtml(duel, playerA, playerB) {
       </div>
       <div style="position:relative;height:20px;border-radius:6px;overflow:hidden;background:var(--panel-3)">
         <div style="position:absolute;inset:0;display:flex">
-          <div style="width:${pctA}%;height:100%;background:linear-gradient(270deg,var(--emerald),var(--gold-bright));display:flex;align-items:center;justify-content:flex-start;padding-left:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctA >= 12 ? pctA + "%" : ""}</div>
-          <div style="width:${pctB}%;height:100%;background:var(--panel-2);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:var(--ink-dim)">${pctB >= 12 ? pctB + "%" : ""}</div>
+          <div style="width:${pctA}%;height:100%;background:var(--sim-a);display:flex;align-items:center;justify-content:flex-start;padding-left:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctA >= 12 ? pctA + "%" : ""}</div>
+          <div style="width:${pctB}%;height:100%;background:var(--sim-b);display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:10px;font-weight:700;color:#0a0e0c">${pctB >= 12 ? pctB + "%" : ""}</div>
         </div>
         <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.25)"></div>
       </div>
@@ -20810,8 +21136,8 @@ function renderSimMatchBody() {
         <div class="matchup-side">${playerAvatarHtml(r.pa, 24)}<span>${nameWithPosition(r.pa)}</span></div>
         <div class="matchup-mid">
           <div style="display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--panel-3);margin:2px 0">
-            <div style="flex:1;display:flex;justify-content:flex-end"><div style="width:${halfFillA}%;background:linear-gradient(270deg,var(--emerald),var(--gold-bright))"></div></div>
-            <div style="flex:1"><div style="width:${halfFillB}%;background:var(--panel-2)"></div></div>
+            <div style="flex:1;display:flex;justify-content:flex-end"><div style="width:${halfFillA}%;background:var(--sim-a)"></div></div>
+            <div style="flex:1"><div style="width:${halfFillB}%;background:var(--sim-b)"></div></div>
           </div>
           <div style="font-size:10px;color:var(--ink-faint);text-align:center">${r.m.label ? r.m.label + " · " : ""}${r.m.setPiece ? "⚽ set-piece · " : ""}${pctA}% / ${pctB}%</div>
         </div>
@@ -20850,8 +21176,8 @@ function renderSimMatchBody() {
         </div>
         <div style="position:relative;height:10px;border-radius:4px;overflow:hidden;background:var(--panel-3)">
           <div style="position:absolute;inset:0;display:flex">
-            <div class="sim-bar-fill" data-bar-boundary="${stat.key}" data-target="${boundaryPct}" style="width:0%;background:var(--gold-bright);transition:width 0.9s cubic-bezier(0.22,0.68,0,1.02)"></div>
-            <div style="flex:1;height:100%;background:var(--emerald)"></div>
+            <div class="sim-bar-fill" data-bar-boundary="${stat.key}" data-target="${boundaryPct}" style="width:0%;background:var(--sim-a);transition:width 0.9s cubic-bezier(0.22,0.68,0,1.02)"></div>
+            <div style="flex:1;height:100%;background:var(--sim-b)"></div>
           </div>
           <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(0,0,0,0.25)"></div>
         </div>
@@ -21034,7 +21360,7 @@ function renderSimulationTab() {
 }
 
 // ---------- tabs ----------
-const TAB_NAMES = ["stats", "projections", "shortlist", "team", "captaincy", "planner", "table", "fdr", "insights", "h2h", "tacboard", "simulation", "rankings"];
+const TAB_NAMES = ["stats", "projections", "shortlist", "team", "captaincy", "planner", "table", "managers", "fdr", "insights", "h2h", "tacboard", "simulation", "rankings"];
 const TAB_ICONS = {
   stats: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19V10M12 19V5M19 19v-6"/></svg>',
   projections: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16l5-6 4 3 7-9"/><path d="M15 4h5v5"/></svg>',
@@ -21043,6 +21369,7 @@ const TAB_ICONS = {
   captaincy: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l7 2.5v5c0 5-3 8.3-7 10.5-4-2.2-7-5.5-7-10.5v-5z"/></svg>',
   planner: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4.2L15.8 5 19 8.2 8.2 19z"/><path d="M13.5 6.5L17.5 10.5"/></svg>',
   table: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8.5 9.5v10"/></svg>',
+  managers: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6a3 3 0 106 0 3 3 0 00-6 0z"/><path d="M4 19c0-3.3 2.2-5.5 5-6M20 19c0-3.3-2.2-5.5-5-6"/><path d="M9 6l3 3 3-3"/></svg>',
   fdr: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M8 3v3.5M16 3v3.5"/></svg>',
   h2h: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8.5" cy="12" r="5"/><circle cx="15.5" cy="12" r="5"/></svg>',
   tacboard: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M12 3.5v17M12 9.5a3 3 0 010 5"/></svg>',
@@ -21050,7 +21377,7 @@ const TAB_ICONS = {
   insights: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3.5"/></svg>',
   simulation: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3.2"/><circle cx="17" cy="12" r="3.2"/><path d="M10.2 12h3.6"/></svg>',
 };
-const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Clubs", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
+const TAB_LABELS = { stats: "Player stats", projections: "Projections", shortlist: "Shortlist", team: "My team", captaincy: "Captaincy", planner: "Planner", table: "Clubs", managers: "Managers", fdr: "FDR", h2h: "Head-to-head", tacboard: "Tactical board", simulation: "Simulation", rankings: "Rankings", insights: "Insights" };
 function switchTab(name) {
   closeSidebar(); // no-op unless the tablet-range overlay is currently open - see setupSidebarToggle
   document.querySelectorAll("#tabs button, #topTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
@@ -21079,6 +21406,7 @@ function switchTab(name) {
   if (name === "shortlist" && !state.tabRendered.shortlist) { renderShortlist(); state.tabRendered.shortlist = true; }
   if (name === "planner" && !state.tabRendered.planner) { renderPlanner(); state.tabRendered.planner = true; }
   if (name === "table" && !state.tabRendered.table) { renderPlTable(); state.tabRendered.table = true; }
+  if (name === "managers" && !state.tabRendered.managers) { renderManagersTab(); state.tabRendered.managers = true; }
   if (name === "fdr" && !state.tabRendered.fdr) { renderFdrGrid(); state.tabRendered.fdr = true; }
   if (name === "rankings" && !state.tabRendered.rankings) { renderRankings(); state.tabRendered.rankings = true; }
   if (name === "h2h" && !state.tabRendered.h2h) { renderH2H(); state.tabRendered.h2h = true; }
