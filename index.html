@@ -873,6 +873,19 @@
   .cap-mini-badge.form { background: rgba(52,211,153,0.14); color: var(--emerald); }
   .cap-mini-badge.fixswing { background: rgba(214,143,255,0.14); color: var(--pink); }
   .cap-mini-badge.template { background: rgba(234,179,8,0.14); color: var(--amber); }
+  .cap-mini-badge.differential { background: rgba(212,212,217,0.14); color: var(--purple); }
+  .cap-mini-badge.lowsignal { background: rgba(245,85,108,0.10); color: var(--red); }
+  .cap-mini-badge.cooling { background: rgba(96,165,250,0.10); color: var(--blue); }
+  .cap-mini-badge.underperform { background: rgba(245,85,108,0.14); color: var(--red); }
+  /* My Team pitch-slot L5 history toggle/row (see slotHtmlReadOnly/
+     renderMiniHistoryInto) - deliberately tiny since a pitch-slot has very
+     little spare width (see .pitch-slot's cqw-based sizing above). */
+  .mini-hist-toggle {
+    font-size: 7px; font-weight: 700; letter-spacing: 0.03em; color: var(--ink-faint);
+    background: rgba(255,255,255,0.08); border: none; border-radius: 3px; padding: 1px 4px; cursor: pointer; margin-top: 1px;
+  }
+  .mini-hist-toggle:hover { background: rgba(255,255,255,0.16); color: var(--ink); }
+  .mini-hist-row { display: flex; gap: 2px; margin-top: 2px; flex-wrap: wrap; justify-content: center; }
   .cap-pinned-row { outline: 1px solid rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
   /* Round 23: brief highlight flash on a row just pinned via the Base view
      search, so a successful pin is visible even when the row lands off
@@ -1534,6 +1547,7 @@
       </div>
       <div id="myTeamPitchArea"></div>
       <div id="myTeamActionsArea" style="margin-top:16px"></div>
+      <div id="myTeamSuggestedTransfers" style="margin-top:24px"></div>
     </div>
   </section>
 
@@ -2404,7 +2418,7 @@ const SORT_OPTIONS = [
   ["ppm", "Points per £m"], ["ppm90", "Points per £m /90"], ["ppmPerApp", "Points per £m per appearance"],
   ["ictIndex", "ICT index"], ["threat", "Threat"], ["creativity", "Creativity"], ["influence", "Influence"],
   ["expectedGoalInvolvements", "xGI (season)"], ["xgi90", "xGI /90"], ["xg90", "xG /90"], ["xa90", "xA /90"],
-  ["netTransfers", "Net transfers (GW)"], ["goalsScored", "Goals"], ["assists", "Assists"],
+  ["netTransfers", "Net transfers (GW)"], ["goalsScored", "Goals"], ["assists", "Assists"], ["gaTotal", "Goals+Assists"],
   ["cleanSheets", "Clean sheets"], ["goalsConcededPer90", "Goals conceded /90"], ["xgc90", "xGC /90"],
   ["saves90", "Saves /90"], ["defensiveContribution", "Defensive contribution"], ["bps", "BPS"],
   ["minutes", "Minutes"], ["minsPerStart", "Mins /start"], ["bonus", "Bonus points"], ["pointsPer90", "Points /90"], ["goalsPer90", "Goals /90"],
@@ -2423,21 +2437,21 @@ const STAT_THEMES = {
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
       ["Value", ["selectedByPercent", "netTransfers", "ppm", "ppm90", "ppmPerApp"]],
-      ["Output", ["goalsScored", "assists", "goalsPer90", "assistsPer90", "gaPer90", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
+      ["Output", ["goalsScored", "assists", "gaTotal", "goalsPer90", "assistsPer90", "gaPer90", "cleanSheets", "expectedGoalInvolvements", "bonus", "pointsPer90"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["selectedByPercent", "Own%"], ["netTransfers", "Net Tr"], ["ppm", "Pts/£m"], ["ppm90", "Pts/£m/90"], ["ppmPerApp", "Pts/£m/App"],
-      ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["gaPer90", "GA/90"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
+      ["goalsScored", "G"], ["assists", "A"], ["gaTotal", "G+A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["gaPer90", "GA/90"], ["cleanSheets", "CS"], ["expectedGoalInvolvements", "XGI"], ["bonus", "Bon"], ["pointsPer90", "Pts/90"]],
   },
   attacking: {
     label: "Attacking",
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
-      ["Goals & assists", ["goalsScored", "assists", "goalsPer90", "assistsPer90"]],
+      ["Goals & assists", ["goalsScored", "assists", "gaTotal", "goalsPer90", "assistsPer90"]],
       ["Expected", ["expectedGoals", "expectedAssists", "expectedGoalInvolvements", "xg90", "xa90", "xgi90"]],
       ["Team share", ["teamGoalShare", "teamXgiShare"]],
       ["Underlying", ["threat", "creativity", "penaltiesMissed"]],
     ],
-    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["goalsScored", "G"], ["assists", "A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["goalsScored", "G"], ["assists", "A"], ["gaTotal", "G+A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
       ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
   },
@@ -2485,6 +2499,16 @@ const COLUMN_FORMAT = {
   netTransfers: p => [(p.netTransfers >= 0 ? "+" : "") + (p.netTransfers / 1000).toFixed(0) + "k", p.netTransfers >= 0 ? "color:var(--emerald)" : "color:var(--red)"],
   goalsScored: p => [p.goalsScored, ""],
   assists: p => [p.assists, ""],
+  // G+A (season total, item: "I want a g+a column" - existing "G"/"A"/
+  // "G/90" chips on the player card, this sits next to them). Derived
+  // directly from the SAME goalsScored/assists fields the G and A columns
+  // already read - never a separately-tracked total - so it can never
+  // drift from what those two columns show. The sort comparator (see
+  // list.sort's own "gaTotal" branch) computes the same sum independently
+  // for the same reason: gaTotal isn't a stored field on the player object,
+  // just derived wherever it's needed, unlike gaPer90 (see that key's own
+  // comment for why a rate field earned being stored for real).
+  gaTotal: p => [(p.goalsScored || 0) + (p.assists || 0), ""],
   cleanSheets: p => [p.cleanSheets, ""],
   xgi90: p => [p.xgi90.toFixed(2), ""],
   defensiveContribution: p => [p.defensiveContribution, ""],
@@ -2601,10 +2625,36 @@ const HEATMAP_INVERT_KEYS = new Set([
 
 // ---------- FM-style custom attributes (freeform, not tied to any data) ----------
 // ---------- FC/FM-style computed radar attributes (derived from real stats, raw numbers hidden) ----------
-function percentileRank(value, pool) {
+// Fix (item: "a lot of players have pace as 4"): the old formula ranked
+// purely by COUNT strictly below `value`, so every player tied on the same
+// raw proxy stat (e.g. the many defenders/GKs/low-minute players who sit at
+// EXACTLY 0 threat/90) all got the SAME "below" count and therefore the
+// SAME percentile - which pctTo20 below then all floors to the identical
+// value 4. Two-part fix:
+//  1. Mid-rank tie-break (standard percentile convention): a value tied
+//     with N-1 others is credited "below" PLUS half the tied block, not
+//     zero - this alone moves a whole tied block off the true bottom edge
+//     instead of pinning it at percentile 1.
+//  2. Optional `tieBreak` (0-1, e.g. a stable per-player fractional key):
+//     when the caller can supply one, it's used to place this SPECIFIC
+//     player somewhere within its own tied block, so two players who are
+//     genuinely, exactly tied on the raw proxy (e.g. two subs who both
+//     played 0 threatening minutes) don't necessarily land on the literal
+//     same integer once pctTo20 rounds it - without part 2, `percentileRank`
+//     has no way to tell two equal-`value` callers apart at all (same
+//     value, same pool -> same output), which is why the old formula
+//     collapsed a large tied block onto one number no matter how it was
+//     rounded. Purely a display/spread aid, not a claim of real signal
+//     between two truly-equal inputs - omitted entirely (defaults to the
+//     tied block's midpoint, unchanged output) by every pre-existing caller
+//     that doesn't pass it.
+function percentileRank(value, pool, tieBreak) {
   if (!pool.length) return 50;
   const below = pool.filter(v => v < value).length;
-  return Math.round((below / pool.length) * 99) + 1;
+  const tied = pool.filter(v => v === value).length;
+  const tieFrac = tied > 1 && tieBreak != null ? Math.max(0, Math.min(1, tieBreak)) : 0.5;
+  const rankFrac = (below + tied * tieFrac) / pool.length;
+  return Math.round(rankFrac * 99) + 1;
 }
 // Axis -> FM attribute key(s) used as a fallback when the FPL-derived
 // percentile for that axis has no real sample to work from (item: "for
@@ -2737,18 +2787,68 @@ const FM12_ATTR_DEFS = [
   { key: "passing", label: "Passing" },
   { key: "penaltyTaking", label: "Penalty taking" },
 ];
+// Round: user's wider "moneyball" export (2946-row full Prem player pool)
+// carries a much bigger attribute set than the original 21 FM12_ATTR_DEFS
+// covers - item: "let's add all player stats rather than the ones I find
+// most important". Kept as a SEPARATE list (not merged into FM12_ATTR_DEFS
+// itself) so the "21 attributes" contract computeFmAttributes12Estimate/
+// FM12_ATTR_DEFS' own comments describe stays accurate and every existing
+// consumer that assumes exactly those 21 keys (radar scaling, matchup
+// scoring, etc) is unaffected - these extras have NO computeFmAttributes12
+// Estimate fallback (no cheap FPL-data proxy exists for most of them, same
+// "don't fabricate a correlation" rule the corners/penaltyTaking defaults
+// above already follow), so until a real CSV import sets one, every player
+// reads as the neutral default 10 via getFmAttributeValue's own fallback.
+// Wired into state.attributeDefs (see below, concatenated onto
+// FM12_ATTR_DEFS) so the existing slider editor (attributeEditorHtml/
+// wireAttributeEditor) picks these up automatically with no separate UI
+// code - it already iterates state.attributeDefs generically by key/label.
+const FM26_EXTRA_ATTR_DEFS = [
+  { key: "crossing", label: "Crossing" },
+  { key: "tackling", label: "Tackling" },
+  { key: "marking", label: "Marking" },
+  { key: "longThrows", label: "Long throws" },
+  { key: "freeKickTaking", label: "Free kick taking" },
+  { key: "stamina", label: "Stamina" },
+  { key: "balance", label: "Balance" },
+  { key: "naturalFitness", label: "Natural fitness" },
+  { key: "leadership", label: "Leadership" },
+  { key: "teamWork", label: "Team work" },
+  { key: "flair", label: "Flair" },
+  { key: "bravery", label: "Bravery" },
+  { key: "concentration", label: "Concentration" },
+  { key: "determination", label: "Determination" },
+  { key: "aggression", label: "Aggression" },
+];
 // Percentile (1-99, via percentileRank) -> FM 1-20 scale, with a floor of 4
 // and ceiling of 19 so nobody sits at the true extremes purely from a
 // small-sample percentile artifact - matches how FM itself avoids handing
 // out 1s and 20s except for genuine outliers.
+// Root cause of "a lot of players have pace as 4": percentileRank's old
+// strict-count tie handling meant every player with a 0 (or otherwise tied)
+// proxy stat landed on the exact SAME low percentile, which this floor then
+// collapsed onto the identical integer 4 - not a broken import, just a
+// coarse floor combined with a bunched-up distribution. percentileRank
+// above now spreads genuine ties out via mid-rank tie-breaking, which is
+// the main fix; kept here too is the floor/ceiling contract unchanged (4-19)
+// so downstream consumers (matchup formulas, radar scaling) see the same
+// scale as before - only the DISTRIBUTION under the floor changed, not the
+// floor/ceiling values themselves.
 function pctTo20(pct) { return Math.max(4, Math.min(19, Math.round(4 + (pct / 99) * 15))); }
 function computeFmAttributes12Estimate(p) {
   const posPool = state.players.filter(x => x.elementType === p.elementType && passesEstablishedThreshold(x, 450));
   const fallbackPool = state.players.filter(x => x.elementType === p.elementType && x.minutes >= 90);
   const pool = posPool.length >= 5 ? posPool : fallbackPool;
   const per90 = (pl, key) => pl.minutes > 0 ? (pl[key] || 0) / (pl.minutes / 90) : 0;
-  const pctOf = (value, key) => percentileRank(value, pool.map(x => per90(x, key)));
-  const pctOfRaw = (value, values) => percentileRank(value, values);
+  // Stable per-player tiebreak (0-1, from player id) so two players who are
+  // genuinely tied on a proxy stat (e.g. both exactly 0 threat/90) don't
+  // land on the literal identical percentile - see percentileRank's own
+  // comment for why this can't be inferred from value+pool alone. "% 997"
+  // (prime, well above any realistic pool size) just decorrelates it from
+  // id ordering/clustering (e.g. squad-number blocks) before normalizing.
+  const tieBreak = (p.id % 997) / 997;
+  const pctOf = (value, key) => percentileRank(value, pool.map(x => per90(x, key)), tieBreak);
+  const pctOfRaw = (value, values) => percentileRank(value, values, tieBreak);
   // Threat/90 is the closest proxy FPL has for "gets in behind / runs in
   // dangerous areas" - used for both pace and acceleration since the data
   // can't distinguish top speed from first-step quickness. A small
@@ -2764,6 +2864,14 @@ function computeFmAttributes12Estimate(p) {
   // by role) blended lightly with bonus points (aerial goals/clean sheet
   // contributions tend to bump BPS) - weakest-grounded estimate of the 12,
   // flagged as such in the UI tooltip.
+  // FUTURE HOOK: a real per-player height (cm) is now available via
+  // getPlayerHeightCm(p.id) once a CSV import with a Height column has run
+  // (see importFmAttributesCsv) - this estimate still can't use it (no
+  // fallback exists pre-import), but once real height data is on file for
+  // most of the pool, blending it in here (or overriding this estimate
+  // entirely when getPlayerHeightCm returns non-null) would make this the
+  // best-grounded of the 12 instead of the weakest. Not wired in this round
+  // - just making the data available for whoever picks this up next.
   const posAerialBase = { GK: 13, DEF: 13, MID: 10, FWD: 12 }[p.position] || 10;
   const bpsPct = pctOf(per90(p, "bps"), "bps");
   const jumpingReach = Math.max(4, Math.min(19, Math.round(posAerialBase + (bpsPct - 50) / 25)));
@@ -2807,7 +2915,7 @@ function computeFmAttributes12Estimate(p) {
   // near the 99th percentile, since the composite is inflated by the
   // minutes bonus that plain defCon/90 never gets.
   const workRateComposite = (pl) => per90(pl, "defensiveContributionPer90") + (pl.minsPerStart ? Math.min(1, pl.minsPerStart / 90) * 20 : 0);
-  const workRatePct = percentileRank(workRateComposite(p), pool.map(workRateComposite));
+  const workRatePct = percentileRank(workRateComposite(p), pool.map(workRateComposite), tieBreak);
   const workRate = pctTo20(workRatePct);
   // ---- Extended 9 (weaker-grounded estimates - FPL has no direct proxy for
   // most of these, so they lean on the closest correlated real stat plus a
@@ -2900,7 +3008,10 @@ function hasRealFmAttribute(playerId, key) {
 function hasAnyRealFmAttribute(playerId) {
   const manual = state.playerAttributes[playerId];
   if (!manual) return false;
-  return FM12_ATTR_DEFS.some(def => manual[def.key] != null);
+  // Checks FM12_ATTR_DEFS AND FM26_EXTRA_ATTR_DEFS - a player whose only
+  // real import hit was e.g. Concentration (an extras-only key) genuinely
+  // does have real data on file and shouldn't still read as "no export".
+  return FM12_ATTR_DEFS.some(def => manual[def.key] != null) || FM26_EXTRA_ATTR_DEFS.some(def => manual[def.key] != null);
 }
 // Rescales an FM 1-20 attribute value onto the radar's 1-99 percentile
 // scale, so a real FM stat can stand in directly for a percentile-ranked
@@ -2997,6 +3108,14 @@ function playerHasNoExportedData(p) {
 // (rather than inlined at each call site) so every consumer - the CS/saves
 // projection below and the radar profile - reads the exact same definition
 // of "shot-stopping quality" and can't drift apart.
+// FUTURE HOOK: getPlayerHeightCm(playerId) (see importFmAttributesCsv) now
+// exposes real per-player height once a CSV Height column has been
+// imported - not folded into this index yet (commandOfArea/aerialReach
+// already act as an ability-based proxy for claiming crosses, but a
+// keeper's genuine reach is real, height-driven data this app didn't have
+// before). A future round could blend height in here (and into the
+// CB-side aerial-duel reads that consume gkShotStoppingIndex/aerialReach)
+// for a more grounded aerial-ability read than ability attributes alone.
 function gkShotStoppingIndex(playerId) {
   const keys = ["reflexes", "handling", "oneOnOnes", "commandOfArea"];
   return keys.reduce((s, k) => s + getGkAttributeValue(playerId, k), 0) / keys.length;
@@ -3066,12 +3185,47 @@ function wireGkAttributeEditor(container, playerId) {
 // ---------- real FM26 CSV import (optional, replaces estimates with real data) ----------
 // Accepts a CSV exported via the free "FM26 Player Export" in-game plugin
 // (Ctrl+P / F9 from the Player Search screen with attribute columns added
-// - see FMScout's "FM26 Player Export" page). Matches rows to FPL players
-// by web name + team short name (best-effort fuzzy match, case-insensitive,
-// diacritic-stripped), and writes matched attribute values into
-// state.playerAttributes as manual overrides - so once imported, real
-// values behave exactly like a hand-entered override and take priority
-// over the estimates above everywhere.
+// - see FMScout's "FM26 Player Export" page), OR a wider third-party
+// "moneyball" export (semicolon-delimited - see sniffCsvDelimiter) that
+// carries a much bigger column set for the full Prem player pool. Matches
+// rows to FPL players by web name + team short name (best-effort fuzzy
+// match, case-insensitive, diacritic-stripped), and writes matched
+// attribute values into state.playerAttributes as manual overrides - so
+// once imported, real values behave exactly like a hand-entered override
+// and take priority over the estimates above everywhere.
+//
+// Round: generalized from "the ~21 attributes this app happened to model"
+// to "every numeric 1-20 column a real export carries" (item: "let's add
+// all player stats rather than the ones I find most important"). Three
+// column categories, each handled differently - get this wrong and either
+// real data silently fails to import (a column added here but missing from
+// FM26_EXTRA_ATTR_DEFS/GK_ATTR_DEFS has nowhere to be read back from later,
+// so it imports into state but no UI/formula ever consumes it) or a
+// non-numeric cell corrupts a numeric field (which is why the numeric-only
+// loop below hard-checks Number.isFinite before ever calling
+// setPlayerAttribute/setGkAttribute):
+//   1. Numeric 1-20 outfield attributes -> FM26_CSV_COLUMN_MAP below,
+//      written to state.playerAttributes. Covers FM12_ATTR_DEFS' original
+//      21 PLUS FM26_EXTRA_ATTR_DEFS' extras (Concentration, Determination,
+//      Aggression, Bravery, Flair, Leadership, Team Work, Natural Fitness,
+//      Balance, Stamina, Crossing, Tackling, Marking, Long Throws, Free
+//      Kick Taking - genuinely new this round, no prior estimate/UI slot
+//      existed for any of these before FM26_EXTRA_ATTR_DEFS was added).
+//   2. Numeric 1-20 GK-only attributes -> FM26_GK_CSV_COLUMN_MAP,
+//      state.gkAttributes, ONLY for player.position === "GK" rows (same
+//      guard as before - a keeper row's outfield-shaped columns are still
+//      imported into playerAttributes like anyone else's, just never read
+//      back for a GK, since GK_ATTR_DEFS is a fully separate system).
+//   3. Special-cased, non-1-20 columns, each with its OWN state map and no
+//      generic loop: Height (cm, e.g. "195 cm" -> parsed int, NOT clamped
+//      to 1-20 - see state.playerHeights/getPlayerHeightCm) and Left
+//      Foot/Right Foot (qualitative text like "Very Strong"/"Reasonable",
+//      stored as-is - see state.playerFootPreference). Forcing either of
+//      these through the numeric 1-20 loop would either silently drop them
+//      (foot preference - Number.isFinite fails on "Very Strong", so
+//      nothing would import) or corrupt the attribute (height - "195" would
+//      get clamped down to the 1-20 range by setPlayerAttribute, turning a
+//      real physical measurement into a meaningless capped number).
 const FM26_CSV_COLUMN_MAP = {
   acceleration: ["Acceleration"],
   pace: ["Pace", "Sprint Speed"],
@@ -3101,6 +3255,29 @@ const FM26_CSV_COLUMN_MAP = {
   longShots: ["Long Shots"],
   passing: ["Passing"],
   penaltyTaking: ["Penalty Taking"],
+  // Wider "moneyball" export column set (item: "let's add all player stats
+  // rather than the ones I find most important") - maps onto
+  // FM26_EXTRA_ATTR_DEFS' keys above. Left Foot/Right Foot are deliberately
+  // NOT here - real exports carry those as qualitative text ("Very Strong",
+  // "Reasonable", "Weak"...), not a 1-20 number, so they'd fail the numeric
+  // check in importFmAttributesCsv below and get silently skipped if mapped
+  // here. Handled separately (see footPreference handling further down)
+  // rather than forced into this numeric-only map.
+  crossing: ["Crossing"],
+  tackling: ["Tackling"],
+  marking: ["Marking"],
+  longThrows: ["Long Throws"],
+  freeKickTaking: ["Free Kick Taking"],
+  stamina: ["Stamina"],
+  balance: ["Balance"],
+  naturalFitness: ["Natural Fitness"],
+  leadership: ["Leadership"],
+  teamWork: ["Team Work"],
+  flair: ["Flair"],
+  bravery: ["Bravery"],
+  concentration: ["Concentration"],
+  determination: ["Determination"],
+  aggression: ["Aggression"],
 };
 // GK-specific columns some exports carry alongside the outfield set above
 // (e.g. the "moneyball" export - one CSV with both outfield AND keeper
@@ -3108,10 +3285,14 @@ const FM26_CSV_COLUMN_MAP = {
 // onto GK_ATTR_DEFS' own keys 1:1 by name - written to state.gkAttributes,
 // NEVER state.playerAttributes, and only for a row whose matched player is
 // actually position GK (same "no outfield writes, ever" guard as
-// setGkAttributeIfBlank). Two of GK_ATTR_DEFS' 9 keys (communication,
-// kicking/throwing/rushingOut) still have no clean column match in this
-// export either - same "don't invent a mapping" rule as the original
-// BUILTIN_GK_ATTRIBUTES comment, left unset rather than guessed.
+// setGkAttributeIfBlank). Round: the newer "moneyball" export (2946-row
+// full pool) DOES carry columns for the 3 that used to have "no clean
+// column match" (communication, kicking, throwing, rushingOut) - now
+// mapped. "Punching" is still left unmapped: GK_ATTR_DEFS has no slot for
+// it at all (its 10 keys don't include a punching-specific attribute), and
+// per the same "don't invent a mapping" rule this doesn't get force-fit
+// onto a similar-sounding existing key - a future round adding a
+// GK_ATTR_DEFS "punching" key is the right way to pick this column up.
 const FM26_GK_CSV_COLUMN_MAP = {
   aerialReach: ["Aerial Reach"],
   commandOfArea: ["Command Of Area"],
@@ -3119,6 +3300,10 @@ const FM26_GK_CSV_COLUMN_MAP = {
   handling: ["Handling"],
   oneOnOnes: ["One On Ones"],
   reflexes: ["Reflexes"],
+  communication: ["Communication"],
+  kicking: ["Kicking"],
+  throwing: ["Throwing"],
+  rushingOut: ["Rushing Out (Tendency)", "Rushing Out"],
 };
 function stripDiacritics(s) { return (s || "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
 // Round: a real-world attribute export ("moneyball" tool export) showed up
@@ -3182,6 +3367,16 @@ function importFmAttributesCsv(csvText) {
   };
   const attrColIdx = {};
   for (const key of Object.keys(FM26_CSV_COLUMN_MAP)) attrColIdx[key] = colIdxFor(FM26_CSV_COLUMN_MAP[key]);
+  // Height ("195 cm" in this export) - NOT a 1-20 attribute, so it's kept
+  // out of FM26_CSV_COLUMN_MAP entirely and read as its own special-cased
+  // column here, written to state.playerHeights (cm, integer) rather than
+  // playerAttributes. Item: "I also included height which will assist in
+  // aerial measurements etc" - this round only makes the raw cm value
+  // available via getPlayerHeightCm (see below); it does NOT yet rewire any
+  // aerial-duel formula to use it (see the comments at jumpingReach in
+  // computeFmAttributes12Estimate and in the GK stats section above for
+  // where that hook should go in a future round).
+  const heightIdx = colIdxFor(["Height"]);
   // GK columns (see FM26_GK_CSV_COLUMN_MAP) - some exports (e.g. the
   // "moneyball" export) carry both outfield AND keeper attributes in one
   // file, unlike the original FM26 Player Export convention this importer
@@ -3191,6 +3386,16 @@ function importFmAttributesCsv(csvText) {
   const gkColIdx = {};
   for (const key of Object.keys(FM26_GK_CSV_COLUMN_MAP)) gkColIdx[key] = colIdxFor(FM26_GK_CSV_COLUMN_MAP[key]);
   const hasGkColumns = Object.values(gkColIdx).some(idx => idx !== -1);
+  // Left Foot / Right Foot: qualitative text ("Very Strong", "Reasonable",
+  // "Weak"...), not a 1-20 number - deliberately NOT in FM26_CSV_COLUMN_MAP
+  // (that map's numeric-only loop below would just skip a non-numeric cell
+  // silently, so this doesn't risk corrupting playerAttributes, but it also
+  // wouldn't capture the value at all without handling it separately here).
+  // Stored as-is (raw string) in state.playerFootPreference rather than
+  // coerced onto some invented 1-20 scale, which would fabricate precision
+  // the source data doesn't have.
+  const leftFootIdx = colIdxFor(["Left Foot"]);
+  const rightFootIdx = colIdxFor(["Right Foot"]);
   const norm = (s) => stripDiacritics(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   let matched = 0, unmatched = 0, gkMatched = 0;
   for (let i = 1; i < lines.length; i++) {
@@ -3235,10 +3440,52 @@ function importFmAttributesCsv(csvText) {
       }
       if (anyGk) { gkMatched++; any = true; }
     }
+    // Height: strip " cm" (or any trailing non-digit) and parse the integer
+    // centimetre value. Written to state.playerHeights, not
+    // playerAttributes/gkAttributes - it's not a 1-20 attribute and applies
+    // to every position (GK included - a keeper's height matters for
+    // claiming crosses just as much as a CB's does for defending them).
+    if (heightIdx !== -1 && cells[heightIdx]) {
+      const cm = parseInt(String(cells[heightIdx]).replace(/[^0-9]/g, ""), 10);
+      if (Number.isFinite(cm) && cm > 0) {
+        if (!state.playerHeights) state.playerHeights = {};
+        state.playerHeights[player.id] = cm;
+        any = true;
+      }
+    }
+    // Foot preference: stored as the raw text pair (not forced onto a
+    // numeric scale - see the comment above leftFootIdx/rightFootIdx).
+    if (leftFootIdx !== -1 || rightFootIdx !== -1) {
+      const left = leftFootIdx !== -1 ? (cells[leftFootIdx] || "").trim() : "";
+      const right = rightFootIdx !== -1 ? (cells[rightFootIdx] || "").trim() : "";
+      if (left || right) {
+        if (!state.playerFootPreference) state.playerFootPreference = {};
+        state.playerFootPreference[player.id] = { left: left || null, right: right || null };
+        any = true;
+      }
+    }
     if (any) matched++; else unmatched++;
   }
   _fm12EstimateCache = new Map(); // stale after an import touches state.playerAttributes broadly
+  if (heightIdx !== -1) savePlayerHeights();
+  if (leftFootIdx !== -1 || rightFootIdx !== -1) savePlayerFootPreference();
   return { matched, unmatched, gkMatched, error: null };
+}
+function savePlayerHeights() { persistSet("playerHeights", JSON.stringify(state.playerHeights || {})); }
+function savePlayerFootPreference() { persistSet("playerFootPreference", JSON.stringify(state.playerFootPreference || {})); }
+// Effective height (cm) for a player, or null if no real import has ever
+// set one - no estimate fallback exists (FPL's own API doesn't expose
+// height at all, so there's nothing to derive it from), unlike
+// getFmAttributeValue's "always resolves to something" contract. Future
+// aerial-duel work (heading/jumpingReach in computeFmAttributes12Estimate,
+// and the CB/GK-specific aerial code in the goalkeeper stats section
+// above) should read height through this single choke point once it's
+// ready to consume it, rather than reaching into state.playerHeights
+// directly - kept as its own function now specifically so that hook-up is
+// a one-line change later, not a new lookup pattern.
+function getPlayerHeightCm(playerId) {
+  const h = (state.playerHeights || {})[playerId];
+  return h != null ? h : null;
 }
 // Bulk specific-position import (item: "grab positions... even wikipedia
 // would do"). Confirmed this round: Wikipedia's per-CLUB "Current squad"
@@ -4323,6 +4570,14 @@ let state = {
   dataMode: "live", dataLegacyWeight: 80,
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
+  // Which tab's chrome should repaint after a renderGwDetail mutation
+  // (transfer/chip/captain/sub click, drag-drop swap) fires its stock
+  // renderPlanner() callback - "planner" (default) or "myteam" when the
+  // SAME renderGwDetail is embedded read-write inside the My Team hub (see
+  // renderActiveGwHost/myTeamGwDetailHost). Sourced from a single flag
+  // rather than duplicating every mutation handler so My Team and Planner
+  // edits stay driven by the exact same code path.
+  gwDetailHost: "planner",
   // Round 24 perf fix: tracks which non-default tabs have had their first
   // lazy render (see switchTab) so re-visiting a tab within the same
   // session doesn't eagerly re-render it again on every single click -
@@ -4405,7 +4660,11 @@ let state = {
   // only holds MANUAL overrides - read via getFmAttributeValue(playerId,
   // key), never directly, so unedited attributes still resolve to the
   // estimate rather than showing blank/10.
-  attributeDefs: FM12_ATTR_DEFS,
+  // FM12_ATTR_DEFS (21 keys with real estimate fallbacks) plus
+  // FM26_EXTRA_ATTR_DEFS (wider "moneyball" export columns, estimate-free -
+  // see its own comment above) - concatenated so the slider editor shows
+  // every attribute this app can hold, real-FM-import-only ones included.
+  attributeDefs: FM12_ATTR_DEFS.concat(FM26_EXTRA_ATTR_DEFS),
   playerAttributes: {},
   // Goalkeeper-specific attributes (Reflexes, Handling, One on ones,
   // Command of area, etc - see GK_ATTR_DEFS) - a completely separate map
@@ -4413,6 +4672,12 @@ let state = {
   // set with no outfield equivalent. Manual-entry only (no free live scout
   // data source), keyed by player id -> { attrKey: 1-20 value }.
   gkAttributes: {},
+  // Height (cm, playerId -> number) and foot preference (playerId ->
+  // {left, right} raw text) from importFmAttributesCsv's special-cased
+  // Height/Left Foot/Right Foot handling - see FM26_CSV_COLUMN_MAP's own
+  // comment for why these live outside the normal 1-20 attribute maps.
+  playerHeights: {},
+  playerFootPreference: {},
   // Round 23: "questions" that adjust an individual player's PROJECTED
   // stats (not the club-strength questionnaire above them - separate
   // system, separate store). Keyed by player id -> { questionId: answer },
@@ -6186,6 +6451,18 @@ function getFiltered() {
     if (f.sort === "webName") { av = a.webName.toLowerCase(); bv = b.webName.toLowerCase(); }
     else if (f.sort === "teamShort") { av = state.teamsById[a.teamId]?.short_name || ""; bv = state.teamsById[b.teamId]?.short_name || ""; }
     else if (f.sort === "position") { av = POS_ORDER[a.position] ?? 9; bv = POS_ORDER[b.position] ?? 9; }
+    // G+A (item: "I want a g+a column") - computed live from goalsScored +
+    // assists rather than stored as its own field on every player object -
+    // those two are already kept correctly live everywhere (prior-league
+    // overrides, scoped stats, etc all set them directly), so deriving from
+    // them here avoids adding a 6th place that would need to independently
+    // stay in sync (the exact staleness risk gaPer90's own comment already
+    // flags for itself - not worth repeating for a value this trivial to
+    // derive on the fly).
+    else if (f.sort === "gaTotal") {
+      const pa = state.scopedStats ? scopedPlayer(a) : a, pb = state.scopedStats ? scopedPlayer(b) : b;
+      av = (pa.goalsScored || 0) + (pa.assists || 0); bv = (pb.goalsScored || 0) + (pb.assists || 0);
+    }
     else {
       av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
       bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
@@ -6599,15 +6876,64 @@ const SCOUT_THEMES = {
     minStartsSoftFloor: 10,
   },
 };
+// Last-season equivalents for the scout metrics that have a direct match in
+// the legacy history payload (see fetchLegacyStatsForAllPlayers) - keyed the
+// same as the this-season field they stand in for, so scoutMetricValue can
+// blend value-for-value via seasonBlend, same pattern as lastSeasonXgPer90/
+// lastSeasonXaPer90 already use for computeProjectionRow. Rate-shaped fields
+// (saves90, goalsConcededPer90, xgi90, threat, creativity) are converted to
+// last season's own per-90 so they're comparable to this season's per-90
+// regardless of how much of this season has been played; "bps" is a season
+// TOTAL on the player object (see COLUMN_FORMAT), so it's converted to a
+// per-90 rate here too and re-scaled by this-season minutes below, same
+// reasoning h2hBlendedPoints uses for why totals need blending help early
+// in a season. "cleanSheets"/expectedGoals/expectedAssists are already
+// full-season totals on both sides, so no per-90 conversion needed. Fields
+// with no legacy equivalent (defensiveContributionPer90 - "defensive
+// contribution" wasn't tracked as a stat until this season; cbit/dsShots -
+// scraped deeper-stats fields with no historical source) return null and
+// just fall back to pure this-season value, same as any player with no
+// legacy record at all.
+function scoutLegacyValue(playerId, key, minutesThisSeason) {
+  const s = lastSeasonStats(playerId);
+  if (!s || !s.minutes) return null;
+  const per90 = (total) => total / (s.minutes / 90);
+  switch (key) {
+    case "saves90": return per90(s.saves || 0);
+    case "goalsConcededPer90": return per90(s.goals_conceded || 0);
+    case "xgi90": return per90(s.expected_goal_involvements || 0);
+    case "threat": return per90(s.threat || 0);
+    case "creativity": return per90(s.creativity || 0);
+    case "bps": return per90(s.bps || 0) * ((minutesThisSeason || 0) / 90);
+    case "cleanSheets": return s.clean_sheets || 0;
+    case "expectedGoals": return s.expected_goals || 0;
+    case "expectedAssists": return s.expected_assists || 0;
+    default: return null;
+  }
+}
 // Underlying metric value for a player + metric key. "fixtureEase" is
 // synthetic (not a raw player field) - it depends on the scout fixture
 // horizon control, so it's threaded through via state.scoutFixtureHorizon
 // rather than being a fixed field on the player object.
+//
+// Blended against last season the same way every other prediction in the
+// app is (seasonBlend/legacyBlendWeights, ramped by this-season minutes via
+// sampleRampFactor) - previously this was 100% this-season with no legacy
+// fallback at all, which is exactly why Scout's Picks looked "broken" early
+// in the season (the hard minMinutes gate in computeScoutList is the other
+// half of that fix - see passesEstablishedThreshold there). Metrics with no
+// legacy equivalent (see scoutLegacyValue) fall back to pure this-season
+// value unchanged, same convention as h2hBlendedPoints/computeProjectionRow
+// use when lastVal is null.
 function scoutMetricValue(p, key) {
   if (key === "cbit") return (p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0);
   if (key === "pointsPerMillion") return p.nowCost > 0 ? p.totalPoints / (p.nowCost / 10) : 0;
   if (key === "fixtureEase") return upcomingFixtureEase(p.teamId, state.scoutFixtureHorizon || 4);
-  return Number(p[key]) || 0;
+  const thisVal = Number(p[key]) || 0;
+  const lastVal = scoutLegacyValue(p.id, key, p.minutes);
+  if (lastVal == null) return thisVal;
+  const { thisWeight } = legacyBlendWeights(p.minutes);
+  return seasonBlend(thisVal, lastVal, thisWeight, (p.minutes || 0) > 0);
 }
 function scoutMetricsFor(pos, themeKey = "base") {
   const theme = SCOUT_THEMES[themeKey] || SCOUT_THEMES.base;
@@ -6635,7 +6961,18 @@ function computeScoutList(pos, themeKey = "base") {
   // Scout picks are meant to be "who should I actually consider", so
   // currently-injured players are dropped from the pool entirely rather
   // than surfacing (and needing a mental discount) alongside fit players.
-  let pool = state.players.filter(p => p.position === pos && p.minutes >= minMinutes && p.status !== "i");
+  //
+  // Eligibility uses passesEstablishedThreshold instead of a flat
+  // `p.minutes >= minMinutes` check - the same early-season fallback
+  // Captaincy/Theoretical Best/Triple Captain/Projections already use (see
+  // its own comment). A hard this-season-only gate meant EVERY player fell
+  // below 300 this-season minutes in GW1-2 and the whole Scout's Picks
+  // panel read as broken/empty, even though last season's real minutes
+  // (already being fetched for the Legacy/Live blend everywhere else in the
+  // app) can tell us a player is nailed-on. Once 8+ GWs are finished this
+  // season, the fallback stops applying and eligibility reverts to needing
+  // real this-season minutes, same as everywhere else.
+  let pool = state.players.filter(p => p.position === pos && passesEstablishedThreshold(p, minMinutes) && p.status !== "i");
   if (theme.maxPrice && theme.maxPrice[pos] != null) pool = pool.filter(p => p.nowCost / 10 <= theme.maxPrice[pos]);
   if (theme.filter) pool = pool.filter(theme.filter);
   const metrics = scoutMetricsFor(pos, themeKey);
@@ -6684,7 +7021,15 @@ function renderScoutThemeRow() {
 function renderScoutPanel() {
   const panel = document.getElementById("scoutPanel");
   if (panel.style.display === "none") return;
-  const anyData = state.players.some(p => p.minutes >= 300);
+  // Same passesEstablishedThreshold fallback as computeScoutList's pool
+  // filter - checks last season's real minutes too, not just this season's,
+  // so this gate doesn't block the whole panel in GW1-2 purely because
+  // nobody has 300+ minutes yet THIS season (see computeScoutList's comment
+  // for the full reasoning). Only truly blocks once there's neither a
+  // this-season sample NOR any last-season data to fall back on at all -
+  // e.g. legacy stats haven't finished loading yet, or genuinely nobody
+  // qualifies.
+  const anyData = state.players.some(p => passesEstablishedThreshold(p, 300));
   if (!anyData) {
     panel.innerHTML = `<div class="card"><p class="foot-note">Not enough minutes played yet this season (need 300+) to scout standouts reliably - check back once a few gameweeks are in.</p></div>`;
     return;
@@ -7531,7 +7876,10 @@ function renderMyTeamSummaryCard(entry, squad, bank) {
         <div class="detail-block-title" style="margin-bottom:6px;font-size:11px">Chip status (from your real history)</div>
         <div id="myTeamChipStatus" class="foot-note">Loading…</div>
       </div>
-      <button class="dir-btn" id="myTeamOpenPlannerBtn">Open in Planner →</button>
+      <div style="display:flex;gap:8px">
+        <button class="dir-btn" id="myTeamOpenPlannerBtn">Open in Planner →</button>
+        <button class="dir-btn" id="myTeamShortlistBtn" title="Jump to your Shortlist tab">⭐ Shortlist</button>
+      </div>
     </div>
   `;
   const ftInput = document.getElementById("myTeamFtInput");
@@ -7543,6 +7891,7 @@ function renderMyTeamSummaryCard(entry, squad, bank) {
     switchTab("planner");
     selectDraft("myteam");
   };
+  document.getElementById("myTeamShortlistBtn").onclick = () => switchTab("shortlist");
   loadMyTeamChipHistory(entry.id).then(used => {
     const el = document.getElementById("myTeamChipStatus");
     if (el) el.innerHTML = myTeamChipStatusHtml(used);
@@ -7556,7 +7905,13 @@ function renderMyTeamSummaryCard(entry, squad, bank) {
 // squad for an upcoming one. Visual language (pitch/pitch-row/pitch-slot,
 // cap-mark, bench-strip) matches the Planner's builder pitch exactly, so
 // this reads as the same app rather than a bolted-on second view.
-function slotHtmlReadOnly(p, { isCaptain, isVice, pts, gwId, benchLabel } = {}) {
+// `showHistory` (My Team's finished-GW view only - see renderMyTeamPitchForGw)
+// adds a small "L5" toggle that reveals each player's real points across
+// their last 5 finished gameweeks, reusing loadPlayerHeatmap (already
+// built/cached for the Player Stats heatmap - see its own comment - so this
+// costs nothing extra beyond that one-fetch-per-finished-GW cache, no new
+// per-player network call).
+function slotHtmlReadOnly(p, { isCaptain, isVice, pts, gwId, benchLabel, showHistory, underperforming } = {}) {
   if (!p) {
     return `<div class="pitch-slot placeholder-slot">${playerAvatarHtml(null, 40)}<div class="name-tag" style="opacity:0.7">Unknown</div></div>`;
   }
@@ -7568,8 +7923,88 @@ function slotHtmlReadOnly(p, { isCaptain, isVice, pts, gwId, benchLabel } = {}) 
       <div class="name-tag">${p.webName}</div>
       <div class="pts-tag mono">${pts != null ? pts + " pts" : fmtPrice(p.nowCost)}</div>
       ${gwId != null ? gwFixtureHtml(p.teamId, gwId) : ""}
+      ${underperforming ? `<span class="cap-mini-badge underperform" title="Actual points over recent played gameweeks are well below what the model projected for those same weeks" style="margin-top:2px">\u{1F4C9} Underperforming</span>` : ""}
+      ${showHistory ? `<button class="mini-hist-toggle" data-hist-player="${p.id}" title="Show last 5 gameweeks' real points">L5</button><div class="mini-hist-row" id="miniHist-${p.id}" style="display:none"></div>` : ""}
     </div>
   `;
+}
+// Compact last-5-finished-gameweeks strip for one player, shown under a My
+// Team pitch slot on demand (see slotHtmlReadOnly's L5 toggle). Reuses
+// heatmapCellColor for the same red->green "how good was that week" shading
+// the Player Stats heatmap already uses, just smaller cells and capped to
+// the last 5 rather than the full season, since a pitch-slot has nowhere
+// near the width for a full-season heatmap.
+function renderMiniHistoryInto(container, playerId) {
+  if (!container) return;
+  container.innerHTML = '<span style="font-size:8px;color:var(--ink-faint)">…</span>';
+  loadPlayerHeatmap(playerId).then(rows => {
+    if (!container.isConnected) return;
+    const last5 = rows.slice(-5);
+    if (!last5.length) { container.innerHTML = '<span style="font-size:8px;color:var(--ink-faint)">No history yet</span>'; return; }
+    container.innerHTML = last5.map(r => `
+      <span title="GW${r.gw}: ${r.points === null ? "did not play" : r.points + " pts"}" style="display:inline-block;width:14px;height:14px;border-radius:3px;background:${heatmapCellColor(r.points)};font-size:6.5px;color:rgba(0,0,0,0.65);text-align:center;line-height:14px;font-family:'JetBrains Mono',monospace">${r.points === null ? "-" : r.points}</span>
+    `).join("");
+  }).catch(() => {
+    if (container.isConnected) container.innerHTML = '<span style="font-size:8px;color:var(--ink-faint)">Couldn\'t load</span>';
+  });
+}
+// Wires up every "L5" mini-history toggle currently on the pitch/bench -
+// call after innerHTML is set on a My Team finished-GW render. Lazily
+// fetches/renders on first expand only (not on every render) so flipping
+// gameweeks doesn't fire a burst of fetches for slots the user never opens.
+function wireMiniHistoryToggles(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-hist-player]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const pid = Number(btn.dataset.histPlayer);
+      const row = document.getElementById(`miniHist-${pid}`);
+      if (!row) return;
+      const willOpen = row.style.display === "none";
+      row.style.display = willOpen ? "flex" : "none";
+      if (willOpen && !row.dataset.loaded) {
+        row.dataset.loaded = "1";
+        renderMiniHistoryInto(row, pid);
+      }
+    };
+  });
+}
+// Underperformer check (item: "tag underperforming players"). Compares real
+// points actually scored over a trailing window of PLAYED gameweeks against
+// what computeProjectionRow projected for those exact same gameweeks at the
+// time - i.e. the same expectation baseline the rest of the app already
+// uses, not a new model. Thresholds, both deliberately conservative so this
+// only fires on a genuine, sustained miss rather than one quiet week:
+//   - at least 2 of the trailing window's gameweeks must have been played
+//     (minutes > 0) - a run of blanks from injury/rotation is a fitness
+//     story, not an underperformance one (captaincyFitnessStatus/STATUS_LABEL
+//     already cover that separately).
+//   - actual total across those played GWs must be under 60% of what was
+//     projected for them - comfortably below normal variance, not a
+//     "slightly missed" flag.
+const UNDERPERFORM_WINDOW = 4; // trailing finished gameweeks considered
+const UNDERPERFORM_MIN_PLAYED = 2; // of that window, how many must have actually been played
+const UNDERPERFORM_RATIO = 0.6; // actual/projected below this trips the badge
+// Async because it needs each trailing GW's live stats, which may not be
+// fetched yet this session - fetchGwLive is itself cached (state.gwLiveCache)
+// so repeat calls for the same player/GW combo across a squad's worth of
+// players cost nothing extra after the first.
+async function computeIsUnderperforming(p) {
+  const finished = state.events.filter(e => e.finished).map(e => e.id).sort((a, b) => a - b);
+  if (!finished.length) return false;
+  const window = finished.slice(-UNDERPERFORM_WINDOW);
+  let actual = 0, projected = 0, played = 0;
+  for (const gw of window) {
+    let live;
+    try { live = await fetchGwLive(gw); } catch (e) { continue; } // a fetch hiccup on one GW shouldn't blank the whole check
+    const stats = live[p.id];
+    if (!stats) continue; // player had no row this GW (e.g. not in the squad yet) - not the same as "played and blanked"
+    if ((stats.minutes || 0) > 0) played++;
+    actual += stats.total_points || 0;
+    projected += computeProjectionRow(p, gw, gw, false, 70, 0.8).proj;
+  }
+  if (played < UNDERPERFORM_MIN_PLAYED || projected <= 0) return false;
+  return actual < projected * UNDERPERFORM_RATIO;
 }
 async function renderMyTeamPitchForGw(gwId, isFinished) {
   const area = document.getElementById("myTeamPitchArea");
@@ -7589,22 +8024,32 @@ async function renderMyTeamPitchForGw(gwId, isFinished) {
       return;
     }
     const picksWithPlayers = data.picks.map(pk => ({ ...pk, player: state.players.find(pl => pl.id === pk.element) })).filter(pk => pk.player);
+    // Underperformer badge (item: tag a player whose recent real points
+    // clearly trail their projection) - computed once per squad member up
+    // front, in parallel, rather than per-slot, since computeIsUnderperforming
+    // needs a few finished-GW fetches (cached, so cheap after first render,
+    // but still async) and every slot needs its own player's answer before
+    // the pitch HTML can be built.
+    const underperformFlags = {};
+    await Promise.all(picksWithPlayers.map(async pk => {
+      underperformFlags[pk.element] = await computeIsUnderperforming(pk.player).catch(() => false);
+    }));
     const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
     const bench = [];
     for (const pk of picksWithPlayers) {
       const raw = data.live[pk.element]?.total_points ?? null;
       const pts = raw != null ? raw * (pk.multiplier || (pk.multiplier === 0 ? 0 : 1)) : null;
-      const entryOut = { p: pk.player, isCaptain: pk.is_captain, isVice: pk.is_vice_captain, pts };
+      const entryOut = { p: pk.player, isCaptain: pk.is_captain, isVice: pk.is_vice_captain, pts, underperforming: underperformFlags[pk.element] };
       if (pk.position <= 11) byPos[pk.player.position].push(entryOut);
       else bench.push(entryOut);
     }
     const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-      `<div class="pitch-row">${byPos[pos].map(x => slotHtmlReadOnly(x.p, { isCaptain: x.isCaptain, isVice: x.isVice, pts: x.pts })).join("")}</div>`
+      `<div class="pitch-row">${byPos[pos].map(x => slotHtmlReadOnly(x.p, { isCaptain: x.isCaptain, isVice: x.isVice, pts: x.pts, showHistory: true, underperforming: x.underperforming })).join("")}</div>`
     ).join("");
     let outfieldIdx = 0;
     const benchHtml = bench.length
       ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${bench.map(x =>
-          slotHtmlReadOnly(x.p, { isCaptain: x.isCaptain, isVice: x.isVice, pts: x.pts, benchLabel: x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}` })
+          slotHtmlReadOnly(x.p, { isCaptain: x.isCaptain, isVice: x.isVice, pts: x.pts, benchLabel: x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}`, showHistory: true, underperforming: x.underperforming })
         ).join("")}</div>`
       : "";
     const gwTotal = data.entryHistory?.points ?? picksWithPlayers.reduce((s, pk) => s + (pk.position <= 11 ? (data.live[pk.element]?.total_points ?? 0) * (pk.multiplier || 0) : 0), 0);
@@ -7613,13 +8058,21 @@ async function renderMyTeamPitchForGw(gwId, isFinished) {
       <div style="text-align:center;margin-bottom:10px;font-weight:700;font-size:15px">${gwTotal} pts${data.entryHistory ? ` · Rank ${data.entryHistory.overall_rank?.toLocaleString?.() || "-"}` : ""}</div>
       <div class="pitch">${pitchRows}</div>${benchHtml}
     `;
+    wireMiniHistoryToggles(area);
     return;
   }
 
-  // Future gameweek - delegate straight to the Planner's own draft/timeline
-  // engine (getSquadTimeline + computeGwResult) so transfers/chips/captain
-  // planned in the Planner tab show up here identically, no separate logic
-  // to keep in sync.
+  // Future gameweek - now a genuinely EDITABLE pitch, not a read-only
+  // preview that links out to the Planner. It embeds the Planner's own
+  // renderGwDetail directly (the exact same draggable pitch-slot swap
+  // wiring, transfers-in browse list, chip buttons, and Recommended
+  // Transfers panel Planner uses) against the SAME "myteam" draft Planner
+  // already reads via getDraft("myteam")/getSquadTimeline, so a transfer or
+  // chip choice made here IS a transfer/chip choice made in the Planner -
+  // one shared draft, two entry points, no parallel mutation logic to keep
+  // in sync (see renderActiveGwHost for how renderGwDetail's mutation
+  // handlers know to repaint My Team instead of Planner's own chrome when
+  // they're reached from here).
   const draft = getDraft("myteam");
   if (!draft) { area.innerHTML = `<div class="empty-state">No squad loaded yet.</div>`; actionsArea.innerHTML = ""; return; }
   const horizon = getHorizonGws(38);
@@ -7627,42 +8080,11 @@ async function renderMyTeamPitchForGw(gwId, isFinished) {
   const timeline = getSquadTimeline(draft, horizon);
   const entryTl = timeline.find(t => t.gwId === gwId);
   if (!entryTl) { area.innerHTML = `<div class="empty-state">No plan for ${fmtGwName(gwId)} yet.</div>`; return; }
-  const result = computeGwResult(entryTl.squad, gwId, entryTl.chip, entryTl.captainId || null);
-  const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
-  for (const x of result.starting) byPos[x.p.position].push(x);
-  const pitchRows = ["GK", "DEF", "MID", "FWD"].map(pos =>
-    `<div class="pitch-row">${byPos[pos].map(x => `
-      <div class="pitch-slot">
-        ${result.captain?.id === x.p.id ? '<span class="cap-mark">C</span>' : result.viceCaptainId === x.p.id ? '<span class="cap-mark" style="background:var(--ink-dim)">VC</span>' : ""}
-        ${playerAvatarHtml(x.p, 40)}
-        <div class="name-tag">${x.p.webName}</div>
-        <div class="pts-tag mono">${x.proj.toFixed(1)}</div>
-        ${gwFixtureHtml(x.p.teamId, gwId)}
-      </div>
-    `).join("")}</div>`
-  ).join("");
-  let outfieldIdx = 0;
-  const benchHtml = result.bench.length
-    ? `<div class="bench-strip"><div class="bench-label">Substitutes</div>${result.bench.map(x => `
-        <div class="pitch-slot">
-          <div class="name-tag" style="background:rgba(7,15,12,0.6);margin-bottom:1px">${x.p.position === "GK" ? "GKP" : `${++outfieldIdx}. ${x.p.position}`}</div>
-          ${playerAvatarHtml(x.p, 40)}
-          <div class="name-tag">${x.p.webName}</div>
-          <div class="pts-tag mono">${x.proj.toFixed(1)}</div>
-          ${gwFixtureHtml(x.p.teamId, gwId)}
-        </div>
-      `).join("")}</div>`
-    : "";
-  const freeTransfers = (entryTl.chip === "WC" || entryTl.chip === "FH") ? Infinity : entryTl.freeTransfersAvailable;
-  const hit = Math.max(0, entryTl.transfersCount - freeTransfers) * 4;
-  area.innerHTML = `
-    ${entryTl.chip ? `<div style="text-align:center;margin-bottom:10px"><span class="chip-tag">${CHIP_LABELS[entryTl.chip]} planned</span></div>` : ""}
-    <div style="text-align:center;margin-bottom:10px;font-weight:700;font-size:15px">Projected ${(result.total - hit).toFixed(1)} pts${hit > 0 ? ` <span style="color:var(--red);font-weight:600;font-size:12px">(−${hit} hit)</span>` : ""}</div>
-    <div class="pitch">${pitchRows}</div>${benchHtml}
-  `;
+  state.gwDetailHost = "myteam"; // renderGwDetail's mutation handlers repaint via renderActiveGwHost - see its comment
+  area.innerHTML = `<div class="gw-row"><div class="gw-row-body" id="gw-body-${gwId}"></div></div>`;
   actionsArea.innerHTML = `
-    <p class="foot-note" style="text-align:center">This is your planned squad for ${fmtGwName(gwId)} - manage transfers, captaincy and chips in the Planner.</p>
-    <div style="text-align:center"><button class="dir-btn" id="myTeamPlanBtn">Plan transfers for ${fmtGwName(gwId)} →</button></div>
+    <p class="foot-note" style="text-align:center">Editing your planned squad for ${fmtGwName(gwId)} - drag players on the pitch to sub/swap, or drag from the list below to transfer. Changes here also show up in the Planner tab.</p>
+    <div style="text-align:center"><button class="dir-btn" id="myTeamPlanBtn">Open in Planner →</button></div>
   `;
   const planBtn = document.getElementById("myTeamPlanBtn");
   if (planBtn) planBtn.onclick = () => {
@@ -7670,6 +8092,7 @@ async function renderMyTeamPitchForGw(gwId, isFinished) {
     switchTab("planner");
     selectDraft("myteam");
   };
+  renderGwDetail(draft, gwId, horizon, timeline);
 }
 function myTeamGoToGw(gwId) {
   state.myTeamGwView = gwId;
@@ -7699,6 +8122,127 @@ function renderMyTeamHub(entry, squad, bank) {
   nextBtn.onclick = () => idx < allGws.length - 1 && myTeamGoToGw(allGws[idx + 1]);
 
   renderMyTeamPitchForGw(gwId, isFinished);
+  renderMyTeamSuggestedTransfers(entry);
+}
+
+// ---- My Team suggested transfers (item: "suggested transfers with
+// different topics") - three angles distinct from the Planner's own
+// Recommended Transfers panel (consistent/long-term/punt, already visible
+// inside the embedded future-GW pitch above via renderRecommendedTransfersPanel):
+// this panel is about the user's squad SPECIFICALLY, not general upgrade
+// hunting - a notably tough fixture run, or a doubtful/injured/suspended
+// player, are squad-specific problems Planner's three categories don't
+// target directly. Reuses the same "weakest squad player in this position,
+// by this metric" comparison pattern as bestSwapForCategory, but each
+// category's candidate pool and scoring differ enough (fixture-swing needs
+// BOTH squad and pool scored on fixture ease specifically; injury-risk needs
+// to start from a FLAGGED squad player, not the best-scoring one) that
+// reusing bestSwapForCategory itself would need contorting its "highest
+// scorer wins" assumption, so each category is its own small function
+// instead.
+// Always reads getDraft("myteam").squad (player IDs) - the same real,
+// kept-in-sync squad the embedded future-GW pitch and Planner both already
+// share (see seedDraftFromSquad's call site) - not a stale copy.
+function myTeamSquadPlayers() {
+  const draft = getDraft("myteam");
+  if (!draft) return [];
+  return draft.squad.map(id => state.players.find(p => p.id === id)).filter(Boolean);
+}
+function myTeamValueUpgradeSuggestions(squadPlayers, gwId) {
+  const squadIds = new Set(squadPlayers.map(p => p.id));
+  const pool = state.players.filter(p => !squadIds.has(p.id));
+  const out = [];
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const squadAtPos = squadPlayers.filter(p => p.position === pos);
+    if (!squadAtPos.length) continue;
+    const weakest = squadAtPos.map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, 0.8).proj })).sort((a, b) => a.proj - b.proj)[0];
+    if (!weakest) continue;
+    // Same price band (within £1.0m) so this reads as a genuine like-for-like
+    // upgrade, not just "buy the most expensive player in this position."
+    const candidates = pool.filter(p => p.position === pos && p.nowCost <= weakest.p.nowCost + 10)
+      .map(p => ({ p, proj: computeProjectionRow(p, gwId, gwId, false, 70, 0.8).proj }))
+      .sort((a, b) => b.proj - a.proj);
+    const best = candidates[0];
+    if (!best || best.proj <= weakest.proj + 0.5) continue; // not a meaningful upgrade
+    out.push({ out: weakest.p, in: best.p, statLabel: `+${(best.proj - weakest.proj).toFixed(1)} proj/GW`, outVal: weakest.proj, inVal: best.proj });
+  }
+  return out.sort((a, b) => (b.inVal - b.outVal) - (a.inVal - a.outVal)).slice(0, 3);
+}
+function myTeamFixtureSwingSuggestions(squadPlayers) {
+  const squadIds = new Set(squadPlayers.map(p => p.id));
+  const pool = state.players.filter(p => !squadIds.has(p.id));
+  const out = [];
+  for (const pos of ["DEF", "MID", "FWD"]) { // GK fixture-run swings rarely justify a transfer on their own - same reasoning captaincyMiniBadges' fixswing badge uses (gated to CS_PTS>0 positions)
+    const squadAtPos = squadPlayers.filter(p => p.position === pos);
+    if (!squadAtPos.length) continue;
+    const toughest = squadAtPos.map(p => ({ p, ease: upcomingFixtureEase(p.teamId, 4) })).sort((a, b) => a.ease - b.ease)[0];
+    if (!toughest || toughest.ease >= 4) continue; // 4/10-ish or better isn't a genuinely tough run worth flagging
+    const candidates = pool.filter(p => p.position === pos && p.nowCost <= toughest.p.nowCost + 15)
+      .map(p => ({ p, ease: upcomingFixtureEase(p.teamId, 4) }))
+      .sort((a, b) => b.ease - a.ease);
+    const best = candidates[0];
+    if (!best || best.ease <= toughest.ease + 1.5) continue; // not a meaningfully easier run
+    out.push({ out: toughest.p, in: best.p, statLabel: `${toughest.ease.toFixed(1)} → ${best.ease.toFixed(1)} fixture ease (next 4)`, outVal: toughest.ease, inVal: best.ease });
+  }
+  return out.sort((a, b) => (b.inVal - b.outVal) - (a.inVal - a.outVal)).slice(0, 3);
+}
+function myTeamRiskReplacementSuggestions(squadPlayers, gwId) {
+  const squadIds = new Set(squadPlayers.map(p => p.id));
+  const pool = state.players.filter(p => !squadIds.has(p.id));
+  const flagged = squadPlayers.filter(p => captaincyFitnessStatus(p) !== "fit");
+  const out = [];
+  for (const p of flagged) {
+    const candidates = pool.filter(x => x.position === p.position && captaincyFitnessStatus(x) === "fit" && x.nowCost <= p.nowCost + 15)
+      .map(x => ({ p: x, proj: computeProjectionRow(x, gwId, gwId, false, 70, 0.8).proj }))
+      .sort((a, b) => b.proj - a.proj);
+    const best = candidates[0];
+    if (!best) continue;
+    const label = STATUS_LABEL[p.status] ? STATUS_LABEL[p.status][0] : (captaincyFitnessStatus(p) === "out" ? "Out" : "Doubtful");
+    out.push({ out: p, in: best.p, statLabel: `${label} → fit, ${best.proj.toFixed(1)} proj`, outVal: 0, inVal: best.proj });
+  }
+  return out.slice(0, 3);
+}
+const MY_TEAM_SUGGEST_META = {
+  value: { label: "Best value upgrades", icon: "\u{1F4B0}", blurb: "A same-position replacement with a meaningfully higher projection at a similar or lower price." },
+  fixture: { label: "Fixture swing", icon: "\u{1F4C5}", blurb: "A squad player facing a notably tough run vs a similarly-priced alternative with an easier one (next 4 GWs)." },
+  risk: { label: "Injury / rotation risk", icon: "\u{1FA79}", blurb: "A doubtful, injured or suspended squad player vs an available same-position replacement." },
+};
+function myTeamSuggestCardHtml(key, rec) {
+  const meta = MY_TEAM_SUGGEST_META[key];
+  if (!rec) {
+    return `<div class="card" style="flex:1;min-width:220px;padding:10px 12px">
+      <div style="font-weight:700;font-size:12.5px">${meta.icon} ${meta.label}</div>
+      <div style="font-size:10.5px;color:var(--ink-faint);margin-top:6px">Nothing to flag here right now.</div>
+    </div>`;
+  }
+  return `<div class="card" style="flex:1;min-width:220px;padding:10px 12px">
+    <div style="font-weight:700;font-size:12.5px">${meta.icon} ${meta.label}</div>
+    <div style="font-size:10.5px;color:var(--ink-faint);margin:3px 0 8px">${meta.blurb}</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rec.out.webName}</span>
+      <span style="color:var(--ink-faint)">→</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700">${rec.in.webName}</span>
+    </div>
+    <div class="mono" style="font-size:10.5px;color:var(--gold-bright,#00ff66);margin-top:4px">${rec.statLabel}</div>
+  </div>`;
+}
+function renderMyTeamSuggestedTransfers(entry) {
+  const el = document.getElementById("myTeamSuggestedTransfers");
+  if (!el || !entry) return;
+  const squadPlayers = myTeamSquadPlayers();
+  if (!squadPlayers.length) { el.innerHTML = ""; return; }
+  const gwId = currentEventId() || state.events.find(e => e.is_next)?.id;
+  if (!gwId) { el.innerHTML = ""; return; } // no current/next gameweek to project against yet
+  const lists = {
+    value: myTeamValueUpgradeSuggestions(squadPlayers, gwId)[0] || null,
+    fixture: myTeamFixtureSwingSuggestions(squadPlayers)[0] || null,
+    risk: myTeamRiskReplacementSuggestions(squadPlayers, gwId)[0] || null,
+  };
+  el.innerHTML = `
+    <div class="detail-block-title">Suggested transfers for your squad</div>
+    <p class="foot-note" style="margin:0 0 10px">Distinct from the Planner's Recommended Transfers panel above (general upgrade hunting) - these are specifically about problems in YOUR current squad.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">${["value", "fixture", "risk"].map(k => myTeamSuggestCardHtml(k, lists[k])).join("")}</div>
+  `;
 }
 
 // ---------- planner: storage ----------
@@ -7922,9 +8466,29 @@ function defConProbability(p, minsFactor, fdrScore) {
 function expectedBonusForFixture(p, fx, minsFactor) {
   if (!fx) return 0;
   const oppTeamId = fx.oppId;
-  const pool = state.players.filter(x => (x.teamId === p.teamId || x.teamId === oppTeamId) && x.minutes >= 300);
+  // passesEstablishedThreshold (not a flat `minutes >= 300`) so this pool
+  // isn't empty in GW1-2 - a hard this-season-only gate meant `!pool.length`
+  // fired for every fixture before ~GW3-4, silently zeroing out EVERY
+  // player's expected bonus points app-wide (this feeds computeProjectionRow
+  // directly) for the whole early season, exactly the same failure mode
+  // Scout's Picks had. Same fallback convention as everywhere else: last
+  // season's real minutes count until 8+ GWs are finished this season.
+  const pool = state.players.filter(x => (x.teamId === p.teamId || x.teamId === oppTeamId) && passesEstablishedThreshold(x, 300));
   if (!pool.length) return 0;
-  const weighted = pool.map(x => ({ id: x.id, score: (x.bpsPer90 || 0) * projMinsFactor(x, false) }))
+  // bpsPer90 blended against last season's real bps/90 the same way as
+  // everywhere else (seasonBlend/legacyBlendWeights) - a player who
+  // qualified for the pool purely on the passesEstablishedThreshold
+  // fallback above (0 minutes this season so far) would otherwise score a
+  // flat 0 here even though they're in the ranked pool, silently ranking
+  // last regardless of how good last season's bonus-point record was.
+  const bpsPer90Blended = (x) => {
+    const legacy = lastSeasonStats(x.id);
+    const lastVal = legacy && legacy.minutes ? (legacy.bps || 0) / (legacy.minutes / 90) : null;
+    if (lastVal == null) return x.bpsPer90 || 0;
+    const { thisWeight } = legacyBlendWeights(x.minutes);
+    return seasonBlend(x.bpsPer90 || 0, lastVal, thisWeight, (x.minutes || 0) > 0);
+  };
+  const weighted = pool.map(x => ({ id: x.id, score: bpsPer90Blended(x) * projMinsFactor(x, false) }))
     .sort((a, b) => b.score - a.score);
   const rank = weighted.findIndex(x => x.id === p.id);
   if (rank === -1 || weighted[rank].score <= 0) return 0;
@@ -10021,13 +10585,18 @@ function captaincyScoreForGw(p, gwId) {
   // default (Balanced) captaincy score specifically - this cap was only
   // 15% of base proj, well below the same signal's own 30% weight in
   // Explosive mode (captaincyExplosiveScore's "weighted heaviest" boost
-  // term) and even below routeBonus's own 30% ceiling just above. Raised
-  // to match those - playstyleMatchupBoost is a real 0-1 read on team
+  // term) and even below routeBonus's own 30% ceiling just above. Raised to
+  // 30% to match those, then raised AGAIN this round (user: "boost the
+  // matchup again") to 40% - now deliberately ABOVE routeBonus's own 30%
+  // ceiling by design: playstyle/matchup is now the single heaviest
+  // weighted signal in the default (Balanced) captaincy score, ahead of
+  // route diversity. playstyleMatchupBoost is a real 0-1 read on team
   // openness/mobility, low-block/technique fit, AND direct attribute-edge
-  // vs the likely marker (see playstyleMatchupBoost), so doubling its
-  // ceiling here lets a genuinely favourable matchup meaningfully move the
-  // primary captaincy sort, not just the Explosive re-scoring mode.
-  const boostBonus = row.proj * boost * 0.30; // playstyle/matchup boost capped at +30% of base proj (was 15%)
+  // vs the likely marker (see playstyleMatchupBoost), so this lets a
+  // genuinely favourable matchup meaningfully move the primary captaincy
+  // sort, not just the Explosive re-scoring mode (which got the same
+  // further boost - see captaincyExplosiveScore, boost * 0.35 now).
+  const boostBonus = row.proj * boost * 0.40; // playstyle/matchup boost capped at +40% of base proj (was 30%, originally 15%)
   let captaincyScore = row.proj + routeBonus + boostBonus;
   // Knock deficit: applied to the FINAL score (after route/playstyle
   // bonuses), not the base projection, so a flagged player's whole
@@ -10049,13 +10618,13 @@ function captaincyScoreForGw(p, gwId) {
 // alternate lenses over the exact same underlying data.
 //
 // EXPLOSIVE = highest ceiling - leans on raw attacking upside (xGI, team
-// predicted goals, an easy fixture) and the playstyle/matchup edge
-// (already the strongest "this specific game could explode" signal this
-// app has), with a genuine "hidden gem" property: a low-ownership player
-// whose underlying signals are strong gets a real bump relative to a
-// high-ownership player with the same raw ceiling, so a template captain
-// doesn't automatically dominate just for being popular - surfaces
-// something a template-only view would bury.
+// predicted goals, an easy fixture) and the playstyle/matchup edge (the
+// strongest "this specific game could explode" signal this app has, and
+// its heaviest-weighted term). Round: previously also carried a "hidden
+// gem" multiplicative bump for low-ownership players - REMOVED per user
+// decision ("pure badge, no score effect"); a differential pick is still
+// surfaced, just as a purely informational badge (captaincyMiniBadges'
+// "💎 Differential") that doesn't move this score or the sort order.
 function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   if (fitness === "out") return 0;
   const xgi = p.xgi90 || 0;
@@ -10087,20 +10656,25 @@ function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   const xgiNorm = Math.max(0, Math.min(1, xgi / 1.0));
   const teamXgNorm = Math.max(0, Math.min(1, teamXg / 2.2));
   // Weighted sum - playstyle/matchup boost weighted heaviest per your
-  // steer ("lean heavily on playstyle and matchup"), then ceiling/ xGI,
-  // then team goals/fixture ease, defensive-specific terms only apply to
-  // DEF/GK (0 otherwise so they don't dilute an attacker's score).
-  let score = boost * 0.30 + ceilingNorm * 0.22 + xgiNorm * 0.16 + teamXgNorm * 0.12 + fixtureEase * 0.10 + csUpside * 0.05 + defenceUpside * 0.05;
-  // Hidden-gem surfacing: a genuinely low-owned player (under ~8%) with a
-  // real underlying score gets a modest multiplicative bump - enough to
-  // surface a smaller-club/overlooked-matchup player who wouldn't win a
-  // straight raw-ceiling contest against a heavily-owned superstar with a
-  // similar (but not dramatically higher) underlying case, without letting
-  // low ownership alone drag a genuinely weak case up the list (the bump
-  // is multiplicative on an already-real score, not an additive freebie).
-  const ownership = p.selectedByPercent || 0;
-  const hiddenGemMult = ownership < 8 ? 1 + Math.max(0, (8 - ownership) / 8) * 0.25 : 1; // up to +25% for ~0% owned
-  score *= hiddenGemMult;
+  // steer ("lean heavily on playstyle and matchup", then "boost the
+  // matchup AGAIN" this round) - raised from 0.30 to 0.35. ceilingNorm's
+  // own weight trimmed slightly (0.22 -> 0.18) to make room rather than
+  // just piling the extra weight on top uncapped - the rest (xGI/team
+  // goals/fixture ease/defensive terms) is untouched. Doesn't strictly need
+  // to sum to 1.0 (never did - these are independent 0-1 normalized signals
+  // combined additively, not a probability split), just needs to stay a
+  // sane relative weighting, which it still is with matchup as the clear
+  // single heaviest term. Defensive-specific terms only apply to DEF/GK (0
+  // otherwise so they don't dilute an attacker's score).
+  let score = boost * 0.35 + ceilingNorm * 0.18 + xgiNorm * 0.16 + teamXgNorm * 0.12 + fixtureEase * 0.10 + csUpside * 0.05 + defenceUpside * 0.05;
+  // Round: hidden-gem/low-ownership score bump REMOVED per user decision
+  // ("pure badge, no score effect") - it used to multiply the score up to
+  // +25% for a sub-8%-owned player, which meant two players with an
+  // identical real underlying case could rank differently in Explosive mode
+  // purely because one was less owned. Explosive's ranking is now driven
+  // entirely by the real signals above; low ownership is still surfaced,
+  // just as an informational "💎 Differential" mini-badge (see
+  // captaincyMiniBadges) that carries zero weight in this score.
   if (fitness === "knock") score *= 0.75; // same 25% knock deficit as the default captaincy score
   return score;
 }
@@ -10205,10 +10779,91 @@ function captaincyMiniBadges(p, gwId, scored) {
   if ((p.selectedByPercent || 0) >= 25) {
     badges.push({ cls: "template", icon: "\u{1F465}", label: "Template", title: `${p.selectedByPercent.toFixed(1)}% owned - high-ownership template pick` });
   }
+  // Round: Differential badge - PURELY informational, replaces the old
+  // hidden-gem SCORE bump that used to live inside captaincyExplosiveScore
+  // (removed per user decision: "pure badge, no score effect"). Same <8%
+  // ownership threshold the old multiplier used, so "who gets flagged"
+  // is unchanged - only WHERE the signal shows up (a badge here, not a
+  // ranking boost there) has changed. Distinct icon (💎) from Template's
+  // 👥 so the two ownership-related badges never read as opposites of the
+  // same thing at a glance.
+  if ((p.selectedByPercent || 0) < 8) {
+    badges.push({ cls: "differential", icon: "\u{1F48E}", label: "Differential", title: `${(p.selectedByPercent || 0).toFixed(1)}% owned - low ownership, potential differential pick (informational only - doesn't affect score)` });
+  }
   return badges;
 }
 function captaincyMiniBadgesHtml(p, gwId, scored) {
   const badges = captaincyMiniBadges(p, gwId, scored);
+  if (!badges.length) return "";
+  return `<div class="cap-badge-row">${badges.map(b => `<span class="cap-mini-badge ${b.cls}" title="${b.title}">${b.icon} ${b.label}</span>`).join("")}</div>`;
+}
+// ---- Projections tab badges (item: add badges to the Projections table) ----
+// Deliberately reuses the SAME cap-badge-row/cap-mini-badge CSS classes and
+// the SAME underlying signal functions (playstyleMatchupBoost,
+// playerHasNoExportedData, captaincyMiniBadges' own form/PPG comparison
+// logic) as the Captaincy tab's mini-badges, rather than building a parallel
+// badge system - the intent is that a fixture-swing/no-data/hot-streak
+// signal reads identically wherever it shows up in the app, not a
+// Projections-specific re-derivation that could quietly drift from the
+// Captaincy tab's numbers over time.
+function projectionBadgesHtml(p, row) {
+  const badges = [];
+  const fx = row && row.fixtures && row.fixtures[0];
+  // Great matchup: reuses playstyleMatchupBoost exactly as
+  // captaincyScoreForGw/playstyleMatchupBoost's own callers do - a high
+  // reading here already means "team openness/compactness fit AND/OR a
+  // clearly favourable direct attribute edge vs the likely marker", so no
+  // separate threshold logic needs inventing.
+  if (fx && fx.opp) {
+    const boost = playstyleMatchupBoost(p, fx.opp.id, fx.isHome);
+    if (boost > 0.55) {
+      badges.push({ cls: "fixswing", icon: "\u{1F3AF}", label: "Great matchup", title: `Strong playstyle/matchup fit vs ${fx.opp.short_name || state.teamsById[fx.opp.teamId]?.short_name || "opponent"} this fixture` });
+    }
+  }
+  // Data quality - no export at all (reuses the exact same 🚩 flag/logic
+  // the Player Stats table already shows, see playerHasNoExportedData's own
+  // comment for what "no export" specifically means per position).
+  if (playerHasNoExportedData(p)) {
+    badges.push({ cls: "lowsignal", icon: "\u{1F6A9}", label: "No export", title: "No exported data on file - running entirely on generic estimates (see Player Stats table)" });
+  } else {
+    // Data quality - real import status is fine, but the ESTIMATE itself
+    // (computeFmAttributes12Estimate) is running on thin underlying FPL
+    // data. Distinct from "no export": a player CAN have a tagged position
+    // or a real GK import (so playerHasNoExportedData is false) while still
+    // having every outfield FM attribute purely estimated from near-zero
+    // minutes/threat, which is exactly what pctTo20's floor (4) getting hit
+    // repeatedly signals - see percentileRank/pctTo20's own comments on why
+    // a genuinely low-minutes/low-threat player clusters near that floor.
+    // Only counts keys with NO real override (hasRealFmAttribute false) so
+    // a real imported 4 (a genuinely rated-poor real attribute) never
+    // counts against this player - only the ESTIMATE's own floor does.
+    const est = getFm12Estimate(p.id);
+    let floorCount = 0, estimatedCount = 0;
+    for (const def of FM12_ATTR_DEFS) {
+      if (hasRealFmAttribute(p.id, def.key)) continue;
+      estimatedCount++;
+      if (est[def.key] === 4) floorCount++;
+    }
+    if (estimatedCount > 0 && floorCount >= 5) {
+      badges.push({ cls: "lowsignal", icon: "\u{26A0}\u{FE0F}", label: "Low-signal estimate", title: `${floorCount} of ${estimatedCount} estimated FM attributes sit at the estimate's floor - likely low minutes/threat, treat the attribute-driven parts of this projection with caution` });
+    }
+  }
+  // Form/trend - hot streak (reuses the exact >= threshold logic
+  // captaincyMiniBadges' "In form" badge already uses, so the SAME player
+  // never reads as "in form" on Captaincy but not on Projections).
+  const form = Number(p.form) || 0;
+  const ppg = Number(p.pointsPerGame) || 0;
+  if (form >= 5 || (ppg > 0 && form >= ppg * 1.3 && form >= 4)) {
+    badges.push({ cls: "form", icon: "\u{1F525}", label: "Hot streak", title: `Recent form ${form.toFixed(1)} - trending well above season average (${ppg.toFixed(1)} PPG)` });
+  } else if (ppg > 0 && form > 0 && form <= ppg * 0.7 && (p.minutes || 0) >= 300) {
+    // Cooling off: the mirror case, new this round - recent form clearly
+    // BELOW season PPG for a player with an established sample (300+ mins,
+    // same reliability bar captaincyMiniBadges' "Nailed" badge uses), so a
+    // single quiet substitute appearance doesn't misleadingly flag a
+    // player who's actually fine. Deliberately mutually exclusive with Hot
+    // streak (else branch) - a player can't be both in the same fixture.
+    badges.push({ cls: "cooling", icon: "❄️", label: "Cooling off", title: `Recent form ${form.toFixed(1)} - trending below season average (${ppg.toFixed(1)} PPG)` });
+  }
   if (!badges.length) return "";
   return `<div class="cap-badge-row">${badges.map(b => `<span class="cap-mini-badge ${b.cls}" title="${b.title}">${b.icon} ${b.label}</span>`).join("")}</div>`;
 }
@@ -10836,7 +11491,7 @@ function renderProjectionsTab() {
             ? "vs " + r.bestMatchup.opp.webName + " (" + (state.teamsById[r.bestMatchup.opp.teamId]?.short_name || "") + ") - best-effort inferred matchup, see Simulation tab"
             : "No fixture in range";
           return `<tr>
-            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+            <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>${projectionBadgesHtml(p, r)}</div></td>
             <td>${fixLabel}</td>
             ${cell("proj", r.proj, r.proj.toFixed(1))}
             ${cell("ppm", r.ppm, r.ppm.toFixed(1))}
@@ -11065,6 +11720,28 @@ function renderPlanner() {
     renderSquadBuilder(draft);
   } else {
     renderGwSimulator(draft);
+  }
+}
+
+// Every mutation handler inside renderGwDetail (chip toggle, transfer
+// accept/undo/clear, captain/vice/sub click, drag-drop swap) was written
+// hardcoded to call renderPlanner() afterwards, since renderGwDetail used
+// to only ever be reached from the Planner tab. My Team's future-gameweek
+// view now embeds the exact same renderGwDetail (see renderMyTeamPitchForGw)
+// so edits there share the "myteam" draft with Planner instead of a
+// divergent copy - but repainting via renderPlanner() from My Team would
+// blow up (#draftSelect/#plannerBody don't exist while My Team is the
+// visible tab) or silently repaint the WRONG, invisible tab. This
+// dispatcher is what those call sites now go through instead: it checks
+// state.gwDetailHost (set immediately before renderGwDetail is invoked from
+// either tab) and repaints whichever host is actually on screen, using each
+// host's own top-level render function so every other bit of chrome around
+// the pitch (draft selector, budget card, chip status, etc.) stays correct.
+function renderActiveGwHost() {
+  if (state.gwDetailHost === "myteam") {
+    renderMyTeamHub(state.myTeamEntry, state.myTeamGwSnapshot?.squad || [], state.myTeamGwSnapshot?.bank ?? null);
+  } else {
+    renderPlanner();
   }
 }
 
@@ -12190,6 +12867,7 @@ function renderBuilderPitch(draft) {
 }
 
 function renderGwSimulator(draft) {
+  state.gwDetailHost = "planner"; // renderGwDetail's mutation handlers repaint via renderActiveGwHost - see its comment
   const body = document.getElementById("plannerBody");
   const horizon = getHorizonGws(38);
   if (horizon.length === 0) {
@@ -12479,7 +13157,7 @@ function renderPlannerInBrowseList(draft, gwId, entry, log, horizon) {
     // gameweek-horizon recompute twice. Setting it first means one render
     // suffices.
     state.plannerExpandedGw = gwId;
-    saveDrafts(); renderPlanner();
+    saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
   };
 
   listEl.querySelectorAll("[data-action='pick-replace']").forEach(btn => {
@@ -12672,7 +13350,7 @@ function renderRecommendedTransfersPanel(draft, gwId, entry, log, horizon) {
       log.out.push(rec.target.id); log.in.push(rec.candidate.id);
       if (log.chip) draft.chipsUsed[chipUsageKey(log.chip, gwId)] = true;
       state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek - see completeTransfer's comment
-      saveDrafts(); renderPlanner();
+      saveDrafts(); renderActiveGwHost(); // repaints Planner OR My Team, whichever embedded this gw detail - see renderActiveGwHost
     };
   });
   el.querySelectorAll("[data-rec-decline]").forEach(btn => {
@@ -12754,7 +13432,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
       const c = btn.dataset.chip;
       log.chip = log.chip === c ? null : c;
       state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek - see completeTransfer's comment
-      saveDrafts(); renderPlanner();
+      saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
     };
   });
 
@@ -12871,7 +13549,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
         log.out.splice(idx, 1);
         log.in.splice(idx, 1);
         state.plannerExpandedGw = gwId;
-        saveDrafts(); renderPlanner();
+        saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
       };
     });
     const clearBtn = document.getElementById(`plannerClearTransfersBtn-${gwId}`);
@@ -12879,7 +13557,7 @@ function renderGwDetail(draft, gwId, horizon, timeline) {
       if (!confirm("Remove all transfers planned for this gameweek?")) return;
       log.out = []; log.in = [];
       state.plannerExpandedGw = gwId;
-      saveDrafts(); renderPlanner();
+      saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
     };
   }
 
@@ -13004,7 +13682,7 @@ function wirePitchDragAndDrop(pitchWrap, draft, gwId, horizon, log, result, entr
         if (log.chip) draft.chipsUsed[chipUsageKey(log.chip, gwId)] = true;
         state.plannerReplacingId = null;
         state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek - see completeTransfer's comment
-        saveDrafts(); renderPlanner();
+        saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
         return;
       }
       const sourceId = dragId != null ? dragId : Number(raw);
@@ -13059,7 +13737,7 @@ function openGwPlayerActionModal(draft, gwId, horizon, playerId, result) {
   const rerender = () => {
     closePitchModal();
     state.plannerExpandedGw = gwId; // set before render so one pass lands on the right gameweek - see completeTransfer's comment
-    saveDrafts(); renderPlanner();
+    saveDrafts(); renderActiveGwHost(); // see renderActiveGwHost
   };
 
   const capBtn = document.getElementById("gwModalCaptain");
@@ -13257,6 +13935,18 @@ async function loadFormulasFromStorage() {
   try {
     const raw = await persistGet("gkAttributes");
     if (raw) state.gkAttributes = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  // playerHeights (cm) / playerFootPreference (raw text pair) - both set by
+  // importFmAttributesCsv's Height/Left Foot/Right Foot handling, same
+  // persist-on-write / restore-on-load pattern as playerAttributes/
+  // gkAttributes just above.
+  try {
+    const raw = await persistGet("playerHeights");
+    if (raw) state.playerHeights = JSON.parse(raw);
+  } catch (e) { /* keep defaults */ }
+  try {
+    const raw = await persistGet("playerFootPreference");
+    if (raw) state.playerFootPreference = JSON.parse(raw);
   } catch (e) { /* keep defaults */ }
   try {
     const raw = await persistGet("playerRankAnswers");
@@ -20634,10 +21324,21 @@ function inferredRole(p) {
 // generating the full autoGenerateMatchups() pairing set (which would be
 // expensive to call per-player per-fixture across the whole projection
 // table). Checks pinned Tactical board matchups first (an explicit, most
-// trustworthy signal - the user manually decided this pairing), then
-// falls back to same-inferred-role, highest-totalPoints opposing player
-// (same "PRIMARY role matchup" logic autoGenerateMatchups uses, just
-// resolved for one player instead of a whole XI at once).
+// trustworthy signal - the user manually decided this pairing), then falls
+// back to same-inferred-role, best-ABILITY opposing player (same "PRIMARY
+// role matchup" logic autoGenerateMatchups uses, just resolved for one
+// player instead of a whole XI at once).
+// Round: user asked matchups to use "the best player in that position" -
+// this was previously picking the highest totalPoints player, which is an
+// FPL SCORING/ownership proxy (a heavily-rotated bench player who's played
+// 5 big-minute games can outscore a genuinely elite starter who's missed
+// a few weeks to a knock), not a read of actual on-pitch ability. Switched
+// to matchupStrengthScore (the same real-attribute-based ability score the
+// Tactical board's own matchup cards already use via matchupAttributeEdge)
+// so "best player" means best ABILITY, matching the intent: a favourable
+// matchup read should be conservative - measured against the opponent's
+// strongest player by skill, not whoever happened to bank the most points.
+// Signature/callers unchanged - only the selection criterion inside.
 function likelyOpponentFor(p, oppTeamId) {
   const key = h2hMatchupKey(p.teamId, oppTeamId);
   const pinned = state.h2hMatchups[key] || [];
@@ -20647,12 +21348,12 @@ function likelyOpponentFor(p, oppTeamId) {
   }
   const role = inferredRole(p);
   const oppPool = state.players.filter(x => x.teamId === oppTeamId && inferredRole(x) === role);
-  if (oppPool.length) return oppPool.reduce((best, x) => (!best || (x.totalPoints || 0) > (best.totalPoints || 0)) ? x : best, null);
+  if (oppPool.length) return oppPool.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
   // No same-role player on the opposing side (e.g. a team genuinely
   // lacking a wide option) - fall back to the best player in the same
   // literal FPL position instead of leaving the matchup unresolved.
   const samePos = state.players.filter(x => x.teamId === oppTeamId && x.position === p.position);
-  return samePos.length ? samePos.reduce((best, x) => (!best || (x.totalPoints || 0) > (best.totalPoints || 0)) ? x : best, null) : null;
+  return samePos.length ? samePos.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null) : null;
 }
 // Auto-generates a sensible default set of player-vs-player matchups for a
 // team pairing when nothing has been manually pinned on the Tactical board
