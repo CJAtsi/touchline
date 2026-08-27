@@ -1362,6 +1362,7 @@
       <label id="projFormationWrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim)">Formation
         <select id="projFormationSelect"></select>
       </label>
+      <button type="button" class="chip-btn small" id="projFormulasBtn" style="cursor:pointer;margin-left:auto">ℹ️ How this is calculated</button>
     </div>
     <div id="projectionsBody"></div>
   </section>
@@ -1380,7 +1381,6 @@
       </div>
       <span id="legacyLoadStatus" class="foot-note" style="margin:0"></span>
     </div>
-    <div id="statsBudgetNote" class="foot-note" style="margin-bottom:10px"></div>
 
     <div class="toolbar" style="margin-bottom:8px">
       <div class="seg" id="posSeg"></div>
@@ -1591,6 +1591,7 @@
 
     <div class="mode-btn-row" id="fdrModeRow" style="margin-bottom:12px"></div>
     <div id="fdrLegendRow" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--ink-dim)"></div>
+    <button type="button" class="chip-btn small" id="fdrFormulasBtn" style="cursor:pointer;margin-bottom:14px">ℹ️ How this is calculated</button>
 
     <div class="toolbar" style="margin-bottom:14px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--ink-dim)">From</span>
@@ -1604,7 +1605,7 @@
         <span id="fdrRunThresholdVal" class="mono" style="min-width:26px"></span>
       </label>
     </div>
-    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click any fixture pill for a full scoreline estimate, or click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Scorelines use the same Weibull-count + copula model (win/draw/loss blended with Pi-ratings and real odds where available). Green bars below a club's row mark every run of 2+ favourable fixtures in a row (not just the single best one) - drag the good-run sensitivity slider above to loosen/tighten what counts as "favourable".</p>
+    <p class="foot-note" style="margin-top:-8px;margin-bottom:10px">Click the Avg FDR / Avg GF / Avg GA column headers to sort by them directly. The current gameweek's column is highlighted. Avg GF/GA come from the same Weibull-count + copula expected-goals model used across the app; the standalone scoreline predictor UI has been removed for a revamp. Green bars below a club's row mark every run of 2+ favourable fixtures in a row (not just the single best one) - drag the good-run sensitivity slider above to loosen/tighten what counts as "favourable".</p>
 
     <div class="table-wrap" style="overflow-x:auto">
       <table id="fdrGrid"></table>
@@ -1706,13 +1707,6 @@
     </div>
   </section>
 
-  <div id="fdrPredictModal" class="pitch-modal-backdrop" style="display:none">
-    <div class="pitch-modal-card" style="max-width:320px">
-      <div id="fdrPredictBody"></div>
-      <button class="chip-btn" id="fdrPredictClose" style="margin-top:10px">Close</button>
-    </div>
-  </div>
-
   <div id="groupPickerModal" class="pitch-modal-backdrop" style="display:none">
     <div class="pitch-modal-card" style="max-width:320px">
       <div class="detail-block-title">Added to shortlist - add to a group?</div>
@@ -1743,6 +1737,15 @@
         <button class="btn" id="autopickRunBtn" style="flex:1">Run Auto Pick</button>
         <button class="chip-btn" id="autopickCancelBtn">Cancel</button>
       </div>
+    </div>
+  </div>
+
+  <div id="formulasModal" class="pitch-modal-backdrop" style="display:none">
+    <div class="pitch-modal-card" style="max-width:640px;max-height:82vh;overflow-y:auto">
+      <div class="detail-block-title">How this is calculated</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">The real formulas and weights behind every projection, matchup, captaincy and goals number in the app - read straight from the live code, not a marketing simplification. Nothing here is hidden; if a number surprises you, this is where to check why.</p>
+      <div id="formulasModalBody"></div>
+      <button class="chip-btn" id="formulasModalClose" style="margin-top:10px">Close</button>
     </div>
   </div>
 
@@ -1827,6 +1830,7 @@
   <section id="tab-rankings" style="display:none">
     <h1 class="page-title">Rankings</h1>
     <p class="page-sub">Two separate, independent systems live on this page - they don't affect each other. <strong>Fixture difficulty</strong> (below) colours individual fixtures. <strong>Club rankings</strong> (further down) is a single best-to-worst list of all 20 clubs.</p>
+    <button type="button" class="chip-btn small" id="rankingsFormulasBtn" style="cursor:pointer;margin-bottom:14px">ℹ️ How this is calculated</button>
 
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Data mode - Legacy vs Live</div>
@@ -1896,10 +1900,18 @@
       <p class="foot-note" id="rankingsNote"></p>
     </div>
 
+    <div class="card" style="margin-bottom:18px;border:1px solid rgba(0,255,102,0.25)">
+      <div class="detail-block-title">⚽ Likely lineups - make matchups accurate to who's actually playing</div>
+      <p class="foot-note" style="margin-top:-4px;margin-bottom:6px">
+        By default, every matchup calculation (the Projections/Captaincy "matchup" boost, the Tactical board's auto-generated pairings) treats a club's WHOLE SQUAD as equally likely to face your player - a fringe substitute counts the same as their first-choice starter. Set a club's <strong>likely lineup</strong> below (per formation slot, e.g. "who's the right-back," "who's the striker") and every matchup involving that club switches to using those specific starters instead, for every one of their upcoming fixtures - genuinely accurate to who's likely to actually be on the pitch, not the full 25-man squad.
+      </p>
+      <p class="foot-note" style="margin-bottom:10px">Each team's picker is inside its "⚽ Likely lineup" expander below, alongside its Attack/Defence/Overall sliders. Unset teams keep the previous whole-squad behaviour - nothing changes until you fill in at least one slot for that club.</p>
+    </div>
+
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Edit club strength</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Disagree with FPL's rating for a club? Set Attack, Defence and Overall individually - 1 (weakest) to 5 (strongest). These feed both the FDR formula above (opponent pills, club rankings) <strong>and</strong> the predicted scoreline on the FDR fixture modal - change a club's Attack here and their predicted scorelines update to match. Starts at FPL's own computed rating for each field; hit ↺ Reset to go back to all three.
+        Disagree with FPL's rating for a club? Set Attack, Defence and Overall individually - 1 (weakest) to 5 (strongest). These feed both the FDR formula above (opponent pills, club rankings) <strong>and</strong> the predicted scoreline on the FDR fixture modal - change a club's Attack here and their predicted scorelines update to match. Starts at FPL's own computed rating for each field; hit ↺ Reset to go back to all three. Each row also has an <strong>⚽ Likely lineup</strong> expander (see the card above) for setting that club's specific starters, used by matchup calculations club-wide.
       </p>
       <div id="teamOverrideList"></div>
     </div>
@@ -4479,6 +4491,7 @@ let state = {
   rangePoints: null, rangeLabel: null,
   gwLiveCache: {}, scopedStats: null, scopedStatsLoading: false, playerHeatmapCache: {},
   clubStatsByTeamId: {},
+  shotMapByPlayerId: {}, shotDataCache: {}, // Round 42 - see fetchShotMap/fetchShotDataFor
   expandedShortlistId: null,
   shortlistGroups: [], activeShortlistGroup: "ALL", shortlistCompareMode: false, shortlistViewMode: "list", // "list" | "tier" - interchangeable views over the same shortlist (item: "Shortlist change to list and tier list interchangeable")
   compareSelectionStats: new Set(), compareSelectionShortlist: new Set(),
@@ -5072,6 +5085,150 @@ async function fetchClubStats() {
   }
 }
 
+// Round 42: shot-level data (/shotmap, /shotdata/:id) - a NEW pair of
+// routes, not yet deployed on the live Worker at the time this was written
+// (see touchline-proxy-round42.js, saved alongside this file, for the
+// actual scraper code + deploy note). Wired here with the exact same
+// fail-quiet pattern as fetchClubStats/fetchDeeperStats above so nothing
+// breaks if the route isn't deployed yet - a 404/network failure just
+// leaves state.shotMapByPlayerId empty and every shot-quality UI surface
+// that reads it degrades to "no shot data available" rather than erroring.
+//
+// /shotmap is fetched once at boot (like /clubstats) - it's small (name/
+// team/Understat-id per player, not full shot lists) and needed as the
+// join key before any per-player /shotdata call can be made.
+// /shotdata/:id is deliberately NOT fetched in bulk at boot - see
+// fetchShotDataFor's own comment for why (matches touchline-proxy-round42.js's
+// one-player-per-call design).
+async function fetchShotMap() {
+  if (!WORKER_PROXY_URL) return null;
+  try {
+    const res = await fetch(WORKER_PROXY_URL + "/shotmap", { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length) {
+      state.diagnostics.push({ path: "/shotmap", source: "your Worker", ok: false, error: data.warnings.join("; ") });
+    } else {
+      state.diagnostics.push({ path: "/shotmap", source: "your Worker", ok: true, ms: 0 });
+    }
+    return data;
+  } catch (e) {
+    // Expected/harmless until touchline-proxy-round42.js's /shotmap route
+    // is actually deployed - a 404 here is not a real error, just "not
+    // deployed yet." Still logged to diagnostics (same as every other
+    // route) so it's visible on the Diagnostics panel rather than silent.
+    state.diagnostics.push({ path: "/shotmap", source: "your Worker", ok: false, error: e.message + " (expected until touchline-proxy-round42.js's /shotmap route is deployed)" });
+    return null;
+  }
+}
+// Matches Understat's own numeric player ids onto FPL player ids via the
+// exact same team+name normalization attachDeeperStats already uses -
+// deliberately reusing that convention rather than inventing a second
+// matcher, so this stays consistent with how every other Understat-sourced
+// field on a player already gets matched.
+function attachShotMap(data) {
+  state.shotMapByPlayerId = {};
+  if (!data || !data.players) return;
+  const byKey = {};
+  for (const r of data.players) { if (r.id != null) byKey[normTeam(r.team) + "|" + normName(r.name)] = r.id; }
+  for (const p of state.players) {
+    const team = state.teamsById[p.teamId];
+    if (!team) continue;
+    const tKey = normTeam(team.name);
+    const fullKey = tKey + "|" + normName(p.firstName + " " + p.secondName);
+    const webKey = tKey + "|" + normName(p.webName);
+    const understatId = byKey[fullKey] ?? byKey[webKey];
+    if (understatId != null) state.shotMapByPlayerId[p.id] = understatId;
+  }
+}
+// Lazily fetches ONE player's full shot list, only when actually needed
+// (a player detail panel that wants to show shot-quality detail) - not at
+// boot, matching touchline-proxy-round42.js's deliberate one-player-per-
+// call route design (no bulk "every player's shots" endpoint exists, so
+// fetching this for the whole ~600-player pool at boot would mean ~600
+// separate Understat page scrapes on every page load, which the Worker
+// route was specifically designed to avoid). Cached client-side per
+// Understat id for the session (state.shotDataCache) so re-opening the
+// same player's panel doesn't re-fetch. Returns null (not throwing) on
+// any failure - same fail-quiet contract as every other optional-data
+// fetch in this app - callers should treat null as "no shot data
+// available," not as an error to surface loudly.
+async function fetchShotDataFor(playerId) {
+  if (!WORKER_PROXY_URL) return null;
+  const understatId = state.shotMapByPlayerId && state.shotMapByPlayerId[playerId];
+  if (understatId == null) return null; // no Understat match for this player - not an error, just no data
+  if (!state.shotDataCache) state.shotDataCache = {};
+  if (state.shotDataCache[understatId] !== undefined) return state.shotDataCache[understatId];
+  try {
+    const res = await fetch(WORKER_PROXY_URL + "/shotdata/" + understatId, { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length && !data.shots.length) {
+      state.shotDataCache[understatId] = null;
+      return null;
+    }
+    state.shotDataCache[understatId] = data.shots || [];
+    return state.shotDataCache[understatId];
+  } catch (e) {
+    state.shotDataCache[understatId] = null;
+    return null;
+  }
+}
+// ---------- Shot quality panel (Round 42, player detail view) ----------
+// Synchronous placeholder shown immediately when a player's detail panel
+// opens (same "render a placeholder, fill it in once the async fetch
+// resolves" pattern the rest of this app's optional-data sections don't
+// currently need, since /clubstats etc. are all fetched once at boot
+// before any tab renders - this ones's per-player, so it genuinely can't
+// be ready synchronously). Three states this can show: no Understat match
+// found for this player at all (state.shotMapByPlayerId has nothing for
+// them - not an error, just genuinely no Understat record, e.g. a very
+// fringe player), route not deployed / fetch failed (graceful fallback
+// text, same tone as the existing "/clubstats route deployed?" banner),
+// or the loading placeholder replaced by real shot-quality numbers.
+function shotQualityPanelHtml(playerId) {
+  const hasMatch = state.shotMapByPlayerId && state.shotMapByPlayerId[playerId] != null;
+  if (!hasMatch) {
+    return `<p class="foot-note" style="margin:0">No Understat match found for this player - shot-level data isn't available for them specifically (this is independent of whether the /shotdata route itself is deployed).</p>`;
+  }
+  return `<p class="foot-note" style="margin:0">Loading shot data…</p>`;
+}
+// Summarizes a raw shot list into the same kind of plain-language signal
+// this app's other formula panels favour (see formulasModalHtml) rather
+// than dumping a raw shot table - average distance/angle (the two
+// strongest real feature-importance factors the user's own research
+// flagged), a situation breakdown (open play vs set piece vs penalty
+// share), and average shot xG as a rough "shot selection quality" read
+// (habitually shooting from high-xG positions vs speculative efforts).
+function summarizeShotQuality(shots) {
+  if (!shots || !shots.length) return null;
+  const n = shots.length;
+  const avg = (fn) => shots.reduce((s, x) => s + (fn(x) || 0), 0) / n;
+  const avgDistance = avg(s => s.distanceYards);
+  const avgAngle = avg(s => s.angleDegrees);
+  const avgXg = avg(s => s.xG);
+  const goals = shots.filter(s => s.result === "Goal").length;
+  const bySituation = {};
+  shots.forEach(s => { const k = s.situation || "Unknown"; bySituation[k] = (bySituation[k] || 0) + 1; });
+  const situationPct = Object.entries(bySituation).map(([k, v]) => ({ situation: k, pct: (v / n) * 100 })).sort((a, b) => b.pct - a.pct);
+  return { n, goals, avgDistance, avgAngle, avgXg, situationPct };
+}
+async function loadShotQualityPanel(container, playerId) {
+  const shots = await fetchShotDataFor(playerId);
+  if (!container.isConnected) return; // panel was collapsed/re-rendered before the fetch resolved
+  if (!shots || !shots.length) {
+    container.innerHTML = `<p class="foot-note" style="margin:0">No shot data available - either the /shotdata route isn't deployed yet on your Worker (see touchline-proxy-round42.js), or this player genuinely has no shots on record this season.</p>`;
+    return;
+  }
+  const summary = summarizeShotQuality(shots);
+  container.innerHTML = `
+    <div style="font-size:12px;line-height:1.7">
+      <div>${summary.n} shots this season · <b>${summary.goals}</b> goals · avg shot xG <b>${summary.avgXg.toFixed(2)}</b></div>
+      <div>Avg distance <b>${summary.avgDistance.toFixed(1)} yds</b> · avg angle <b>${summary.avgAngle.toFixed(0)}°</b> <span style="color:var(--ink-faint)">(the two strongest real shot-quality signals per the shot-location/distance/angle research this section is built from)</span></div>
+      <div style="margin-top:4px">${summary.situationPct.map(s => `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:rgba(148,148,158,0.10);color:var(--ink-dim)">${s.situation} ${s.pct.toFixed(0)}%</span>`).join("")}</div>
+    </div>
+  `;
+}
 // Betting odds (/odds route) - same fail-quiet pattern as the two above.
 // Real bookmaker consensus for upcoming EPL fixtures, used as one of the
 // three signals blended into predicted win/draw/loss % (see
@@ -5546,7 +5703,7 @@ async function loadData() {
     precomputeStrengthRanges();
     computeTeamContributionShares();
 
-    const [fixtures, deeper, clubStats, oddsData, pastFormData] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats(), fetchOdds(), fetchPastForm()]);
+    const [fixtures, deeper, clubStats, oddsData, pastFormData, shotMap] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats(), fetchOdds(), fetchPastForm(), fetchShotMap()]);
     state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
     computeTeamTiers();
@@ -5554,6 +5711,7 @@ async function loadData() {
     attachClubStats(clubStats);
     attachOdds(oddsData);
     attachPastForm(pastFormData);
+    attachShotMap(shotMap); // Round 42 - see fetchShotMap's own comment; no-ops (empty map) until /shotmap is deployed
 
     // Player Stats' "Next GW proj." previously just displayed FPL's own
     // ep_next figure verbatim. Now that fixturesByTeam is loaded, replace
@@ -6996,6 +7154,12 @@ function renderStats() {
                 <div class="detail-block-title">Manual club override</div>
                 <div id="cluboverride-stats-${p.id}">${playerClubOverrideEditorHtml(p.id)}</div>
               </div>
+              ${p.position !== "GK" ? `
+              <div>
+                <div class="detail-block-title">Shot quality (Round 42, requires /shotmap + /shotdata deployed)</div>
+                <div id="shotquality-stats-${p.id}">${shotQualityPanelHtml(p.id)}</div>
+              </div>
+              ` : ""}
             </div>
             <div class="detail-panel-wide">
               <div class="detail-block-title">${p.position === "GK" ? "Goalkeeper attributes (1-20)" : "Player attributes (1-20, FM-style)"}</div>
@@ -7013,6 +7177,8 @@ function renderStats() {
         if (plContainer) wirePriorLeagueEditor(plContainer, p.id);
         const clubOvContainer = document.getElementById(`cluboverride-stats-${p.id}`);
         if (clubOvContainer) wirePlayerClubOverrideEditor(clubOvContainer, p.id);
+        const shotQualityContainer = document.getElementById(`shotquality-stats-${p.id}`);
+        if (shotQualityContainer) loadShotQualityPanel(shotQualityContainer, p.id);
         // Bring the newly-expanded row fully into view - otherwise on
         // shorter viewports the panel can open mostly/entirely below the
         // fold and look "cut off" even though it's just unscrolled-to.
@@ -7045,15 +7211,15 @@ function renderStats() {
       };
     });
   }
-  const budgetNote = document.getElementById("statsBudgetNote");
-  const activeDraft = state.drafts.find(d => d.id === state.activeDraftId);
-  if (activeDraft) {
-    const remaining = BUDGET - squadCost(activeDraft.squad);
-    budgetNote.innerHTML = `<strong>${activeDraft.name}:</strong> <span class="mono" style="color:${remaining < 0 ? "var(--rose,#e05d5d)" : "var(--gold-bright)"}">${fmtPrice(remaining)}</span> remaining of £100.0m (${activeDraft.squad.length}/15 players)${remaining < 0 ? " ⚠️ over budget" : ""}`;
-  } else {
-    budgetNote.textContent = "No active squad draft yet - start one in the Planner tab to track remaining budget here.";
-  }
-
+  // Round 42: the "<Squad name>: £X.Xm remaining of £100.0m (15/15 players)"
+  // budget note that used to render here (statsBudgetNote) was the user's
+  // own active squad draft's context bleeding into Player Stats, which is
+  // meant to be a neutral, all-players browsing view with no reference to
+  // the user's own squad - removed per explicit request ("hide my team
+  // from Player Stats"). That budget/squad-value context still lives where
+  // it belongs: My Team's own summary card and the Planner/Squad Builder
+  // toolbars (see renderMyTeamSummaryCard, renderSquadBuilder's own
+  // "remaining" pill) - nothing was lost, only this one duplicate surface.
   const isLegacyScope = state.statsSeasonScope === "legacy";
   const scopeLabel = isLegacyScope ? "2025/26 (last season)"
     : state.filters.gw !== "ALL" ? `GW${state.filters.gw}` : state.filters.venue !== "ALL" ? (state.filters.venue === "HOME" ? "home games only" : "away games only") : null;
@@ -8631,6 +8797,89 @@ function renderProjectionsPairs(pool, fromGw, toGw, assume90, rotationThreshold,
   const anchorClear = document.getElementById("projPairAnchorClear");
   if (anchorClear) anchorClear.onclick = () => { state.projPairAnchorId = null; renderProjectionsTab(); };
 }
+// ---------- Captaincy view (dedicated sub-view within Projections) ----------
+// Round 42: the user asked for captaincy to have its own view again with
+// playstyle-relevant badges and the "route to points" breakdown genuinely
+// VISIBLE, not just a tooltip - restored as a 4th view mode alongside
+// Table/Best XI/Pairs (not a rebuilt standalone tab - Round 39 already
+// established captaincy belongs inside Projections, this just gives it its
+// own dedicated screen within that same tab). Reuses every scoring/badge
+// function exactly as-is - captaincyScoreForGw, captaincyRouteBreakdown,
+// captaincyMiniBadges, playstyleMatchupBoost, captaincyExplosiveScore,
+// captaincySafeScore, captaincyBadgeHtml - zero scoring logic reimplemented
+// here, this is purely a new render/layout consuming existing results.
+const CAPTAINCY_MODE_LABELS = { balanced: "Balanced", explosive: "Explosive (ceiling)", safe: "Safe (floor)" };
+function renderProjectionsCaptaincy(pool, gwId) {
+  const body = document.getElementById("projectionsBody");
+  const mode = state.projCapMode || "balanced";
+  // Same eligibility the old standalone Captaincy tab used: a real minutes
+  // bar so bit-part players don't clutter a captaincy shortlist, plus
+  // excluding goalkeepers (a GK is never a sane captaincy pick) - scored via
+  // the exact same captaincyScoreForGw used everywhere else this score
+  // appears (Table column, Best XI crown, Player pairs column), so a
+  // player's number here always matches those.
+  const candidates = pool
+    .filter(p => p.position !== "GK" && (p.minutes || 0) >= 450)
+    .map(p => captaincyScoreForGw(p, gwId))
+    .filter(Boolean);
+  const scoreKey = mode === "explosive" ? "explosiveScore" : mode === "safe" ? "safeScore" : "captaincyScore";
+  candidates.sort((a, b) => b[scoreKey] - a[scoreKey]);
+  const top = candidates.slice(0, 20);
+  const routePill = (label, live, prob, eligible) => {
+    if (!eligible) return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:rgba(148,148,158,0.10);color:var(--ink-faint)" title="${label}: not a scoring route for this position">${label} N/A</span>`;
+    const pct = Math.round((prob || 0) * 100);
+    const bg = live ? "rgba(0,255,102,0.16)" : "rgba(148,148,158,0.10)";
+    const color = live ? "var(--gold-bright,#00ff66)" : "var(--ink-faint)";
+    return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${bg};color:${color};font-weight:${live ? 700 : 400}" title="${label} route - ${pct}% likelihood this fixture">${label} ${pct}%</span>`;
+  };
+  const rowsHtml = top.map((scored, idx) => {
+    const p = scored.p, row = scored.row, bd = scored.breakdown;
+    const displayScore = scored[scoreKey];
+    const fx = scored.fixture;
+    const oppLabel = fx && fx.opp ? `${fx.opp.short_name} ${fx.isHome ? "(H)" : "(A)"}` : "No fixture";
+    const boostPct = Math.round((scored.boost || 0) * 100);
+    return `<div class="card" style="padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:14px;font-weight:800;color:var(--ink-faint);width:22px;text-align:center">${idx + 1}</div>
+        ${playerAvatarHtml(p, 30)}
+        <div style="flex:1;min-width:160px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="font-weight:700;font-size:14px">${nameWithPosition(p)}</span>
+            ${captaincyBadgeHtml(p, gwId)}
+          </div>
+          <div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)} · vs ${oppLabel}</div>
+          ${captaincyMiniBadgesHtml(p, gwId, scored)}
+        </div>
+        <div style="text-align:right;min-width:90px">
+          <div class="mono" style="font-size:20px;font-weight:800;color:var(--gold-bright,#00ff66)">${displayScore.toFixed(1)}</div>
+          <div style="font-size:9px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.04em">${CAPTAINCY_MODE_LABELS[mode]} score</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-faint,rgba(255,255,255,0.06))">
+        <div style="font-size:9px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Route to points (${bd.routes} live route${bd.routes === 1 ? "" : "s"}) · Floor ${bd.floorPts.toFixed(1)}pts / Ceiling +${bd.ceilingPts.toFixed(1)}pts · Playstyle/matchup boost +${boostPct}%</div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px">
+          ${routePill("CS", bd.csRoute, bd.csProb, bd.csEligible)}
+          ${routePill("DefCon", bd.defConRoute, bd.defConProb, bd.defConEligible)}
+          ${routePill("Goal", bd.goalRoute, bd.goalProb, true)}
+          ${routePill("Assist", bd.assistRoute, bd.assistProb, true)}
+          ${routePill("Bonus", bd.bonusRoute, bd.bonusProb, true)}
+          ${routePill("Matchup", bd.matchupRoute, bd.matchupQuality, true)}
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  body.innerHTML = `
+    <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--ink-dim)">Sort by:</span>
+      ${Object.entries(CAPTAINCY_MODE_LABELS).map(([key, label]) => `<button type="button" class="chip-btn small${mode === key ? " active" : ""}" data-cap-mode="${key}" style="cursor:pointer">${label}</button>`).join("")}
+    </div>
+    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Goalkeepers excluded; 450+ minutes required. Every badge and route pill below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
+    ${rowsHtml || `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
+  `;
+  body.querySelectorAll("[data-cap-mode]").forEach(btn => {
+    btn.onclick = () => { state.projCapMode = btn.dataset.capMode; renderProjectionsTab(); };
+  });
+}
 function renderProjViewModeRow() {
   const row = document.getElementById("projViewModeRow");
   if (!row) return;
@@ -8644,6 +8893,9 @@ function renderProjViewModeRow() {
     </button>
     <button class="mode-btn${view === "pairs" ? " active" : ""}" data-proj-view="pairs" style="--mode-glow:rgba(224,82,154,0.55)">
       <span class="mode-btn-icon">🤝</span>Player pairs
+    </button>
+    <button class="mode-btn${view === "captaincy" ? " active" : ""}" data-proj-view="captaincy" style="--mode-glow:rgba(0,255,102,0.55)">
+      <span class="mode-btn-icon">👑</span>Captaincy
     </button>
   `;
   row.querySelectorAll("[data-proj-view]").forEach(btn => {
@@ -10935,6 +11187,7 @@ function renderProjectionsTab() {
   // so it ignores the position filter specifically (all other filters -
   // min minutes, price, form - still apply, same pool logic otherwise).
   const pairsView = (state.projView || "table") === "pairs";
+  const captaincyView = (state.projView || "table") === "captaincy";
   let pool = state.players.filter(p => passesEstablishedThreshold(p, minMinutes) && (pitchView || posFilter === "ALL" || p.position === posFilter));
   // In Pairs view, "Max £" is the combined budget for the pair, not a
   // per-player cap - so we don't prune individual players out of the pool
@@ -10957,7 +11210,7 @@ function renderProjectionsTab() {
   // through their own dedicated code paths below, so doing it again here
   // for every pool player on every pitch/pairs/simple render would be pure
   // wasted work on the exact hot path Round 37/38 already flagged.
-  if (!pitchView && !pairsView && !simpleView) {
+  if (!pitchView && !pairsView && !simpleView && !captaincyView) {
     rows.forEach(r => {
       const scored = captaincyScoreForGw(r.p, fromGw);
       r.capScore = scored ? scored.captaincyScore : null;
@@ -10978,6 +11231,10 @@ function renderProjectionsTab() {
   }
   if (pairsView) {
     renderProjectionsPairs(pool, fromGw, toGw, assume90, rotationThreshold, state.projProvenWeight, maxPrice);
+    return;
+  }
+  if (captaincyView) {
+    renderProjectionsCaptaincy(pool, fromGw);
     return;
   }
 
@@ -11071,6 +11328,44 @@ function renderProjectionsTab() {
     };
   });
 }
+// ---------- "How this is calculated" formulas panel ----------
+// Round 42: surfaces the real formulas/weights driving projected points,
+// team goals, the scoreline engine, captaincy, and the playstyle/matchup
+// boost - in plain language, directly in the app (not just the external
+// touchline-formulas-explained.md doc). Every number below is read from the
+// actual live code at the time of writing (same weights this doc already
+// documents as of Round 40/41: 80% proven-ability blend default, 40%
+// boostBonus cap, 30% routeBonus cap, 25% knock penalty, 0.25 own-playstyle
+// weight, 0.6 direct-edge weight, 35%/35% Pi-rating/odds blend, 1.53/1.17
+// kickoff baselines) - if the underlying code's weights ever drift, this
+// text needs updating alongside it, same discipline as the markdown doc.
+// Opened from three entry points (Projections/FDR/Rankings toolbars, each
+// wired to the same openFormulasModal()) since projected points, matchup,
+// captaincy and team goals formulas all matter across those tabs - one
+// panel, not three separate near-duplicates.
+function formulasModalHtml() {
+  const sec = (title, body) => `<div class="card" style="margin-bottom:10px;padding:10px 12px">
+    <div class="detail-block-title" style="font-size:12px">${title}</div>
+    <div class="foot-note" style="margin-top:4px;line-height:1.55">${body}</div>
+  </div>`;
+  return [
+    sec("1. Projected points", `Two independent estimates are blended: <strong>proven ability</strong> (this season's points-per-90, blended with last season's, adjusted by fixture difficulty and start probability) and an <strong>underlying build-up</strong> (appearance + attacking points from xG90/xA90 + clean-sheet points + saves + DefCon (defensive-contribution threshold × 2pts) + expected bonus). Blend: <code>finalProj = proven × 80% + underlying × 20%</code> (the 80/20 split is adjustable via a slider). On top: a player form-comparison multiplier, a playstyle/matchup boost capped at ±12%, and kickoff-time-of-day adjustments (Sunday 16:30 home: attacking points +5%; Saturday 12:30 away: attacking points −10%).`),
+    sec("2. Team goals for/against", `A 50/50 blend of the fixture's Custom FDR score (converted to a multiplier) and this team's predicted xG for the fixture (from the scoreline engine below) divided by the league-average xG per team per game, clamped 0.5-2×. Season GF/GA figures shown elsewhere come from this same pipeline, not a separate calculation.`),
+    sec("3. The scoreline / matchup engine", `Each side's expected goals starts from attack/defence ratings (with any manual overrides), lightly adjusted by squad value (12%) and manager tenure (6%), blended with last season's strength (fading as the season progresses), then driven primarily by each team's REAL season-to-date goals-for/against rate (35% weight early season, ramping to 80% as more games are played), multiplied by a recent-form factor, a head-to-head factor (15% weight when history exists), and a kickoff-time-of-day multiplier (7 real UK broadcast slots, baseline 1.53 home / 1.17 away goals/game). Each side's goal count is modelled as a <strong>discrete Weibull distribution</strong> linked by a <strong>Frank copula</strong> (not plain Poisson) to build a full scoreline probability grid - the single most likely cell is "the" predicted scoreline. Win/draw/loss % is a separate blend: 35% Pi-ratings (results-only iterative team strength) + 35% real betting odds (when available) + the scoreline grid's own probabilities.`),
+    sec("4. Captaincy score", `Starts from the player's projected points for that gameweek, then adds: a <strong>route bonus</strong> (+6% of base projection per "route to points" beyond the first - clean sheet, DefCon, goal threat, assist threat, bonus, or a lopsided matchup - capped at +30%) and a <strong>playstyle/matchup bonus</strong> (<code>projection × playstyleMatchupBoost × 40%</code> - currently the single heaviest-weighted signal, above route diversity). A confirmed doubtful/knock status applies a 25% penalty to the whole score; a confirmed-out player gets no score at all. Explosive and Safe modes re-sort the same players through a ceiling-leaning or floor-leaning lens - nobody is ever filtered out, just reordered.`),
+    sec("5. Playstyle / matchup boost", `Four additive 0-1 components, clamped 0-1 overall: (1) opponent's openness × this player's mobility, (2) opponent's low-block compactness × this player's technical profile, (3) the player's OWN opponent-independent ability rating (weight 0.25 - deliberately never exactly zero, so no player's score floors out completely), (4) direct-opponent attribute edge (weight 0.6, only once the edge is genuinely one-sided). FM attributes (pace, technique, etc.) feed into this term and the Simulation-tab duel engine; for players with 90+ real minutes this season, real FPL-derived stats dominate over FM attributes almost everywhere else.`),
+    `<p class="foot-note" style="margin-top:2px">Every weight/threshold above is read directly from the live code, same source as the full <code>touchline-formulas-explained.md</code> reference document.</p>`,
+  ].join("");
+}
+function openFormulasModal() {
+  const modal = document.getElementById("formulasModal");
+  if (!modal) return;
+  const bodyEl = document.getElementById("formulasModalBody");
+  if (bodyEl) bodyEl.innerHTML = formulasModalHtml();
+  modal.style.display = "flex";
+  const closeBtn = document.getElementById("formulasModalClose");
+  if (closeBtn) closeBtn.onclick = () => { modal.style.display = "none"; };
+}
 function setupProjectionsControls() {
   const fromSelect = document.getElementById("projFromGw");
   const toSelect = document.getElementById("projToGw");
@@ -11092,6 +11387,8 @@ function setupProjectionsControls() {
   heatToggle.onchange = (e) => { state.projHeatmap = e.target.checked; renderProjectionsTab(); };
   simpleToggle.onchange = (e) => { state.projSimpleView = e.target.checked; renderProjectionsTab(); };
   assume90Toggle.onchange = (e) => { state.projAssume90 = e.target.checked; renderProjectionsTab(); };
+  const projFormulasBtn = document.getElementById("projFormulasBtn");
+  if (projFormulasBtn) projFormulasBtn.onclick = openFormulasModal;
   const colContainer = document.getElementById("projColumnToggles");
   if (colContainer && !colContainer.dataset.built) {
     colContainer.dataset.built = "1";
@@ -14035,9 +14332,9 @@ function likelyLineupPickerHtml(t) {
   }).join("");
   return `
     <details>
-      <summary class="mono" style="cursor:pointer;font-size:11px;color:${filled ? "var(--gold-bright)" : "var(--ink-faint)"};font-weight:700;user-select:none">⚽ Likely lineup${filled ? " (set)" : " (not set - using whole squad)"}</summary>
+      <summary class="mono" style="cursor:pointer;font-size:11px;color:${filled ? "var(--gold-bright)" : "var(--ink-faint)"};font-weight:700;user-select:none">⚽ Likely lineup${filled ? " (set - matchups use these starters)" : " (not set - matchups use whole squad)"}</summary>
       <div style="margin-top:6px;padding:8px;border-radius:8px;background:var(--panel-2)">
-        <p class="field-desc" style="margin:0 0 8px;font-size:10.5px">Pick the specific players expected to start in each slot for this club's ${lineup.formation} formation. Matchup calculations (Tactical board auto-matchups, Projections/Captaincy "matchup" boost) use these likely starters instead of the whole squad once at least one slot is set. Leave unset to keep the previous whole-squad behaviour.</p>
+        <p class="field-desc" style="margin:0 0 8px;font-size:10.5px">Pick the specific players expected to start in each slot for this club's ${lineup.formation} formation. Matchup calculations (Tactical board auto-matchups, Projections/Captaincy "matchup" boost) use these likely starters - against every one of this club's upcoming fixtures - instead of the whole squad once at least one slot is set. Leave unset to keep the previous whole-squad behaviour.</p>
         ${slotRows}
         ${filled ? `<button type="button" class="dir-btn" data-lineup-clear="${t.id}" style="margin-top:4px">↺ Clear lineup</button>` : ""}
       </div>
@@ -14970,65 +15267,32 @@ function teamRealGaRate(teamId) {
   }
   return _teamGaRateCache[teamId] ?? null;
 }
-function openFdrPredictModal(teamId, oppId, isHome, gwId) {
-  const team = state.teamsById[teamId], opp = state.teamsById[oppId];
-  const modalFx = gwId != null ? (state.fixtureByTeamAndEvent && state.fixtureByTeamAndEvent[teamId] && state.fixtureByTeamAndEvent[teamId][gwId]) : null;
-  const est = estimateScoreline(teamId, oppId, isHome, modalFx ? modalFx.kickoffTime : null);
-  const score = customFdr(teamId, oppId, isHome);
-  const home = isHome ? team : opp, away = isHome ? opp : team;
-  const homeGoals = isHome ? est.teamGoals : est.oppGoals;
-  const awayGoals = isHome ? est.oppGoals : est.teamGoals;
-  const factors = [];
-  if (est.usedEmpirical) factors.push("actual goals scored/conceded this season (home/away specific where there's enough data)");
-  factors.push("recent form");
-  if (est.usedH2h) factors.push("head-to-head history between these two this season");
-  factors.push("last season's table (weighted down as this season's own results pile up)");
-  factors.push("squad value + manager tenure (light adjustment)");
-  factors.push("attack/defence ratings (minor adjustment only)");
-  if (est.usedPiRatings) factors.push("Pi-ratings (form-sensitive rating built from every real result this season)");
-  if (est.usedOdds) factors.push("real betting odds (bookmaker consensus)");
-  const pct = (x) => (x * 100).toFixed(0) + "%";
-  const altRow = est.model.alternates.map(c =>
-    `<span class="mono" style="margin-right:10px;color:var(--ink-faint)">${c.home}-${c.away} (${pct(c.p)})</span>`
-  ).join("");
-  document.getElementById("fdrPredictBody").innerHTML = `
-    <div class="detail-block-title">GW${gwId} - ${home.name} vs ${away.name}</div>
-    <div style="text-align:center;padding:14px 0;font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace">${homeGoals} – ${awayGoals}</div>
-    <p class="foot-note" style="margin-top:0;text-align:center">Predicted scoreline (${pct(est.model.top.p)} chance of this exact score) - the single most probable result from the model; win/draw/loss % blended with Pi-ratings and real odds where available. Season Avg GF/GA (Clubs/FDR tabs) use the expected-goals average instead, which can differ from this single-match pick.</p>
-    <div style="text-align:center;margin:8px 0 12px;font-size:12px">
-      <span style="margin-right:14px">${home.short_name} win: <b>${pct(est.model.homeWin)}</b></span>
-      <span style="margin-right:14px">Draw: <b>${pct(est.model.draw)}</b></span>
-      <span>${away.short_name} win: <b>${pct(est.model.awayWin)}</b></span>
-    </div>
-    <div class="field-desc" style="margin-bottom:4px">Other plausible scorelines</div>
-    <div style="margin-bottom:10px">${altRow}</div>
-    <p class="foot-note" style="margin-top:0">Modelled xG for the ${team.name === home.name ? "home" : "away"} side is a blend of ${factors.join(", ")}. Custom FDR for ${team.name}: ${score.toFixed(1)}.</p>
-  `;
-  document.getElementById("fdrPredictModal").style.display = "flex";
-}
+// Round 42: openFdrPredictModal (the fixture-pill click -> "predicted
+// scoreline 2-1" modal, with win/draw/loss% and alternate scorelines) was
+// removed per explicit user request to remove the scoreline PREDICTOR as a
+// user-facing feature, to be revamped later. Exactly the same constraint
+// Round 37 applied when removing the Rankings-tab prediction-model editor:
+// the underlying engine (estimateScoreline/scorelineProbabilityGrid, the
+// Weibull+copula+Pi-ratings machinery) is load-bearing infrastructure for
+// FDR's colour/mode pills, Projections, and Captaincy - none of that was
+// touched, only this one UI surface that explicitly showed a predicted
+// scoreline number to the user. Fixture pills on the FDR grid are no
+// longer clickable (no scoreline detail to open) - see renderFdrGrid's
+// pill markup, which no longer wires an onclick or shows a "click for a
+// scoreline estimate" title.
 function renderFdrModeRow() {
   const row = document.getElementById("fdrModeRow");
   row.innerHTML = Object.entries(FDR_MODES).map(([key, m]) => `
     <button class="mode-btn${state.fdrMode === key ? " active" : ""}" data-fdr-mode="${key}" style="--mode-glow:${m.glow}">
       <span class="mode-btn-icon">${m.icon}</span>${m.label}
     </button>
-  `).join("") + `
-    <button class="mode-btn${state.fdrViewScoreline ? " active" : ""}" id="fdrScorelineModeBtn" style="--mode-glow:rgba(224,169,79,0.55)">
-      <span class="mode-btn-icon">📋</span>Scoreline view
-    </button>
-  `;
+  `).join("");
+  // Round 42: the "Scoreline view" mode pill (flipped fixture pills to show
+  // a predicted "2-1" scoreline instead of opponent+H/A) was removed along
+  // with openFdrPredictModal, per the same scope note above - see there.
   row.querySelectorAll("[data-fdr-mode]").forEach(btn => {
     btn.onclick = () => { state.fdrMode = btn.dataset.fdrMode; renderFdrModeRow(); renderFdrGrid(); };
   });
-  // "Scoreline view" used to live as a separate segmented control tucked
-  // into the GW-range toolbar below, easy to miss next to the FDR/Win%/etc
-  // mode pills - it's now a pill in the same row so it reads as a peer
-  // mode rather than a buried secondary toggle. Toggling it flips the
-  // grid's display style; it's independent of which data mode is active.
-  document.getElementById("fdrScorelineModeBtn").onclick = () => {
-    state.fdrViewScoreline = !state.fdrViewScoreline;
-    renderFdrModeRow(); renderFdrViewSeg(); renderFdrGrid();
-  };
   const mode = FDR_MODES[state.fdrMode];
   const legend = document.getElementById("fdrLegendRow");
   if (mode.key === "fdr" || !mode.buckets) {
@@ -15241,7 +15505,6 @@ function renderFdrGrid() {
   const curId = currentEventId();
   const sortBy = state.fdrSort;
   const mode = FDR_MODES[state.fdrMode];
-  const viewMode = state.fdrViewScoreline ? "scoreline" : "colour";
   const showGoals = true; // Avg GF/Avg GA now always shown, no toggle
   const showAvgCol = sortBy !== "alpha";
 
@@ -15311,13 +15574,18 @@ function renderFdrGrid() {
           label = `${oppLabel}<br>${mode.fmt(modeVal)}`;
           bgColor = fdrModeColor(mode, modeVal);
         } else {
-          label = viewMode === "scoreline" && est
-            ? `${oppLabel} ${est.teamGoals}-${est.oppGoals}`
-            : `${oppLabel} ${homeAway}`;
+          // Round 42: the "Scoreline view" (predicted "2-1" text on the
+          // pill) was removed as a user-facing feature - see the scope
+          // note above renderFdrModeRow. Every pill now always shows
+          // opponent + home/away, regardless of mode.
+          label = `${oppLabel} ${homeAway}`;
           bgColor = fdrGradientColor(score);
         }
-        const scoreTitle = `custom FDR ${score.toFixed(1)}` + (est ? `, predicted ${est.teamGoals}-${est.oppGoals}` : "");
-        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="cursor:pointer;background:${bgColor};margin:1px auto;width:56px;font-size:9px;line-height:1.3" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) - ${scoreTitle}. Click for a scoreline estimate.">${label}</div>`;
+        // Round 42: pills are no longer clickable and their tooltip no
+        // longer surfaces a predicted scoreline number - just the custom
+        // FDR score, same removal as openFdrPredictModal above.
+        const scoreTitle = `custom FDR ${score.toFixed(1)}`;
+        return `<div class="fdr-pill" data-team="${t.id}" data-opp="${fx.oppId}" data-home="${fx.isHome}" data-gw="${gwId}" style="background:${bgColor};margin:1px auto;width:56px;font-size:9px;line-height:1.3" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) - ${scoreTitle}.">${label}</div>`;
       }).join("");
       scoresInOrder.push(worstThisGw);
       modeValsInOrder.push(worstModeValThisGw);
@@ -15406,9 +15674,6 @@ function renderFdrGrid() {
   // fixtures. See the #fdrGrid thead th override in the stylesheet.
   const fdrGridEl = document.getElementById("fdrGrid");
   fdrGridEl.innerHTML = `<thead>${head}</thead><tbody>${rows}</tbody>`;
-  fdrGridEl.querySelectorAll(".fdr-pill").forEach(pill => {
-    pill.onclick = () => openFdrPredictModal(Number(pill.dataset.team), Number(pill.dataset.opp), pill.dataset.home === "true", Number(pill.dataset.gw));
-  });
   fdrGridEl.querySelectorAll("[data-fdr-head-sort]").forEach(th => {
     th.onclick = () => {
       const kind = th.dataset.fdrHeadSort;
@@ -15693,20 +15958,12 @@ function renderFdrSortSeg() {
     btn.onclick = () => { state.fdrSort = btn.dataset.fdrSort; renderFdrSortSeg(); renderFdrGrid(); };
   });
 }
-function renderFdrViewSeg() {
-  // The standalone segmented control this used to render was folded into
-  // the "Scoreline view" pill in renderFdrModeRow() - kept as a no-op
-  // (rather than deleted) in case anything still calls it.
-  const el = document.getElementById("fdrViewSeg");
-  if (!el) return;
-  el.innerHTML = `
-    <button class="${!state.fdrViewScoreline ? "active" : ""}" data-fdr-view="colour">Opponent view</button>
-    <button class="${state.fdrViewScoreline ? "active" : ""}" data-fdr-view="scoreline">Scoreline view</button>
-  `;
-  document.querySelectorAll("#fdrViewSeg [data-fdr-view]").forEach(btn => {
-    btn.onclick = () => { state.fdrViewScoreline = btn.dataset.fdrView === "scoreline"; renderFdrViewSeg(); renderFdrGrid(); };
-  });
-}
+// Round 42: renderFdrViewSeg (the already-dead-since-before-Round-37
+// standalone "Opponent view / Scoreline view" segmented control, superseded
+// even before this round by the "Scoreline view" mode pill) removed
+// entirely along with the scoreline-predictor UI it fed - #fdrViewSeg
+// never existed in the HTML (this was already a permanent no-op, per its
+// own prior comment), so nothing else needs to change.
 function setupFdrControls() {
   document.getElementById("fdrStartGw").onchange = renderFdrGrid;
   document.getElementById("fdrEndGw").onchange = renderFdrGrid;
@@ -15720,12 +15977,10 @@ function setupFdrControls() {
     renderFdrGrid();
   };
   renderFdrSortSeg();
-  renderFdrViewSeg();
-  const fdrPredictModalEl = document.getElementById("fdrPredictModal");
-  document.getElementById("fdrPredictClose").onclick = () => { fdrPredictModalEl.style.display = "none"; };
-  fdrPredictModalEl.onclick = (e) => { if (e.target.id === "fdrPredictModal") e.target.style.display = "none"; };
   setupFdrSwingControls();
   renderChipAdvisorPanel();
+  const fdrFormulasBtn = document.getElementById("fdrFormulasBtn");
+  if (fdrFormulasBtn) fdrFormulasBtn.onclick = openFormulasModal;
 }
 
 // ---------- Chip advisor (Bench Boost / Triple Captain timing) ----------
@@ -19709,6 +19964,8 @@ function setupRankingsControls() {
   setupRankingsPresets();
   const exportBtn = document.getElementById("exportSettingsBtn");
   if (exportBtn) exportBtn.onclick = exportTouchlineSettings;
+  const rankingsFormulasBtn = document.getElementById("rankingsFormulasBtn");
+  if (rankingsFormulasBtn) rankingsFormulasBtn.onclick = openFormulasModal;
 }
 // Keys that make up a person's "setup" - their rankings/customizations -
 // as opposed to one-off internal flags (startOfSeasonSeeded,
