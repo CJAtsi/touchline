@@ -8660,8 +8660,15 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // a modest ±12% so this refines the projection rather than dominating
     // it, since the underlying matchup inference is a best-effort read of
     // real stats, not confirmed data (see likelyOpponentFor/inferredRole).
+    // Round: matchup boost now reads computeAggregatedMatchupScore (blends
+    // several weighted opponents by role - see that function's own comment)
+    // instead of a single likelyOpponentFor pick. oppPlayer (for the
+    // bestMatchup display) still resolves to the single PRIMARY opponent
+    // (pin, or best-ability same-role pick) purely for the "biggest
+    // mismatch" label/hover - the actual matchupScore used to move the
+    // projection is the blended aggregate, not just this one player's duel.
     const oppPlayer = likelyOpponentFor(p, fx.oppId);
-    const matchupScore = oppPlayer ? overallMatchupScore(p.id, oppPlayer.id) : null;
+    const matchupScore = computeAggregatedMatchupScore(p, fx.oppId, fx.isHome);
     if (matchupScore !== null) {
       const matchupMult = 1 + Math.max(-0.12, Math.min(0.12, (matchupScore - 50) / 50 * 0.12));
       finalProj *= matchupMult;
@@ -10725,9 +10732,12 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
   // route/pill already communicate; this stays a pure upside nudge like
   // teamOpennessBoost above) and only kicks in once the edge is genuinely
   // one-sided (>58%), not just a coin-flip-adjacent edge.
-  const opp = likelyOpponentFor(p, opponentTeamId);
-  const edge = opp ? matchupAttributeEdge(p, opp) : null;
-  const directEdgeBoost = edge && edge.favoured === "A" && edge.pctA > 58 ? (edge.pctA - 58) / 42 : 0; // 0 to 1
+  // Round: direct-opponent edge now reads aggregatedMatchupEdgePct (blends
+  // several weighted opponents by role, same aggregation
+  // computeAggregatedMatchupScore uses for the Projections boost - see that
+  // function's own comment) instead of a single likelyOpponentFor pick.
+  const aggPctA = aggregatedMatchupEdgePct(p, opponentTeamId);
+  const directEdgeBoost = aggPctA !== null && aggPctA > 58 ? (aggPctA - 58) / 42 : 0; // 0 to 1
   // Player's own playstyle rating (Round 38) - see this function's own
   // comment, term 3: opponent-independent, so it's the one component here
   // that's essentially never 0, guaranteeing the combined score isn't
@@ -10876,6 +10886,111 @@ function captaincyScoreForGw(p, gwId) {
   _capScoreCache.set(cacheKey, result);
   return result;
 }
+// ---- Shot/chance VOLUME + QUALITY, for Explosive/Safe captaincy modes ----
+// Real per-90 shots/chances-created data lives in p.dsShots/p.dsKeyPasses
+// (see SIM_MATCH_OUTPUT_STATS's "shots"/"chancesCreated" entries and the
+// note at STAT_THEMES/activeColumns above) - the Understat/FBref scrape
+// that populates them is confirmed unreliable (Understat's playersData
+// markers move, FBref 403s), so most players fall through to the same
+// fallback ratios SIM_MATCH_OUTPUT_STATS already uses: shots90 ≈ xg90*4.5,
+// chancesCreated90 ≈ xa90*3. Reusing those exact fallback constants here
+// (rather than inventing new ones) keeps this consistent with what the
+// Simulation tab already shows for the same player, and means a player
+// with zero real scrape match still gets a sane non-zero volume read
+// rather than falling out of the captaincy comparison entirely.
+function shotsPer90(p) {
+  const real = per90Rate(p.dsShots, p.minutes);
+  return real != null ? real : (p.xg90 || 0) * 4.5;
+}
+function chancesCreatedPer90(p) {
+  const real = per90Rate(p.dsKeyPasses, p.minutes);
+  return real != null ? real : (p.xa90 || 0) * 3;
+}
+// Shot QUALITY proxy: xG per shot (a genuinely real ratio when real shot
+// volume is matched - xg90 is always real FPL data regardless). Clamped to
+// a sane 0.03-0.6 xG/shot band (a single penalty at ~0.76 xG or a legitimate
+// tap-in can otherwise produce a wild ratio off a small shots90 denominator)
+// and normalized 0-1 against a 0.05 (very low quality, pot-shots) to 0.25
+// (very high quality, mostly clear-cut/close-range chances) reference range -
+// real-world striker xG/shot sits roughly in that band.
+function shotQualityScore(p) {
+  const shots90 = shotsPer90(p);
+  if (!shots90 || shots90 <= 0) return 0.5; // no shot volume signal at all - neutral, not a penalty
+  const xgPerShot = Math.max(0.03, Math.min(0.6, (p.xg90 || 0) / shots90));
+  return Math.max(0, Math.min(1, (xgPerShot - 0.05) / 0.20));
+}
+// Chance-creation QUALITY proxy: xA per chance created, same shape as
+// shotQualityScore above (xa90 is real FPL data; chancesCreatedPer90 is
+// real-or-fallback per-90 volume) - a smaller reference band since an
+// average key pass converts to an assist far less often than an average
+// shot converts to a goal.
+function chanceQualityScore(p) {
+  const cc90 = chancesCreatedPer90(p);
+  if (!cc90 || cc90 <= 0) return 0.5;
+  const xaPerChance = Math.max(0.01, Math.min(0.3, (p.xa90 || 0) / cc90));
+  return Math.max(0, Math.min(1, (xaPerChance - 0.02) / 0.10));
+}
+// FM-attribute amplifiers - Explosive wants finishing/composure (shots) and
+// passing/vision/technique (chances created) to AMPLIFY the volume signal
+// (a big-volume shooter who's also clinical is a stronger explosive case
+// than the same volume from a wayward one), not replace it; Safe wants the
+// same attribute pairs to CONFIRM quality (a moderate-volume, high-quality
+// creator whose attributes back that up reads as more reliably safe than
+// one whose quality number might be a small-sample fluke). Both normalized
+// 0-1 off the 1-20 FM scale the same way playstyleMatchupBoost's own
+// attribute terms are (a 10/20 base-default attribute reads as neutral,
+// not a penalty - see that function's mobilityScore/technicalScore comment).
+function shootingAttributeScore(p) {
+  const finishing = getFmAttributeValue(p.id, "shooting");
+  const composure = getFmAttributeValue(p.id, "composure");
+  return Math.max(0, Math.min(1, ((finishing + composure) / 2 - 10) / 9));
+}
+function chanceCreationAttributeScore(p) {
+  const passing = getFmAttributeValue(p.id, "passing");
+  const vision = getFmAttributeValue(p.id, "vision");
+  const technique = getFmAttributeValue(p.id, "technique");
+  return Math.max(0, Math.min(1, ((passing + vision + technique) / 3 - 10) / 9));
+}
+// EXPLOSIVE volume term (spec item 6): rewards HIGH-VOLUME shot/chance
+// generation - count weighted heavier than per-chance quality, since more
+// shots/chances at any given quality means more realistic paths to a goal
+// or assist (or more than one). shots90/chancesCreated90 normalized
+// against a genuinely high-volume reference (2.5 shots/90, 2 chances
+// created/90 - roughly a genuine focal-point attacker's rate), then a
+// SMALL quality nudge (only 20% of the term's own weight - explicitly
+// lighter than volume per spec) on top, and the matching FM attribute
+// pair amplifies the whole thing multiplicatively (1.0-1.3x) rather than
+// being added as its own separate signal - "FM stats amplify the volume
+// signal, not replace it", per spec item 6.
+function explosiveVolumeScore(p) {
+  const shotVolNorm = Math.max(0, Math.min(1, shotsPer90(p) / 2.5));
+  const ccVolNorm = Math.max(0, Math.min(1, chancesCreatedPer90(p) / 2.0));
+  const volume = shotVolNorm * 0.6 + ccVolNorm * 0.4; // shots weighted a little heavier than chances created - a shot is this player's own direct route to points, a chance created is one step removed (needs a teammate to finish it)
+  const quality = shotQualityScore(p) * 0.6 + chanceQualityScore(p) * 0.4;
+  const base = volume * 0.8 + quality * 0.2; // volume dominant, quality a minor confirming nudge - per spec item 6
+  const attrAmplifier = 1 + (shootingAttributeScore(p) * 0.6 + chanceCreationAttributeScore(p) * 0.4) * 0.3; // 1.0x-1.3x
+  return Math.max(0, Math.min(1, base * attrAmplifier));
+}
+// FLOOR/SAFE quality term (spec item 7): the opposite emphasis from
+// Explosive - balances volume WITH quality (roughly even weight, not
+// volume-dominant), and the same FM attribute pair here CONFIRMS quality
+// (reinforces a moderate-volume, high-quality-chance player's reliability)
+// rather than amplifying raw volume - so it's blended additively into the
+// quality half of the score, not as a multiplier on the whole thing.
+function floorChanceScore(p) {
+  const shotVolNorm = Math.max(0, Math.min(1, shotsPer90(p) / 2.5));
+  const ccVolNorm = Math.max(0, Math.min(1, chancesCreatedPer90(p) / 2.0));
+  const volume = shotVolNorm * 0.6 + ccVolNorm * 0.4;
+  const rawQuality = shotQualityScore(p) * 0.6 + chanceQualityScore(p) * 0.4;
+  const attrConfirmation = shootingAttributeScore(p) * 0.6 + chanceCreationAttributeScore(p) * 0.4;
+  // Quality half is itself a blend of the real xG/xA-per-chance ratio and
+  // the FM attribute read confirming it - a genuinely elite quality ratio
+  // backed up by real finishing/passing attributes scores higher than the
+  // same ratio on a player whose attributes suggest it might be a small-
+  // sample-size overachievement.
+  const quality = rawQuality * 0.7 + attrConfirmation * 0.3;
+  return Math.max(0, Math.min(1, volume * 0.5 + quality * 0.5)); // balanced, not volume-dominant - per spec item 7
+}
 // ---- Safe / Explosive re-scoring modes (item 3) ----
 // Both re-SCORE and re-SORT the same pool the default "Captaincy score"
 // column does - they never filter/hide anyone, per your steer (everyone
@@ -10921,6 +11036,13 @@ function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   const ceilingNorm = Math.max(0, Math.min(1, breakdown.ceilingPts / 8)); // ~8pts ceiling is a genuinely explosive contingent upside
   const xgiNorm = Math.max(0, Math.min(1, xgi / 1.0));
   const teamXgNorm = Math.max(0, Math.min(1, teamXg / 2.2));
+  // Shot/chance VOLUME term (spec item 6) - rewards a HIGH-VOLUME generator
+  // of shots/chances created (more plausible paths to more than one goal/
+  // assist) over a lower-volume, higher-quality-per-chance player; FM
+  // finishing/composure (shots) and passing/vision/technique (chances
+  // created) amplify this term rather than being scored separately - see
+  // explosiveVolumeScore's own comment for the exact shape.
+  const volumeNorm = explosiveVolumeScore(p);
   // Weighted sum - playstyle/matchup boost weighted heaviest per your
   // steer ("lean heavily on playstyle and matchup", then "boost the
   // matchup AGAIN" this round) - raised from 0.30 to 0.35. ceilingNorm's
@@ -10931,8 +11053,12 @@ function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   // combined additively, not a probability split), just needs to stay a
   // sane relative weighting, which it still is with matchup as the clear
   // single heaviest term. Defensive-specific terms only apply to DEF/GK (0
-  // otherwise so they don't dilute an attacker's score).
-  let score = boost * 0.35 + ceilingNorm * 0.18 + xgiNorm * 0.16 + teamXgNorm * 0.12 + fixtureEase * 0.10 + csUpside * 0.05 + defenceUpside * 0.05;
+  // otherwise so they don't dilute an attacker's score). volumeNorm added
+  // at 0.14 - a genuine new signal, not just re-weighting xGI (xGI is a
+  // season-long OUTCOME rate; volumeNorm is this fixture-agnostic shot/
+  // chance GENERATION rate, a different real read) - taken from a small
+  // trim off ceilingNorm/xgiNorm/teamXgNorm rather than diluting matchup.
+  let score = boost * 0.35 + ceilingNorm * 0.15 + xgiNorm * 0.13 + teamXgNorm * 0.10 + volumeNorm * 0.14 + fixtureEase * 0.08 + csUpside * 0.05 + defenceUpside * 0.05;
   // Round: hidden-gem/low-ownership score bump REMOVED per user decision
   // ("pure badge, no score effect") - it used to multiply the score up to
   // +25% for a sub-8%-owned player, which meant two players with an
@@ -10960,7 +11086,13 @@ function captaincySafeScore(p, row, breakdown, routeCoefficient, fitness) {
   const routesNorm = Math.max(0, Math.min(1, breakdown.routes / 5));
   const consistency = Math.max(0, Math.min(1, (p.pointsPerGame || 0) / 7)); // proven season-long PPG, large sample
   const startReliability = Math.max(0, Math.min(1, ((p.minutes || 0) >= 300 ? 1 : (p.minutes || 0) / 300)));
-  let score = floorNorm * 0.35 + routeCoefNorm * 0.25 + routesNorm * 0.15 + consistency * 0.15 + startReliability * 0.10;
+  // Shot/chance QUALITY-BALANCED term (spec item 7) - the opposite emphasis
+  // from Explosive's volumeNorm: still incorporates chance COUNT, but
+  // balanced evenly with chance QUALITY (xG/shot, xA/chance), with FM
+  // finishing/composure/passing/vision/technique CONFIRMING quality rather
+  // than amplifying volume - see floorChanceScore's own comment.
+  const chanceScore = floorChanceScore(p);
+  let score = floorNorm * 0.32 + routeCoefNorm * 0.22 + routesNorm * 0.13 + consistency * 0.13 + startReliability * 0.08 + chanceScore * 0.12;
   if (fitness === "knock") score *= 0.75; // a genuine knock undermines "reliable" regardless of mode
   return score;
 }
@@ -21055,6 +21187,276 @@ function likelyOpponentFor(p, oppTeamId) {
     if (fullPosPool.length) return fullPosPool.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
   }
   return null;
+}
+// ---- Aggregated matchup (multi-opponent blend) ----
+// likelyOpponentFor above picks ONE opponent (pinned, or best-ability same-
+// role) - a reasonable simplification, but a real matchup for a winger is
+// never just "the RB", it's mostly the RB with a side-order of the near
+// centre-back covering inside and the nearest midfielder screening; a
+// striker's real matchup is the WHOLE back line, not just the best/nearest
+// CB; a central midfielder's real matchup rotates across all their
+// opponent's central mids, not one nailed-on individual. This blends
+// several opponents, weighted by how much they actually matter for that
+// player's role, into one aggregated score - used everywhere a single
+// "direct opponent edge" used to be read (Projections/Captaincy's ±12%
+// matchup-boost term via overallMatchupScore, and playstyleMatchupBoost's
+// direct-opponent-edge term).
+//
+// Role buckets (SPECIFIC_POSITIONS tags, falling back to inferredRole for
+// anyone untagged):
+//   WINGER  (LW/RW/LM/RM, or MID/FWD tagged WIDE by inferredRole) - 85%
+//     the direct fullback/wingback on the same side (mirrored: a left-
+//     sided player faces the opponent's RIGHT-sided defender, same
+//     mirroring convention tacticalAutoPresetMatchups already uses), 10%
+//     the centre-back nearest that fullback, 5% the nearest midfielder.
+//     "Fullback" resolution: a back-5 (LWB/RWB present) uses the wingback
+//     on that side; a back-3/4 with no wingbacks falls back to the nearest
+//     same-side wide midfielder (LM/RM) as the primary 85% opponent instead.
+//   STRIKER (ST/CF, or FWD tagged CENTRAL) - simple equal-weight average
+//     across every opposing centre-back, whatever the opponent's defensive
+//     shape (back-2/3/4 all just average across however many CBs exist).
+//     Deliberately NOT start-probability-weighted, per explicit user steer.
+//   CENTRAL MID (CDM/CM/LCM/RCM/CAM, or MID tagged CENTRAL) - simple
+//     equal-weight average across all of the opponent's central-midfield
+//     players (up to 3; whatever central-mid roles the opponent's shape
+//     actually has, e.g. 2 in some back-3 systems).
+//   Anything else (GK, wide defenders, untagged/ambiguous) - falls back to
+//     likelyOpponentFor's single-opponent read (no aggregation defined for
+//     these roles in the spec; behaviour unchanged from before this change).
+//
+// PIN BEHAVIOUR: a pinned Tactical-board matchup (state.h2hMatchups, non-
+// setPiece) does NOT bypass this aggregation - it sets which player anchors
+// the primary/highest-weighted slot (the 85% winger opponent, or one seat
+// in the striker/mid average) instead of the auto-inferred pick, while the
+// secondary auto-detected opponents still blend in on top exactly as
+// normal. This mirrors likelyOpponentFor's own "pin wins the SELECTION,
+// not the whole read" precedent.
+//
+// Returns { score, weighted: [{opp, weight}] } - score is 0-100, same scale
+// as overallMatchupScore, so callers can plug it in as a drop-in blended
+// replacement for a single overallMatchupScore(p.id, opp.id) call.
+// scoreFn defaults to overallMatchupScore (duel-engine 0-100 score) but can
+// be swapped for a matchupStrengthScore-based comparator (see
+// aggregatedMatchupEdgePct below, used by playstyleMatchupBoost) - the
+// opponent-selection/weighting logic is identical either way, only what
+// gets measured once the opponent set is resolved differs.
+function opponentPoolFor(oppTeamId) {
+  const likelyIds = likelyLineupPlayerIdsFor(oppTeamId);
+  return likelyIds ? state.players.filter(x => likelyIds.includes(x.id)) : state.players.filter(x => x.teamId === oppTeamId);
+}
+// Pinned (non-setPiece) opponent for player p against oppTeamId, if any -
+// same lookup likelyOpponentFor uses for its own pin check, pulled out so
+// the aggregation below can use it as an ANCHOR rather than a full
+// single-opponent override.
+function pinnedOpponentFor(p, oppTeamId) {
+  const key = h2hMatchupKey(p.teamId, oppTeamId);
+  const pinned = state.h2hMatchups[key] || [];
+  for (const m of pinned) {
+    if (m.setPiece) continue;
+    if (m.playerAId === p.id) { const opp = state.players.find(x => x.id === m.playerBId); if (opp) return opp; }
+    if (m.playerBId === p.id) { const opp = state.players.find(x => x.id === m.playerAId); if (opp) return opp; }
+  }
+  return null;
+}
+function specificRoleOf(p) { return getSpecificPosition(p.id) || null; }
+const AGG_WINGER_TAGS = ["LW", "RW", "LM", "RM"];
+const AGG_STRIKER_TAGS = ["ST", "CF"];
+const AGG_CENTRAL_MID_TAGS = ["CDM", "CM", "LCM", "RCM", "CAM"];
+// Side ("L"/"R") this player lines up on, for mirrored fullback matching -
+// from their specific-position tag first (most reliable), else a coarse
+// guess from the tag's first letter isn't available (untagged), in which
+// case null (caller treats that as "no reliable side", falls back to
+// nearest-available rather than a specific mirrored pick).
+function aggPlayerSide(p) {
+  const tag = specificRoleOf(p);
+  if (tag && tag[0] === "L") return "L";
+  if (tag && tag[0] === "R") return "R";
+  return null;
+}
+const AGG_OPPOSITE_SIDE = { L: "R", R: "L" };
+// Resolves the weighted opponent set for a WINGER (LW/RW/LM/RM), mirrored
+// side-matching per the spec: a left-sided player's primary opponent is
+// found on the opponent's RIGHT side (two sides face each other, so a left
+// winger runs at the opponent's right-back, not their own left-back - same
+// mirroring tacticalAutoPresetMatchups already applies for LCM/RCM).
+function aggWingerOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  const side = aggPlayerSide(p);
+  const wantSide = side ? AGG_OPPOSITE_SIDE[side] : null;
+  const defs = pool.filter(x => x.position === "DEF");
+  const wingbacks = defs.filter(x => specificRoleOf(x) === "LWB" || specificRoleOf(x) === "RWB");
+  const hasBack5Wingbacks = wingbacks.length > 0;
+  // Primary (85%): the wingback on the mirrored side if the opponent plays
+  // a back-5; else the nearest same-mirrored-side wide midfielder (LM/RM);
+  // else (no side info, or neither exists) the ability-best defender/wide
+  // player available, matching likelyOpponentFor's own "best available"
+  // fallback philosophy rather than leaving the primary slot empty.
+  let primary = null;
+  if (hasBack5Wingbacks) {
+    primary = wantSide ? wingbacks.find(x => specificRoleOf(x) === wantSide + "WB") : null;
+    if (!primary) primary = wingbacks.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  } else {
+    const mids = pool.filter(x => x.position === "MID");
+    const wideMids = mids.filter(x => specificRoleOf(x) === "LM" || specificRoleOf(x) === "RM");
+    if (wideMids.length) {
+      primary = wantSide ? wideMids.find(x => specificRoleOf(x) === wantSide + "M") : null;
+      if (!primary) primary = wideMids.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+    } else {
+      // No wingbacks AND no tagged wide midfielders - fall back to the
+      // opponent's fullback (LB/RB) as the closest real-world equivalent,
+      // still preferring the mirrored side when known.
+      const fullbacks = defs.filter(x => specificRoleOf(x) === "LB" || specificRoleOf(x) === "RB");
+      const candidates = fullbacks.length ? fullbacks : defs;
+      primary = wantSide ? candidates.find(x => specificRoleOf(x) === wantSide + "B") : null;
+      if (!primary) primary = candidates.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+    }
+  }
+  // A pinned matchup ANCHORS the primary slot (spec item 4) - replaces the
+  // auto-inferred primary pick, but the secondary 10%/5% terms below still
+  // auto-detect and blend in regardless of whether a pin exists.
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  if (pinned) primary = pinned;
+  // Secondary (10%): the centre-back nearest that primary opponent's side -
+  // prefer a CB tagged to the same mirrored side (LCB/RCB), else the
+  // ability-best CB available. Excludes anyone tagged as a fullback/
+  // wingback (they're not a CB even if untagged elsewhere) but treats a
+  // genuinely untagged DEF as CB-eligible, same "don't silently drop an
+  // untagged player" precedent used throughout this aggregation.
+  const AGG_NON_CB_DEF_TAGS = ["LB", "RB", "LWB", "RWB"];
+  const cbs = defs.filter(x => !AGG_NON_CB_DEF_TAGS.includes(specificRoleOf(x) || ""));
+  let nearCb = wantSide ? cbs.find(x => specificRoleOf(x) === wantSide + "CB") : null;
+  if (!nearCb) nearCb = cbs.filter(x => x.id !== (primary && primary.id)).reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  // Tertiary (5%): the nearest midfielder - prefer the same-mirrored-side
+  // central mid (LCM/RCM/LM/RM whichever exists), else ability-best mid.
+  const mids = pool.filter(x => x.position === "MID" && x.id !== (primary && primary.id));
+  let nearMid = wantSide ? mids.find(x => specificRoleOf(x) === wantSide + "CM" || specificRoleOf(x) === wantSide + "M") : null;
+  if (!nearMid) nearMid = mids.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  const weighted = [];
+  if (primary) weighted.push({ opp: primary, weight: 0.85 });
+  if (nearCb) weighted.push({ opp: nearCb, weight: 0.10 });
+  if (nearMid) weighted.push({ opp: nearMid, weight: 0.05 });
+  return weighted;
+}
+// Striker: simple equal-weight average across every opposing centre-back
+// (back-2/3/4 all just split evenly across however many CBs actually
+// exist) - explicit user steer: NOT start-probability-weighted.
+function aggStrikerOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  const defs = pool.filter(x => x.position === "DEF");
+  let cbs = defs.filter(x => {
+    const tag = specificRoleOf(x);
+    return tag === "CB" || tag === "LCB" || tag === "RCB" || !tag; // untagged DEF defaults into the CB bucket for a striker's matchup, same "don't leave the primary role silently unfilled" precedent as likelyOpponentFor
+  });
+  if (!cbs.length) cbs = defs; // genuinely no CB-ish player found (e.g. an all-wingback back line) - fall back to every defender rather than an empty set
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  // Pin anchors ONE seat in the average (replacing the auto-picked CB it's
+  // most naturally standing in for, if that CB is also in the pool) rather
+  // than being added as an extra unweighted 12th opponent - keeps the
+  // total weight normalized to "one CB's worth" per pin, matching spec
+  // item 4's "pin replaces auto-find, blending stays in place" framing.
+  if (pinned && !cbs.some(x => x.id === pinned.id)) {
+    cbs = cbs.length ? [pinned, ...cbs.slice(1)] : [pinned];
+  } else if (pinned) {
+    cbs = [pinned, ...cbs.filter(x => x.id !== pinned.id)];
+  }
+  if (!cbs.length) return [];
+  const w = 1 / cbs.length;
+  return cbs.map(opp => ({ opp, weight: w }));
+}
+// Central midfielder: simple equal-weight average across the opponent's
+// central-mid players (CDM/CM/LCM/RCM/CAM tags), up to the 3 a normal
+// midfield trio would have - if the opponent's shape only has 2 central
+// mids (some back-3 systems), average across whichever exist.
+function aggCentralMidOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  const mids = pool.filter(x => x.position === "MID");
+  let centrals = mids.filter(x => {
+    const tag = specificRoleOf(x);
+    return tag ? AGG_CENTRAL_MID_TAGS.includes(tag) : true; // untagged MID defaults into the central bucket - a genuine wide mid should be tagged LM/RM to be excluded, same "don't silently drop a player with no tag yet" precedent as elsewhere in this app
+  });
+  if (!centrals.length) centrals = mids;
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  if (pinned) {
+    centrals = [pinned, ...centrals.filter(x => x.id !== pinned.id)];
+  }
+  if (!centrals.length) return [];
+  const w = 1 / centrals.length;
+  return centrals.map(opp => ({ opp, weight: w }));
+}
+// Role bucket this player falls into for aggregation purposes, or null if
+// no aggregation rule applies (caller should fall back to
+// likelyOpponentFor's single-opponent read for these - GK, wide defenders,
+// and anyone genuinely ambiguous).
+function aggregationRoleFor(p) {
+  const tag = specificRoleOf(p);
+  if (tag) {
+    if (AGG_WINGER_TAGS.includes(tag)) return "WINGER";
+    if (AGG_STRIKER_TAGS.includes(tag)) return "STRIKER";
+    if (AGG_CENTRAL_MID_TAGS.includes(tag)) return "CENTRAL_MID";
+    return null; // an explicitly-tagged role this aggregation doesn't cover (GK, CB, LB/RB, LWB/RWB)
+  }
+  // Untagged - fall back to the coarse inferredRole read, same source
+  // likelyOpponentFor already trusts when no specific tag is set.
+  const role = inferredRole(p);
+  if (p.position === "FWD") return role === "WIDE" ? "WINGER" : "STRIKER";
+  if (p.position === "MID") return role === "WIDE" ? "WINGER" : "CENTRAL_MID";
+  return null;
+}
+// Resolves the weighted opponent set for player p against oppTeamId, per
+// the role rules above. Returns [] when this role has no aggregation rule
+// (caller should fall back to a single-opponent read).
+function aggregatedOpponentSet(p, oppTeamId) {
+  const role = aggregationRoleFor(p);
+  if (role === "WINGER") return aggWingerOpponents(p, oppTeamId);
+  if (role === "STRIKER") return aggStrikerOpponents(p, oppTeamId);
+  if (role === "CENTRAL_MID") return aggCentralMidOpponents(p, oppTeamId);
+  return [];
+}
+// THE drop-in replacement for "find THE opponent, score one duel" - blends
+// overallMatchupScore across the weighted opponent set above for
+// WINGER/STRIKER/CENTRAL_MID roles, falling back to the previous single-
+// opponent likelyOpponentFor + overallMatchupScore read for every other
+// role (GK, CB, LB/RB/LWB/RWB, or a genuinely unresolved case) so behaviour
+// for those roles is completely unchanged. Same 0-100 return scale as
+// overallMatchupScore itself, so every existing caller (Projections'
+// matchup-boost term, Captaincy's route-bonus matchup-score check) can
+// swap in this function with no downstream changes needed.
+function computeAggregatedMatchupScore(p, oppTeamId, isHome) {
+  if (!p || !oppTeamId) return null;
+  const weighted = aggregatedOpponentSet(p, oppTeamId);
+  if (!weighted.length) {
+    const opp = likelyOpponentFor(p, oppTeamId);
+    return opp ? overallMatchupScore(p.id, opp.id) : null;
+  }
+  let sum = 0, wSum = 0;
+  weighted.forEach(({ opp, weight }) => {
+    const s = overallMatchupScore(p.id, opp.id);
+    if (s !== null) { sum += s * weight; wSum += weight; }
+  });
+  return wSum > 0 ? sum / wSum : null;
+}
+// Same weighted-opponent blend as computeAggregatedMatchupScore, but
+// measuring matchupAttributeEdge's pctA (this player's share of the
+// combined matchupStrengthScore, 0-100) instead of the duel engine - this
+// is what playstyleMatchupBoost's direct-opponent-edge term needs (it
+// compares against a >58% threshold on pctA, not the SIM_DUELS overall
+// score), so it gets its own aggregator over the SAME opponent set/weights
+// rather than re-deriving a pctA out of a 0-100 SIM_DUELS score that isn't
+// on the same scale.
+function aggregatedMatchupEdgePct(p, oppTeamId) {
+  if (!p || !oppTeamId) return null;
+  const weighted = aggregatedOpponentSet(p, oppTeamId);
+  if (!weighted.length) {
+    const opp = likelyOpponentFor(p, oppTeamId);
+    const edge = opp ? matchupAttributeEdge(p, opp) : null;
+    return edge ? edge.pctA : null;
+  }
+  let sum = 0, wSum = 0;
+  weighted.forEach(({ opp, weight }) => {
+    const edge = matchupAttributeEdge(p, opp);
+    if (edge) { sum += edge.pctA * weight; wSum += weight; }
+  });
+  return wSum > 0 ? sum / wSum : null;
 }
 // Auto-generates a sensible default set of player-vs-player matchups for a
 // team pairing when nothing has been manually pinned on the Tactical board
