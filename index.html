@@ -7101,7 +7101,7 @@ function renderStats() {
         : "";
       tr.innerHTML = `
         <td class="label-col">
-          <div class="name-cell">${nameWithPosition(p)}${unprovenBadge}${noExportBadge}${(p.minutes || 0) >= 450 ? captaincyBadgeHtml(p, currentEventId()) : ""}</div>
+          <div class="name-cell">${nameWithPosition(p)}${unprovenBadge}${noExportBadge}${captaincyBadgeHtml(p, currentEventId())}</div>
           ${statusInfo ? `<div class="status-tag" style="color:${statusInfo[1]}">${statusInfo[0]}</div>` : ""}
         </td>
         <td class="label-col" style="color:var(--ink-dim)">${team ? team.short_name : ""}</td>
@@ -7988,7 +7988,7 @@ async function renderMyTeamPitchForGw(gwId, isFinished) {
   if (!draft) { area.innerHTML = `<div class="empty-state">No squad loaded yet.</div>`; actionsArea.innerHTML = ""; return; }
   const horizon = getHorizonGws(38);
   if (!horizon.includes(gwId)) { area.innerHTML = `<div class="empty-state">${fmtGwName(gwId)} is outside the current planning horizon.</div>`; actionsArea.innerHTML = ""; return; }
-  const timeline = getSquadTimeline(draft, horizon);
+  const timeline = getSquadTimelineCached(draft, horizon);
   const entryTl = timeline.find(t => t.gwId === gwId);
   if (!entryTl) { area.innerHTML = `<div class="empty-state">No plan for ${fmtGwName(gwId)} yet.</div>`; return; }
   state.gwDetailHost = "myteam"; // renderGwDetail's mutation handlers repaint via renderActiveGwHost - see its comment
@@ -8818,8 +8818,18 @@ function renderProjectionsCaptaincy(pool, gwId) {
   // the exact same captaincyScoreForGw used everywhere else this score
   // appears (Table column, Best XI crown, Player pairs column), so a
   // player's number here always matches those.
+  // Round 43: removed the flat 450-minute eligibility gate - it made this
+  // whole view come up empty for the first ~5 gameweeks of a season (nobody
+  // can have played 450 mins that early), even though captaincyScoreForGw
+  // already handles a low-minutes player correctly via the legacy-season
+  // blend inside computeProjectionRow (legacyBlendWeights/seasonBlend ramp
+  // toward last season's rate as this-season minutes approach 0, rather
+  // than the player just projecting 0). Eligibility is now just "has a
+  // fixture and isn't confirmed out" - both already enforced inside
+  // captaincyScoreForGw itself (it returns null otherwise), so no separate
+  // minutes check is needed here.
   const candidates = pool
-    .filter(p => p.position !== "GK" && (p.minutes || 0) >= 450)
+    .filter(p => p.position !== "GK")
     .map(p => captaincyScoreForGw(p, gwId))
     .filter(Boolean);
   const scoreKey = mode === "explosive" ? "explosiveScore" : mode === "safe" ? "safeScore" : "captaincyScore";
@@ -8873,7 +8883,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
       <span style="font-size:12px;color:var(--ink-dim)">Sort by:</span>
       ${Object.entries(CAPTAINCY_MODE_LABELS).map(([key, label]) => `<button type="button" class="chip-btn small${mode === key ? " active" : ""}" data-cap-mode="${key}" style="cursor:pointer">${label}</button>`).join("")}
     </div>
-    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Goalkeepers excluded; 450+ minutes required. Every badge and route pill below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
+    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every badge and route pill below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
     ${rowsHtml || `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
   `;
   body.querySelectorAll("[data-cap-mode]").forEach(btn => {
@@ -10603,7 +10613,7 @@ function playstyleMatchupBoost(p, opponentTeamId, isHome) {
 // FPL data is loaded, at which point invalidateCaptaincyScoreCache() is
 // called to drop stale entries.
 const _capScoreCache = new Map();
-function invalidateCaptaincyScoreCache() { _capScoreCache.clear(); invalidateCaptaincyBestCache(); _proj5Cache.clear(); _projRowCache.clear(); _scorelineCache.clear(); _fcAttrCache.clear(); }
+function invalidateCaptaincyScoreCache() { _capScoreCache.clear(); invalidateCaptaincyBestCache(); _proj5Cache.clear(); _projRowCache.clear(); _scorelineCache.clear(); _fcAttrCache.clear(); if (typeof invalidatePlannerCaches === "function") invalidatePlannerCaches(); }
 // Memoized multi-gameweek projection sum, used by the Planner's "sort
 // transfer-in list by next 5 GW projection" toggle - computeProjectionRow
 // runs a real per-fixture model (matchup boosts, scoreline estimates etc.)
@@ -10642,7 +10652,10 @@ function warmCaptaincyScoreCache() {
   const upcoming = state.events && state.events.filter(e => !e.finished).sort((a, b) => a.id - b.id);
   const gwId = upcoming && upcoming.length ? upcoming[0].id : null;
   if (!gwId) return;
-  const pool = state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
+  // Round 43: no minutes gate here either (see renderProjectionsCaptaincy's
+  // comment) - warming the cache for the same full candidate pool the view
+  // itself now uses, so opening Captaincy right after boot is still fast.
+  const pool = state.players.filter(p => p.position !== "GK");
   // Bigger chunks (was 20) so the whole eligible pool warms in fewer idle
   // slots - still small enough per chunk not to visibly jank the boot
   // sequence's own rendering, but finishes sooner, which is the actual
@@ -11035,7 +11048,9 @@ function _capPoolSignature(pool) {
   return "sq:" + pool.map(p => p.id).sort((a, b) => a - b).join(",");
 }
 function computeTheoreticalBestCaptaincy(gwIds, pool) {
-  const candidates = pool || state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
+  // Round 43: no minutes gate (see renderProjectionsCaptaincy's comment) -
+  // the league-wide "best" pool now matches Captaincy's own eligible pool.
+  const candidates = pool || state.players.filter(p => p.position !== "GK");
   const sig = _capPoolSignature(pool);
   return gwIds.map(gwId => {
     const cacheKey = sig + "|" + gwId;
@@ -11501,6 +11516,47 @@ function getHorizonGws(count) {
 function nextFreeTransfers(available, transfersCount, chip) {
   if (chip === "WC" || chip === "FH") return Math.min(5, available + 1);
   return Math.min(5, Math.max(0, available - transfersCount) + 1);
+}
+// Round 43 perf fix: getSquadTimeline + the rail's computeGwResult calls
+// used to re-run in full (38 gameweeks x formation search x projectPoints
+// per squad player) on EVERY Prev/Next click in the Planner, even though
+// clicking to a different gameweek doesn't change the plan itself - only
+// state.plannerExpandedGw changes. That's what made gameweek navigation
+// slow. Fixed by memoizing both the timeline and the per-row
+// computeGwResult by a cheap signature of the draft's own mutable planning
+// fields (squad/bank/transfersLog/chipsUsed/freeTransfersStart) plus the
+// horizon - these only change when the user actually edits the plan
+// (a transfer, chip, captain, sub), not when they just navigate between
+// gameweeks. Falls through to a real recompute whenever the signature
+// changes, so correctness is unaffected - this is pure caching, no formula
+// changed.
+const _plannerTimelineCache = new Map();
+const _plannerGwResultCache = new Map();
+function _plannerDraftSignature(draft) {
+  return JSON.stringify({
+    squad: draft.squad, bank: draft.bank, transfersLog: draft.transfersLog,
+    chipsUsed: draft.chipsUsed, freeTransfersStart: draft.freeTransfersStart,
+  });
+}
+function invalidatePlannerCaches() { _plannerTimelineCache.clear(); _plannerGwResultCache.clear(); }
+function getSquadTimelineCached(draft, horizonGwIds) {
+  const sig = draft.id + "|" + horizonGwIds.join(",") + "|" + _plannerDraftSignature(draft);
+  const cached = _plannerTimelineCache.get(draft.id);
+  if (cached && cached.sig === sig) return cached.timeline;
+  const timeline = getSquadTimeline(draft, horizonGwIds);
+  _plannerTimelineCache.set(draft.id, { sig, timeline });
+  return timeline;
+}
+// computeGwResult itself is left untouched (still called directly wherever
+// a caller needs a guaranteed-fresh result, e.g. renderGwDetail after a
+// mutation) - this cached wrapper is only for the rail, which re-derives
+// every gameweek's result on every render purely to paint the sidebar.
+function computeGwResultCached(draft, squadIds, gwId, chip, captainId) {
+  const sig = draft.id + "|" + gwId + "|" + _plannerDraftSignature(draft) + "|" + chip + "|" + captainId;
+  if (_plannerGwResultCache.has(sig)) return _plannerGwResultCache.get(sig);
+  const result = computeGwResult(squadIds, gwId, chip, captainId);
+  _plannerGwResultCache.set(sig, result);
+  return result;
 }
 function getSquadTimeline(draft, horizonGwIds) {
   let persistent = [...draft.squad];
@@ -12727,13 +12783,13 @@ function renderGwSimulator(draft) {
   if (state.plannerExpandedGw === undefined || state.plannerExpandedGw === null || !horizon.includes(state.plannerExpandedGw)) {
     state.plannerExpandedGw = horizon[0];
   }
-  const timeline = getSquadTimeline(draft, horizon);
+  const timeline = getSquadTimelineCached(draft, horizon);
   const curGwId = state.plannerExpandedGw;
   const curIdx = horizon.indexOf(curGwId);
 
   let cumulative = 0;
   const railRows = timeline.map(({ gwId, squad, chip, captainId, transfersCount, freeTransfersAvailable }) => {
-    const result = computeGwResult(squad, gwId, chip, captainId || null);
+    const result = computeGwResultCached(draft, squad, gwId, chip, captainId || null);
     const freeTransfers = (chip === "WC" || chip === "FH") ? Infinity : freeTransfersAvailable;
     const hit = Math.max(0, transfersCount - freeTransfers) * 4;
     const net = result.total - (Number.isFinite(hit) ? hit : 0);
@@ -16033,9 +16089,11 @@ function poolWideBenchBoostSignal(gwIds) {
 // loaded) captaincy score per gameweek, ranked, top few surfaced with the
 // same route/fixture reasoning the Captaincy tab already shows.
 function tripleCaptainCandidates(gwIds, squadIds) {
+  // Round 43: no minutes gate on the pool-wide fallback either (see
+  // renderProjectionsCaptaincy's comment) - matches Captaincy's own pool.
   const pool = squadIds && squadIds.length
     ? squadIds.map(id => state.players.find(p => p.id === id)).filter(Boolean)
-    : state.players.filter(p => passesEstablishedThreshold(p, 450) && p.position !== "GK");
+    : state.players.filter(p => p.position !== "GK");
   const results = [];
   for (const gwId of gwIds) {
     const scored = pool.map(p => captaincyScoreForGw(p, gwId)).filter(Boolean).sort((a, b) => b.captaincyScore - a.captaincyScore);

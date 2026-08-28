@@ -23,6 +23,29 @@
  *      compact opponent" read — both built from the same real results,
  *      no API key needed, no rate limit (static file hosting). Route:
  *      /pastform
+ *   6. (Round 42, NEW — not yet consumed by index.html by default, see
+ *      that file's fetchShotMap/fetchShotData for the graceful-fallback
+ *      wiring) Serves shot-level data — x/y location, distance, angle,
+ *      xG per shot, situation (open play / corner / free kick / penalty),
+ *      shot type (foot/head), result, and assisting player — scraped from
+ *      Understat, which is the only one of this project's existing
+ *      sources (Understat/FBref/football-data.co.uk) that exposes
+ *      individual-shot detail rather than season aggregates. Two routes:
+ *        /shotmap — the league's player-name -> Understat numeric player
+ *          ID lookup (needed once per session; Understat's shot data is
+ *          keyed by ITS OWN id, not FPL's), reusing the same playersData
+ *          blob /clubstats already scrapes, with `id` now also captured.
+ *        /shotdata/:understatId — one specific player's full shot list
+ *          for the current season. Deliberately ONE PLAYER PER CALL (not
+ *          a bulk "every player" route like /deeperstats) — Understat has
+ *          no bulk shot-level endpoint, so getting everyone's shots means
+ *          one fetch per player; doing that for ~600 players in a single
+ *          request would blow past a Cloudflare Worker's per-request
+ *          subrequest limit and hammer Understat. The app is expected to
+ *          call this lazily, per player, when a user actually opens that
+ *          player's detail view — see index.html's shot-quality section
+ *          there for the graceful fallback when this route isn't deployed
+ *          or a specific player's fetch fails.
  *
  * HOW TO DEPLOY
  * This project needs THREE files kept in sync on your repo's main branch:
@@ -77,6 +100,12 @@ export default {
     }
     if (url.pathname.startsWith("/pastform")) {
       return handlePastForm(url, request);
+    }
+    if (url.pathname === "/shotmap" || url.pathname === "/shotmap/") {
+      return handleShotMap(url, request);
+    }
+    if (url.pathname.startsWith("/shotdata/")) {
+      return handleShotData(url, request);
     }
     if (isFplApiPath(url.pathname)) {
       return handleFplProxy(url);
@@ -175,6 +204,11 @@ async function scrapeUnderstat() {
   const jsonStr = match[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
   const raw = JSON.parse(jsonStr);
   return raw.map(p => ({
+    // Round 42: `id` is Understat's OWN numeric player id (distinct from
+    // FPL's element id) — was already present in the raw playersData blob
+    // this function scrapes but previously discarded; now captured since
+    // /shotmap needs it as the join key for /shotdata/:understatId.
+    id: p.id != null ? Number(p.id) : null,
     name: p.player_name,
     team: p.team_title,
     games: Number(p.games),
@@ -510,5 +544,162 @@ async function handlePastForm(url, request) {
     },
   });
   if (matches.length) await cache.put(cacheKey, response.clone());
+  return response;
+}
+
+// ---------- 6. Shot-level data (Round 42, NEW) ----------
+// Understat is the only one of this project's three scrape sources that
+// exposes per-shot detail (x/y location, xG, situation, shot type, result,
+// assisting player) rather than season aggregates — confirmed via the
+// `understat` Python package's documented schema and the actively
+// maintained `worldfootballR` R package's real scraper source (both
+// independently name the embedded page variable `shotsData` and the same
+// field set: id, minute, result, X, Y, xG, player, h_a, situation,
+// shotType, match_id, player_assisted, lastAction). This mirrors that
+// exact convention — same hex-decode-then-JSON.parse approach
+// scrapeUnderstat/scrapeUnderstatTeams already use on the league page, just
+// pointed at a player page instead. NOT independently verified against a
+// live fetch from this environment (Understat blocks this sandbox's own
+// fetch tooling via robots.txt / bot detection — the existing /clubstats
+// and /deeperstats routes already work around that by running from a real
+// Cloudflare Worker IP with a real browser User-Agent, which this route
+// reuses via SCRAPE_HEADERS) - deploy and check /shotdata/<id> for one
+// known player before trusting this in the live app.
+//
+// Angle/distance are NOT raw Understat fields (confirmed absent from both
+// reference sources above) - both are simple geometry derived from X/Y
+// here server-side, so the app never needs to reimplement the goal-mouth
+// math client-side. Understat's pitch is normalized 0-1 with the away
+// goal at x=1, y=0.5 (standard Understat convention, attacking left-to-
+// right regardless of home/away) - shotDistanceYards/shotAngleDegrees
+// below assume a 105m x 68m pitch (the standard/most common professional
+// pitch dimensions; Understat doesn't publish the exact one it normalizes
+// against, so this is a reasonable, clearly-labelled approximation, not a
+// precise reverse-engineering of Understat's own unit scale).
+const PITCH_LENGTH_M = 105, PITCH_WIDTH_M = 68, GOAL_WIDTH_M = 7.32;
+function shotGeometry(xNorm, yNorm) {
+  const x = xNorm * PITCH_LENGTH_M, y = yNorm * PITCH_WIDTH_M;
+  const goalX = PITCH_LENGTH_M, goalCenterY = PITCH_WIDTH_M / 2;
+  const dx = goalX - x, dy = y - goalCenterY;
+  const distanceM = Math.sqrt(dx * dx + dy * dy);
+  // Angle subtended by the goal mouth from the shot location (the standard
+  // "shot angle" xG feature) — via the two goalpost positions, not just a
+  // straight-line bearing to the centre spot, since a shot from a tight
+  // angle right next to the byline is a very different chance than one
+  // from the same distance straight in front of goal even though both can
+  // have a similar bearing-to-centre.
+  const postA = { x: goalX, y: goalCenterY - GOAL_WIDTH_M / 2 };
+  const postB = { x: goalX, y: goalCenterY + GOAL_WIDTH_M / 2 };
+  const angToA = Math.atan2(postA.y - y, postA.x - x);
+  const angToB = Math.atan2(postB.y - y, postB.x - x);
+  let angleDeg = Math.abs((angToA - angToB) * (180 / Math.PI));
+  if (angleDeg > 180) angleDeg = 360 - angleDeg;
+  return {
+    distanceYards: Math.round(distanceM * 1.09361 * 10) / 10,
+    angleDegrees: Math.round(angleDeg * 10) / 10,
+  };
+}
+// /shotmap — the league's Understat-player-id lookup. Deliberately its own
+// tiny route (not folded into /clubstats' existing response) so the app
+// can fetch just this small id-lookup table once per session/cache window
+// without pulling the rest of /clubstats' payload along with it, and so a
+// future per-player /shotdata call always has a fresh id to key off even
+// if /clubstats' own cache is stale.
+async function handleShotMap(url, request) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const warnings = [];
+  let players = [];
+  try {
+    const all = await scrapeUnderstat();
+    players = all.filter(p => p.id != null).map(p => ({ id: p.id, name: p.name, team: p.team }));
+    if (!players.length) warnings.push("Understat returned 0 players with a usable id — page structure may have changed.");
+  } catch (e) {
+    warnings.push("Understat player-id lookup failed: " + e.message);
+  }
+
+  const body = JSON.stringify({ players, warnings, syncedAt: new Date().toISOString() });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      "Cache-Control": warnings.length ? "no-store" : "public, max-age=86400",
+    },
+  });
+  if (!warnings.length) await cache.put(cacheKey, response.clone());
+  return response;
+}
+// /shotdata/:understatId — one player's full shot list for the current
+// season, scraped from https://understat.com/player/:id (the shotsData
+// blob embedded there, same hex-decode-then-JSON.parse pattern as
+// playersData/teamsData on the league page). Deliberately single-player
+// per call — see the file-header comment for why this isn't a bulk route.
+async function scrapeUnderstatPlayerShots(understatId) {
+  const res = await fetch(`https://understat.com/player/${understatId}`, { headers: SCRAPE_HEADERS });
+  const html = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} from Understat player ${understatId} — snippet: ${html.slice(0, 200).replace(/\s+/g, " ")}`);
+  const match = html.match(/var\s+shotsData\s*=\s*JSON\.parse\('(.+?)'\);/);
+  if (!match) {
+    const idx = html.indexOf("shotsData");
+    if (idx !== -1) {
+      throw new Error(`"shotsData" found at index ${idx} but didn't match the expected pattern — context: ${html.slice(idx - 40, idx + 200).replace(/\s+/g, " ")}`);
+    }
+    throw new Error(`"shotsData" not found on Understat player ${understatId}'s page — id may be wrong, or the page layout changed.`);
+  }
+  const jsonStr = match[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  const raw = JSON.parse(jsonStr);
+  return raw.map(s => {
+    const xNorm = Number(s.X), yNorm = Number(s.Y);
+    const geo = (Number.isFinite(xNorm) && Number.isFinite(yNorm)) ? shotGeometry(xNorm, yNorm) : { distanceYards: null, angleDegrees: null };
+    return {
+      id: s.id, minute: Number(s.minute) || 0, result: s.result || "",
+      x: xNorm, y: yNorm, xG: Number(s.xG) || 0,
+      distanceYards: geo.distanceYards, angleDegrees: geo.angleDegrees,
+      situation: s.situation || "", shotType: s.shotType || "",
+      lastAction: s.lastAction || "", player: s.player || "",
+      playerAssisted: s.player_assisted || null,
+      isHome: s.h_a === "h", season: s.season || null, date: s.date || null,
+      matchId: s.match_id != null ? Number(s.match_id) : null,
+    };
+  });
+}
+async function handleShotData(url, request) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const parts = url.pathname.split("/").filter(Boolean); // ["shotdata", "1250"]
+  const understatId = parts[1];
+  if (!understatId || !/^\d+$/.test(understatId)) {
+    return new Response(JSON.stringify({ shots: [], warnings: ["No valid Understat player id given — expected /shotdata/<numeric id>, get ids from /shotmap first."], syncedAt: new Date().toISOString() }), {
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
+  }
+
+  const warnings = [];
+  let shots = [];
+  try {
+    shots = await scrapeUnderstatPlayerShots(understatId);
+  } catch (e) {
+    warnings.push(e.message);
+  }
+
+  const body = JSON.stringify({ understatId: Number(understatId), shots, warnings, syncedAt: new Date().toISOString() });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      // A day is the same cadence /deeperstats and /clubstats already use
+      // for season-aggregate scrapes — a player's shot history only grows
+      // after a real match, so daily is plenty fresh without hammering
+      // Understat on every player-detail-panel open.
+      "Cache-Control": warnings.length ? "no-store" : "public, max-age=86400",
+    },
+  });
+  if (!warnings.length) await cache.put(cacheKey, response.clone());
   return response;
 }
