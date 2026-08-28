@@ -1486,6 +1486,7 @@
     <div id="teamResult"></div>
     <div id="myTeamHub" style="display:none">
       <div class="card" id="myTeamSummaryCard" style="margin:16px 0"></div>
+      <div id="myTeamFdrMini"></div>
       <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px">
         <button class="dir-btn" id="myTeamGwPrevBtn" title="Previous gameweek">‹</button>
         <span style="font-size:16px;font-weight:700" id="myTeamGwLabel"></span>
@@ -1933,7 +1934,15 @@ const POS_COLOR = { GK: "var(--gold-bright)", DEF: "var(--emerald)", MID: "var(-
 const SPECIFIC_POSITIONS = {
   GK: ["GK"],
   DEF: ["CB", "LB", "RB", "LWB", "RWB"],
-  MID: ["CDM", "CM", "CAM", "LM", "RM", "LW", "RW"],
+  // LCM/RCM added Round 46 (user request: side-aware central-mid slots for
+  // the Likely lineup picker + mirrored Tactical board auto-matchups) -
+  // every other MID/DEF/FWD entry here already distinguishes left/right
+  // where the real game does (LB/RB, LM/RM, LW/RW); central midfield never
+  // had that distinction even though a genuine back-three or 3-central-mid
+  // shape very much has a left- and right-sided central mid, not just an
+  // interchangeable "CM". Plain "CM" stays available for a lone/single
+  // pivot or a team where the two aren't meaningfully side-differentiated.
+  MID: ["CDM", "CM", "LCM", "RCM", "CAM", "LM", "RM", "LW", "RW"],
   FWD: ["ST", "CF", "LW", "RW"],
 };
 function savePlayerPositions() { persistSet("playerPositions", JSON.stringify(state.playerPositions || {})); }
@@ -4465,16 +4474,7 @@ let state = {
   // grid, tuned by weibullShape/copulaTheta below. Fixed at these defaults
   // (Round 37 removed the Rankings-tab "Edit prediction model" UI that used
   // to let a visitor tune them) - only reachable now via a loaded preset.
-  // Round 45 (user steer): odds weighted heavier than Pi-ratings/the model
-  // grid, specifically because real betting odds price in a huge number of
-  // real-world factors (team news, injuries, referee, weather, motivation,
-  // sharp-money moves) that this app has no way to model directly - "weigh
-  // in betting sentiment heavy since it has many factors I don't want to
-  // calculate". Was 0.35/0.35 (odds and Pi-ratings equal, model grid took
-  // the remaining 0.30); now odds 0.55, Pi-ratings 0.25, model grid the
-  // remaining ~0.20 - still auto-redistributed to Pi-ratings/the grid on
-  // any fixture with no odds match (see blendOutcomeProbs).
-  modelWeights: { piRatingWeight: 0.25, oddsWeight: 0.55, weibullShape: 1.15, copulaTheta: -0.15, piLearningRate: 0.06, piCrossInfluence: 0.6 },
+  modelWeights: { piRatingWeight: 0.35, oddsWeight: 0.35, weibullShape: 1.15, copulaTheta: -0.15, piLearningRate: 0.06, piCrossInfluence: 0.6 },
   piRatings: null, // computed once per data load - see computePiRatings()
   oddsData: [], oddsWarnings: [],
   pastFormMatches: [], pastFormWarnings: [],
@@ -4821,11 +4821,31 @@ async function ensureLegacyStatsCache() {
   }
   state.legacyStatsCacheLoading = false;
   applyFormBlend();
+  // Round 46 fix ("captaincy ratio sometimes shows a different player
+  // first, e.g. Haaland vs De Cuyper at ~95%"): applyFormBlend() just
+  // reblended every player's p.form using real last-season data - this
+  // feeds provenAbility/attackPts (via computeProjectionRow), which feeds
+  // every cached _capScoreCache entry. Captaincy's score cache is warmed
+  // in idle-time chunks starting right at boot (warmCaptaincyScoreCache),
+  // racing this ~700-call background fetch with NO ordering guarantee
+  // between them - whichever finishes first for a given player determines
+  // whether that player's cached captaincy score reflects the pre- or
+  // post-legacy-blend form, and that race resolves differently across
+  // page loads/network conditions. That's the actual "sometimes X first,
+  // sometimes Y first" nondeterminism, not a real scoring bug. Fix:
+  // invalidate the captaincy cache (and everything downstream of it) once
+  // the blend lands, then re-warm and re-render so the Captaincy view
+  // (if currently open) immediately reflects the fully-blended numbers
+  // instead of silently keeping whatever stale scores it happened to
+  // cache first.
+  if (typeof invalidateCaptaincyScoreCache === "function") invalidateCaptaincyScoreCache();
+  if (typeof warmCaptaincyScoreCache === "function") warmCaptaincyScoreCache();
   if (typeof syncDataBlendControls === "function") syncDataBlendControls();
   // Re-render the views whose numbers change once real last-season data is
   // in (they rendered with the pre-cache fallback right after boot).
   renderRankingsList();
   renderStats();
+  if (typeof renderProjectionsTab === "function") renderProjectionsTab();
 }
 // Form blend, pulled out of ensureLegacyStatsCache so the Legacy/Live
 // toggle (dataMode/dataLegacyWeight - see legacyBlendWeights) can re-apply
@@ -5731,14 +5751,20 @@ async function loadData() {
     if (modelNextEvent) {
       state.players.forEach(p => { p.epNext = projectPoints(p, modelNextEvent.id); });
     }
-    // Warm the Captaincy tab's score cache in idle-time chunks right away
-    // (item: "captaincy takes a second to load first time") - fire-and-forget,
-    // does not block the rest of loadData(); by the time the user actually
-    // clicks the tab (always at least a little after boot) most/all of the
-    // eligible pool is already cached, so the tab opens instantly with
-    // every feature computing exactly the same as before.
-    if (typeof warmCaptaincyScoreCache === "function") warmCaptaincyScoreCache();
-
+    // Round 46 fix: warmCaptaincyScoreCache() used to fire right here,
+    // fire-and-forget, BEFORE piRatings/formulas/prior-league overrides/
+    // built-in positions/GK+FM attributes were set below - every `await`
+    // between here and where those actually land (loadShortlistFromStorage,
+    // loadFormulasFromStorage, seedStartOfSeasonRatings) yields the event
+    // loop, giving the idle-scheduled warm-cache chunks a real chance to
+    // run mid-sequence, computing some players' captaincy scores against
+    // stale/unset piRatings or pre-override data while other chunks (timing-
+    // dependent, not consistent across loads) compute against the final
+    // values - once cached, _capScoreCache never re-checks. That race is
+    // the direct cause of "captaincy shows a different top player at ~95%
+    // between reloads" - moved to fire only after every state-mutating step
+    // below has actually landed, so every warmed score reflects the same
+    // final inputs regardless of how idle callbacks happen to interleave.
     // Round 24 perf fix ("many places take a while to load"): these two
     // groups of persisted-storage loads were previously 13 separate
     // sequential `await`s in a row. Each one reads a completely distinct
@@ -5789,6 +5815,15 @@ async function loadData() {
       loadTheme(), loadProjAccuracyLog(),
     ]);
     setBanner(null);
+    // Warm the Captaincy tab's score cache in idle-time chunks right away
+    // (item: "captaincy takes a second to load first time") - fire-and-forget,
+    // does not block the rest of loadData(); by the time the user actually
+    // clicks the tab (always at least a little after boot) most/all of the
+    // eligible pool is already cached, so the tab opens instantly with
+    // every feature computing exactly the same as before. Now fires here,
+    // after piRatings/formulas/overrides/attributes are all in (see the
+    // Round 46 comment above) rather than before them.
+    if (typeof warmCaptaincyScoreCache === "function") warmCaptaincyScoreCache();
     ensureLegacyStatsCache(); // background - not awaited, powers the site-wide form/ability blend once it lands
     populateTeamSelect();
     renderDash();
@@ -8023,6 +8058,7 @@ function renderMyTeamHub(entry, squad, bank) {
   if (!hub || !entry) return;
   hub.style.display = "block";
   renderMyTeamSummaryCard(entry, squad, bank);
+  renderMyTeamFdrMini(squad.map(s => s.player).filter(Boolean));
 
   const allGws = myTeamAllGws();
   if (allGws.length === 0) { document.getElementById("myTeamPitchArea").innerHTML = '<div class="empty-state">No gameweek data available yet.</div>'; return; }
@@ -8045,6 +8081,49 @@ function renderMyTeamHub(entry, squad, bank) {
   renderMyTeamSuggestedTransfers(entry);
 }
 
+// Mini 5-gameweek FDR strip for My Team (user request: "add a mini fdr 5gw
+// from current gameweek table below in my team") - one row per club
+// actually represented in the loaded squad (deduped, alphabetical), next 5
+// gameweeks starting from the current one. Reuses the exact same customFdr/
+// fdrGradientColor pipeline the full FDR tab's grid (renderFdrGrid) already
+// uses - not a separate/simplified calculation, just a squad-scoped, 5-week
+// slice of it living right on My Team so a fixture-run problem is visible
+// without switching tabs.
+function renderMyTeamFdrMini(squadPlayers) {
+  const el = document.getElementById("myTeamFdrMini");
+  if (!el) return;
+  if (!squadPlayers.length || !state.teams.length || !state.events.length) { el.innerHTML = ""; return; }
+  const curId = currentEventId() || state.events.find(e => !e.finished)?.id || state.events[0].id;
+  const gwIds = state.events.map(e => e.id).filter(id => id >= curId).slice(0, 5);
+  if (!gwIds.length) { el.innerHTML = ""; return; }
+  const teams = [...new Set(squadPlayers.map(p => p.teamId))]
+    .map(id => state.teamsById[id]).filter(Boolean)
+    .sort((a, b) => a.short_name.localeCompare(b.short_name));
+  const rows = teams.map(t => {
+    const byGw = {};
+    for (const fx of state.fixturesByTeam[t.id] || []) (byGw[fx.event] ||= []).push(fx);
+    const cells = gwIds.map(gwId => {
+      const fixtures = byGw[gwId] || [];
+      if (!fixtures.length) return `<td class="mono" style="color:var(--ink-faint);text-align:center">–</td>`;
+      const html = fixtures.map(fx => {
+        const opp = state.teamsById[fx.oppId];
+        const score = customFdr(t.id, fx.oppId, fx.isHome);
+        const oppLabel = fx.isHome ? (opp ? opp.short_name : "?") : (opp ? opp.short_name.toLowerCase() : "?");
+        return `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(score)};color:#0b1310" title="${opp ? opp.name : ""} (${fx.isHome ? "Home" : "Away"}) - custom FDR ${score.toFixed(1)}">${oppLabel} ${fx.isHome ? "(H)" : "(A)"}</span>`;
+      }).join("");
+      return `<td style="padding:3px;text-align:center">${html}</td>`;
+    });
+    return `<tr><td class="label-col" style="font-weight:600">${t.short_name}</td>${cells.join("")}</tr>`;
+  });
+  el.innerHTML = `
+    <div class="card" style="margin:0 0 16px;padding:12px 14px">
+      <div class="detail-block-title" style="font-size:12px;margin-bottom:6px">Squad clubs - next ${gwIds.length} fixtures (from ${fmtGwName(gwIds[0])})</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th class="label-col">Club</th>${gwIds.map(id => `<th class="gw-col">GW${id}${id === curId ? " •" : ""}</th>`).join("")}</tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table></div>
+    </div>`;
+}
 // ---- My Team suggested transfers (item: "suggested transfers with
 // different topics") - three angles distinct from the Planner's own
 // Recommended Transfers panel (consistent/long-term/punt, already visible
@@ -8370,42 +8449,11 @@ function fixtureDefConMultiplier(fdrScore) {
   if (fdrScore === null || fdrScore === undefined) return 1;
   return 0.85 + (fdrScore - 1) * (0.35 / 4);
 }
-// Round 45 (user steer, weighted heavily): GAME STATE - how even/open the
-// match itself is projected to be - genuinely moves defensive-contribution
-// output, separately from a player's own rate and the fixture's overall
-// difficulty (fixtureDefConMultiplier above, which reflects the SEASON-LONG
-// fixture difficulty, not this specific projected scoreline). A close,
-// even contest (small projected xG margin between the two sides) tends to
-// stay end-to-end and contested for the full 90 - more genuine tackles/
-// interceptions/clearances/blocks for BOTH sides. A one-sided, likely-to-
-// be-decisive scoreline (big margin) more often turns into the winning
-// side keeping the ball and the losing side chasing shadows rather than
-// making clean defensive actions, or the winning side game-managing once
-// it's safe - either way, fewer of the specific actions DefCon counts.
-// Uses the SAME per-fixture xG estimate already computed by the caller
-// (estimateScoreline's teamXg/oppXg) so this reflects THIS matchup, not a
-// generic team-wide rate. Deliberately a wider range than
-// fixtureDefConMultiplier's 0.85-1.2 - this is meant to be a primary
-// driver here, not a minor nudge, per the explicit "weigh that heavy" ask.
-function gameStateDefConMultiplier(est) {
-  if (!est || est.teamXg == null || est.oppXg == null) return 1;
-  const margin = Math.abs(est.teamXg - est.oppXg);
-  // margin 0 (dead even, likely to stay open/contested) -> 1.3x;
-  // margin 2.5+ (an established, likely-decisive mismatch) -> 0.75x.
-  return Math.max(0.75, Math.min(1.3, 1.3 - margin * 0.22));
-}
-function defConProbability(p, minsFactor, fdrScore, est) {
+function defConProbability(p, minsFactor, fdrScore) {
   if (p.position === "GK") return 0;
   const threshold = DEFCON_THRESHOLD[p.position];
-  const lambda = (p.defensiveContributionPer90 || 0) * minsFactor * teamStyleMultiplier(p.teamId) * fixtureDefConMultiplier(fdrScore) * gameStateDefConMultiplier(est);
-  // Capped below literal certainty - Poisson survival probability can
-  // mathematically round to "100%" once displayed for a high-DefCon-rate
-  // player at a near-guaranteed 90 minutes, but nothing in a 90-minute
-  // football match is ACTUALLY nailed on (a red card, a tactical change, a
-  // genuinely quiet game can always deny it) - per the explicit "nothing
-  // should be 100%" steer. See also the route-probability pills in
-  // captaincyRouteBreakdown, capped the same way for the same reason.
-  return Math.min(0.97, poissonSf(lambda, threshold));
+  const lambda = (p.defensiveContributionPer90 || 0) * minsFactor * teamStyleMultiplier(p.teamId) * fixtureDefConMultiplier(fdrScore);
+  return poissonSf(lambda, threshold);
 }
 // ---- Bonus: exactly 3+2+1=6 bonus points are awarded per real match, so
 // this is modelled as a Plackett-Luce-style ranking over the pool of likely
@@ -8593,47 +8641,32 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // for p.position === "GK").
     const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
     const savesPts = gkSavesPts(p, minsFactor);
-    const defConProb = defConProbability(p, minsFactor, fdrScore, est);
+    const defConProb = defConProbability(p, minsFactor, fdrScore);
     const defConPts = defConProb * 2;
     const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
     const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
     let finalProj = provenProj * provenW + underlyingProj * (1 - provenW);
-    // Round 45: player form-comparison multiplier REMOVED per explicit user
-    // steer - if a player isn't getting into good positions or generating
-    // real xG, that already shows up directly in their own underlying rate
-    // (xg90/xa90/points-per-90 feeding provenAbility/attackPts above), so a
-    // subjective "who's hotter" A/B-quiz multiplier on top of that was
-    // double-counting a signal the real stats already carry, not adding a
-    // genuinely independent one. playerFormCompareMultiplier/the Rankings
-    // "tap the higher one" quiz still exists and still records answers into
-    // state.playerFormCompare, it's just no longer applied here.
+    // Player form comparison multiplier (Rankings tab) - see
+    // playerFormCompareMultiplier. Applied to the whole blended finalProj
+    // (not just one sub-term) so it scales with however much of this
+    // player's projection is actually there to nudge, same shape as the
+    // matchup-boost multiplier just below.
+    finalProj *= playerFormCompareMultiplier(p.id);
     // Matchup boost: who this player is actually likely to face this
     // fixture (pinned Tactical board matchup if set, else same-role
     // inference - see likelyOpponentFor), scored via the same overall
-    // duel-score engine the Simulation tab uses, THEN blended with a
-    // TEAM-level counter-attack/low-block signal (Round 45, user steer:
-    // "a team that progresses the ball fast and has fast players can hurt
-    // on the counter... but if opponents are setting up a low block...
-    // they may not get as much opportunity") - see teamMatchupSignalScore.
-    // The 1v1 duel score answers "is this player individually better than
-    // whoever marks them"; the team signal answers "does this fixture's
-    // shape even give them the space their game depends on" - genuinely
-    // different questions, so blended rather than one replacing the other.
-    // Still capped at a modest ±12% total so this refines the projection
-    // rather than dominating it, since both inputs are best-effort reads,
-    // not confirmed data.
+    // duel-score engine the Simulation tab uses. A genuinely lopsided
+    // matchup (far from the neutral 50) nudges the projection - capped at
+    // a modest ±12% so this refines the projection rather than dominating
+    // it, since the underlying matchup inference is a best-effort read of
+    // real stats, not confirmed data (see likelyOpponentFor/inferredRole).
     const oppPlayer = likelyOpponentFor(p, fx.oppId);
     const matchupScore = oppPlayer ? overallMatchupScore(p.id, oppPlayer.id) : null;
-    const teamSignalScore = teamMatchupSignalScore(p, fx.oppId, fx.isHome);
-    const combinedMatchupScore = matchupScore !== null ? (matchupScore * 0.7 + teamSignalScore * 0.3) : teamSignalScore;
-    if (combinedMatchupScore !== null) {
-      const matchupMult = 1 + Math.max(-0.12, Math.min(0.12, (combinedMatchupScore - 50) / 50 * 0.12));
+    if (matchupScore !== null) {
+      const matchupMult = 1 + Math.max(-0.12, Math.min(0.12, (matchupScore - 50) / 50 * 0.12));
       finalProj *= matchupMult;
-      matchupSum += combinedMatchupScore; matchupN++;
-      // bestMatchup ("vs [Opponent]" display) stays keyed on the raw 1v1
-      // duel score specifically - it names an actual opposing player, which
-      // the team-only signal (no direct opponent needed) can't do.
-      if (matchupScore !== null && (!bestMatchup || Math.abs(matchupScore - 50) > Math.abs(bestMatchup.matchupScore - 50))) {
+      matchupSum += matchupScore; matchupN++;
+      if (!bestMatchup || Math.abs(matchupScore - 50) > Math.abs(bestMatchup.matchupScore - 50)) {
         bestMatchup = { opp: oppPlayer, matchupScore, gw };
       }
     }
@@ -8722,26 +8755,15 @@ function computeProjPerGw(p, fromGw, toGw, assume90, rotationThreshold, provenAb
       const csPct = est ? FDR_MODES.cleansheet.value(est, fx.isHome) : null;
       const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
       const savesPts = gkSavesPts(p, minsFactor);
-      const defConProb = defConProbability(p, minsFactor, fdrScore, est);
+      const defConProb = defConProbability(p, minsFactor, fdrScore);
       const defConPts = defConProb * 2;
       const bonusPts = expectedBonusForFixture(p, fx, minsFactor);
       const underlyingProj = appearancePts + attackPts + csPts + savesPts + defConPts + bonusPts;
       let gwProj = provenProj * provenW + underlyingProj * (1 - provenW);
-      // Round 45: form-comparison multiplier removed (see computeProjectionRow's
-      // own comment for why) - kept in sync deliberately so this per-gw
-      // projection and the season-summed one there can never disagree.
-      // Matchup boost (1v1 duel + team openness/low-block signal) - same
-      // formula and same reasoning as computeProjectionRow, added here too
-      // since this function was previously missing it entirely, a real
-      // divergence from the season-summed path despite the "kept in sync"
-      // intent stated above.
-      const oppPlayer = likelyOpponentFor(p, fx.oppId);
-      const matchupScore = oppPlayer ? overallMatchupScore(p.id, oppPlayer.id) : null;
-      const teamSignalScore = teamMatchupSignalScore(p, fx.oppId, fx.isHome);
-      const combinedMatchupScore = matchupScore !== null ? (matchupScore * 0.7 + teamSignalScore * 0.3) : teamSignalScore;
-      if (combinedMatchupScore !== null) {
-        gwProj *= 1 + Math.max(-0.12, Math.min(0.12, (combinedMatchupScore - 50) / 50 * 0.12));
-      }
+      // Same player form comparison multiplier as computeProjectionRow (see
+      // there) - kept in sync deliberately so a player's per-gw projection
+      // here and their season-summed projection there can never disagree.
+      gwProj *= playerFormCompareMultiplier(p.id);
       total += gwProj;
     });
     byGw[g] = total;
@@ -8899,61 +8921,106 @@ function renderProjectionsCaptaincy(pool, gwId) {
     .map(p => captaincyScoreForGw(p, gwId))
     .filter(Boolean);
   const scoreKey = mode === "explosive" ? "explosiveScore" : mode === "safe" ? "safeScore" : "captaincyScore";
-  candidates.sort((a, b) => b[scoreKey] - a[scoreKey]);
+  // Round 46 (user request: "make the captaincy section have a table like
+  // structure where i can sort by route to points etc"): the route-to-
+  // points breakdown used to only be visible as small pills inside a card,
+  // sortable exactly one way (whichever mode button was active). Rebuilt
+  // as a proper sortable table - every route probability (and floor/
+  // ceiling) is now its own column, sortable by clicking the header, same
+  // click-to-sort/▼▲-indicator convention the Table view above already
+  // uses (data-proj-sort). Uses its own state (capSortKey/capSortDir) and
+  // its own data-cap-sort attribute so it doesn't collide with that other
+  // table's sort state. Nothing about the underlying score/route model
+  // changes here - this is purely a new way to look at the same numbers.
+  const sortKey = state.capSortKey || "score";
+  const sortDir = state.capSortDir || "desc";
+  const sortVal = (c) => {
+    const bd = c.breakdown;
+    switch (sortKey) {
+      case "score": return c[scoreKey];
+      case "floor": return bd.floorPts;
+      case "ceiling": return bd.ceilingPts;
+      case "cs": return bd.csEligible ? bd.csProb : null;
+      case "defcon": return bd.defConEligible ? bd.defConProb : null;
+      case "goal": return bd.goalProb;
+      case "assist": return bd.assistProb;
+      case "bonus": return bd.bonusProb;
+      case "matchup": return bd.matchupQuality;
+      default: return c[scoreKey];
+    }
+  };
+  if (sortKey === "name") {
+    candidates.sort((a, b) => sortDir === "asc" ? a.p.webName.localeCompare(b.p.webName) : b.p.webName.localeCompare(a.p.webName));
+  } else {
+    candidates.sort((a, b) => {
+      const av = sortVal(a) ?? -Infinity, bv = sortVal(b) ?? -Infinity;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+  }
   const top = candidates.slice(0, 20);
-  const routePill = (label, live, prob, eligible) => {
-    if (!eligible) return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:rgba(148,148,158,0.10);color:var(--ink-faint)" title="${label}: not a scoring route for this position">${label} N/A</span>`;
+  const colLabel = (key, label, title) => `<th data-cap-sort="${key}" style="cursor:pointer" ${title ? `title="${title}"` : ""}>${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+  const pctCell = (live, prob, eligible, label) => {
+    if (!eligible) return `<td class="mono" style="text-align:center;color:var(--ink-faint)" title="${label}: not a scoring route for this position">N/A</td>`;
     const pct = Math.round((prob || 0) * 100);
-    const bg = live ? "rgba(0,255,102,0.16)" : "rgba(148,148,158,0.10)";
     const color = live ? "var(--gold-bright,#00ff66)" : "var(--ink-faint)";
-    return `<span class="fdr-pill" style="width:auto;padding:1px 6px;margin:1px;font-size:9px;background:${bg};color:${color};font-weight:${live ? 700 : 400}" title="${label} route - ${pct}% likelihood this fixture">${label} ${pct}%</span>`;
+    return `<td class="mono" style="text-align:center;color:${color};font-weight:${live ? 700 : 400}" title="${label} route - ${pct}% likelihood this fixture">${pct}%</td>`;
   };
   const rowsHtml = top.map((scored, idx) => {
-    const p = scored.p, row = scored.row, bd = scored.breakdown;
+    const p = scored.p, bd = scored.breakdown;
     const displayScore = scored[scoreKey];
     const fx = scored.fixture;
     const oppLabel = fx && fx.opp ? `${fx.opp.short_name} ${fx.isHome ? "(H)" : "(A)"}` : "No fixture";
-    const boostPct = Math.round((scored.boost || 0) * 100);
-    return `<div class="card" style="padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="font-size:14px;font-weight:800;color:var(--ink-faint);width:22px;text-align:center">${idx + 1}</div>
-        ${playerAvatarHtml(p, 30)}
-        <div style="flex:1;min-width:160px">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <span style="font-weight:700;font-size:14px">${nameWithPosition(p)}</span>
-            ${captaincyBadgeHtml(p, gwId)}
-          </div>
-          <div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)} · vs ${oppLabel}</div>
-          ${captaincyMiniBadgesHtml(p, gwId, scored)}
-        </div>
-        <div style="text-align:right;min-width:90px">
-          <div class="mono" style="font-size:20px;font-weight:800;color:var(--gold-bright,#00ff66)">${displayScore.toFixed(1)}</div>
-          <div style="font-size:9px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.04em">${CAPTAINCY_MODE_LABELS[mode]} score</div>
-        </div>
-      </div>
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line-faint,rgba(255,255,255,0.06))">
-        <div style="font-size:9px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Route to points (${bd.routes} live route${bd.routes === 1 ? "" : "s"}) · Floor ${bd.floorPts.toFixed(1)}pts / Ceiling +${bd.ceilingPts.toFixed(1)}pts · Playstyle/matchup boost +${boostPct}%</div>
-        <div style="display:flex;flex-wrap:wrap;gap:2px">
-          ${routePill("CS", bd.csRoute, bd.csProb, bd.csEligible)}
-          ${routePill("DefCon", bd.defConRoute, bd.defConProb, bd.defConEligible)}
-          ${routePill("Goal", bd.goalRoute, bd.goalProb, true)}
-          ${routePill("Assist", bd.assistRoute, bd.assistProb, true)}
-          ${routePill("Bonus", bd.bonusRoute, bd.bonusProb, true)}
-          ${routePill("Matchup", bd.matchupRoute, bd.matchupQuality, true)}
-        </div>
-      </div>
-    </div>`;
+    return `<tr>
+      <td class="mono" style="text-align:center;color:var(--ink-faint);font-weight:700">${idx + 1}</td>
+      <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-weight:600">${nameWithPosition(p)}</span>${captaincyBadgeHtml(p, gwId)}</div>
+        <div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)} · vs ${oppLabel}</div>
+        ${captaincyMiniBadgesHtml(p, gwId, scored)}
+      </div></td>
+      <td class="mono" style="text-align:center;font-weight:800;color:var(--gold-bright,#00ff66)">${displayScore.toFixed(1)}</td>
+      <td class="mono" style="text-align:center">${bd.floorPts.toFixed(1)}</td>
+      <td class="mono" style="text-align:center">+${bd.ceilingPts.toFixed(1)}</td>
+      ${pctCell(bd.csRoute, bd.csProb, bd.csEligible, "CS")}
+      ${pctCell(bd.defConRoute, bd.defConProb, bd.defConEligible, "DefCon")}
+      ${pctCell(bd.goalRoute, bd.goalProb, true, "Goal")}
+      ${pctCell(bd.assistRoute, bd.assistProb, true, "Assist")}
+      ${pctCell(bd.bonusRoute, bd.bonusProb, true, "Bonus")}
+      ${pctCell(bd.matchupRoute, bd.matchupQuality, true, "Matchup")}
+    </tr>`;
   }).join("");
   body.innerHTML = `
     <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;align-items:center;gap:8px">
-      <span style="font-size:12px;color:var(--ink-dim)">Sort by:</span>
+      <span style="font-size:12px;color:var(--ink-dim)">Score formula:</span>
       ${Object.entries(CAPTAINCY_MODE_LABELS).map(([key, label]) => `<button type="button" class="chip-btn small${mode === key ? " active" : ""}" data-cap-mode="${key}" style="cursor:pointer">${label}</button>`).join("")}
     </div>
-    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every badge and route pill below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
-    ${rowsHtml || `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
+    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Click any column header to sort by it - route columns show that route's live probability for this exact fixture. Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every number below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
+    ${top.length ? `<div class="table-wrap"><table>
+      <thead><tr>
+        <th></th>
+        ${colLabel("name", "Player")}
+        ${colLabel("score", CAPTAINCY_MODE_LABELS[mode] + " score")}
+        ${colLabel("floor", "Floor", "Guaranteed-ish points if nothing extra lands")}
+        ${colLabel("ceiling", "Ceiling", "Extra points on top of floor if routes land")}
+        ${colLabel("cs", "CS%", "Clean-sheet route probability")}
+        ${colLabel("defcon", "DefCon%", "Defensive-contribution threshold probability")}
+        ${colLabel("goal", "Goal%", "Goal-threat route probability")}
+        ${colLabel("assist", "Assist%", "Assist-threat route probability")}
+        ${colLabel("bonus", "Bonus%", "Expected-bonus route probability")}
+        ${colLabel("matchup", "Matchup%", "Playstyle/matchup edge quality")}
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table></div>` : `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
   `;
   body.querySelectorAll("[data-cap-mode]").forEach(btn => {
     btn.onclick = () => { state.projCapMode = btn.dataset.capMode; renderProjectionsTab(); };
+  });
+  body.querySelectorAll("[data-cap-sort]").forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.capSort;
+      if (state.capSortKey === key) state.capSortDir = state.capSortDir === "desc" ? "asc" : "desc";
+      else { state.capSortKey = key; state.capSortDir = key === "name" ? "asc" : "desc"; }
+      renderProjectionsTab();
+    };
   });
 }
 function renderProjViewModeRow() {
@@ -10374,11 +10441,9 @@ function leagueAvgCsPct() {
 }
 function captaincyRouteBreakdown(p, row) {
   // Route eligibility by position - mirrors CS_PTS's own position gating
-  // (CS pts are 0 for FWD in real FPL scoring) plus DefCon eligibility.
-  // Reopened for FWD (previously DEF/MID-only): real FPL's 2025/26 DefCon
-  // rules set the forward threshold at 12 (same as MID, via
-  // DEFCON_THRESHOLD above) - forwards genuinely can and do reach it, so
-  // excluding them here was wrong, not a simplification.
+  // (CS pts are 0 for FWD in real FPL scoring) plus DefCon eligibility
+  // (defenders/mids realistically bank DefCon; forwards essentially never
+  // rack up the tackles+CBIs+recoveries threshold).
   // CS route refinement: for DEF, the row-average CS% (already fixture-
   // context-aware via FDR_MODES.cleansheet) at a flat 15% bar is fine -
   // clean sheets are their bread and butter. For MID/FWD specifically,
@@ -10398,7 +10463,7 @@ function captaincyRouteBreakdown(p, row) {
       ? (row.csPct || 0) > 15
       : (nextFixtureCsPct !== null ? nextFixtureCsPct : (row.csPct || 0)) > leagueAvgCsPct() * 1.3
   );
-  const defConRoute = (p.position === "DEF" || p.position === "MID" || p.position === "FWD") && (row.defConPct || 0) > 15;
+  const defConRoute = (p.position === "DEF" || p.position === "MID") && (row.defConPct || 0) > 15;
   // Goal route: computed the SAME way for every position off actual xG/90
   // - no position-based suppression or auto-inclusion. FWDs will simply
   // tend to have a high xg90 and so naturally score a high probability;
@@ -10444,20 +10509,13 @@ function captaincyRouteBreakdown(p, row) {
   // a nonzero CS probability here regardless of how favourable the
   // fixture's clean-sheet odds look. This was the bug behind strikers
   // (e.g. Haaland) showing a "CS" route pill on Captaincy.
-  // Round 45: every route-probability pill below capped at 0.97 (97%), not
-  // 1.0 - per explicit user steer ("nothing should be 100%"). These are
-  // genuinely uncapped ratios (csPct/45, defConPct/40, etc.) before the
-  // clamp, so a strong-enough fixture/rate could otherwise mathematically
-  // hit the hard 1.0 ceiling and display as a nailed-on 100% - which
-  // overstates it for a single football match, however heavily favoured.
-  const ROUTE_PROB_CAP = 0.97;
   const csProb = (CS_PTS[p.position] || 0) > 0
-    ? Math.max(0, Math.min(ROUTE_PROB_CAP, (p.position === "DEF" ? (row.csPct || 0) : (nextFixtureCsPct !== null ? nextFixtureCsPct : (row.csPct || 0))) / 45))
+    ? Math.max(0, Math.min(1, (p.position === "DEF" ? (row.csPct || 0) : (nextFixtureCsPct !== null ? nextFixtureCsPct : (row.csPct || 0))) / 45))
     : 0;
-  const defConProb = (p.position === "DEF" || p.position === "MID" || p.position === "FWD") ? Math.max(0, Math.min(ROUTE_PROB_CAP, (row.defConPct || 0) / 40)) : 0;
-  const goalProb = Math.max(0, Math.min(ROUTE_PROB_CAP, (p.xg90 || 0) / 0.6));
-  const assistProb = Math.max(0, Math.min(ROUTE_PROB_CAP, (p.xa90 || 0) / 0.4));
-  const bonusProb = Math.max(0, Math.min(ROUTE_PROB_CAP, (row.bonusExp || 0) / 1.2));
+  const defConProb = (p.position === "DEF" || p.position === "MID") ? Math.max(0, Math.min(1, (row.defConPct || 0) / 40)) : 0;
+  const goalProb = Math.max(0, Math.min(1, (p.xg90 || 0) / 0.6));
+  const assistProb = Math.max(0, Math.min(1, (p.xa90 || 0) / 0.4));
+  const bonusProb = Math.max(0, Math.min(1, (row.bonusExp || 0) / 1.2));
   // Rescaled so 50 (evenly matched) reads as 0 probability and 100
   // (total domination) reads as 1 - matches the 0-1 shape of every other
   // route probability here even though the underlying score is 0-100. Only
@@ -10488,7 +10546,7 @@ function captaincyRouteBreakdown(p, row) {
   // silently omitting it, vs. a real (possibly low) probability pill for
   // an eligible one.
   const csEligible = (CS_PTS[p.position] || 0) > 0;
-  const defConEligible = p.position === "DEF" || p.position === "MID" || p.position === "FWD";
+  const defConEligible = p.position === "DEF" || p.position === "MID";
   return { routes, floorPts, ceilingPts, csRoute, defConRoute, goalRoute, assistRoute, bonusRoute, matchupRoute, csProb, defConProb, goalProb, assistProb, bonusProb, matchupProb, matchupQuality, csEligible, defConEligible };
 }
 // ---- Route coefficient (item 1) ----
@@ -10564,36 +10622,6 @@ function lowBlockSignature(teamId, isHome) {
     score += tight * 0.3 + controlled * 0.2;
   }
   return Math.max(0, Math.min(1, score));
-}
-// Round 45 (user steer): "add the team matchup - a team that progresses the
-// ball fast and has fast players can hurt on the counter therefore they get
-// a boost to their output but if opponents are setting up a low block
-// against them then they may not get as much opportunity". counterAttack-
-// Signature/lowBlockSignature above already existed but only fed Captaincy's
-// playstyleMatchupBoost - Projections' own ±12% matchup term was 1v1
-// attribute-duel only (overallMatchupScore), with no read on the opponent's
-// actual defensive setup at all. This expresses the same team-openness idea
-// on a 0-100 "matchup score" scale (50 = neutral) so it can blend directly
-// with that 1v1 duel score in computeProjectionRow/computeProjPerGw.
-// Deliberately modelled as ONE mobile player's output being pulled in
-// OPPOSITE directions by the same two team-level reads (openness rewards
-// it, the opponent's compactness suppresses that same reward) rather than
-// as two independent bonuses - a low block specifically takes away the
-// space a counter-attacking player's game depends on, it doesn't just fail
-// to add to it.
-function teamMatchupSignalScore(p, opponentTeamId, isHome) {
-  const openness = counterAttackSignature(opponentTeamId, isHome); // 0-1: opponent is open/leaky
-  const compactness = lowBlockSignature(opponentTeamId, isHome); // 0-1: opponent sits deep/compact
-  const pace = getFmAttributeValue(p.id, "pace");
-  const accel = getFmAttributeValue(p.id, "acceleration");
-  const offBall = getFmAttributeValue(p.id, "offTheBall");
-  // This player's own "thrives in transition" profile - fast, mobile, good
-  // off the ball. Same mobility read playstyleMatchupBoost's team-openness
-  // term already uses (kept identical so the two don't quietly disagree).
-  const mobilityScore = Math.max(0, ((pace + accel + offBall) / 3 - 10) / 9); // 0-1
-  if (mobilityScore <= 0) return 50; // not a counter-attacking profile either way - neutral, no signal
-  const net = (openness - compactness) * mobilityScore; // -1..+1
-  return Math.max(0, Math.min(100, 50 + net * 50));
 }
 // Round 38 (user's exact words, confirmed: "Player playstyle score = matchup
 // component + player's own playstyle rating, teams get a separate
@@ -14468,21 +14496,38 @@ function renderTeamOverrides() {
 // Simple dropdown-per-slot picker, one <details> block per team, following
 // the same lightweight form/picker convention already used throughout this
 // panel (plain <select> elements, onchange handlers, no new UI components).
-// Round 44: picking a player fires renderTeamOverrides(), which rebuilds
-// the WHOLE panel's innerHTML from scratch (including every other team's
-// row) - a bare <details> with no `open` attribute always re-renders
-// closed, so the panel you were mid-pick in snapped shut after every single
-// selection. Tracked here in a module-level Set (survives the innerHTML
-// rebuild since it's plain JS state, not DOM state) so the expander stays
-// open across a whole picking session; only resets on a real page reload.
-const _likelyLineupOpenTeams = new Set();
+// Round 46 (user request: "rename the positions of player when making
+// lineup to be positional reference rather than def 1 def 2 etc"): the
+// Likely lineup picker used to label every slot just "DEF 1"/"DEF 2"/
+// "MID 1" etc - a bare index, not which actual role that slot represents.
+// Maps a position + this club's CURRENT slot count for it (from
+// FORMATIONS_H2H, always 3/4/5 for DEF+MID, 1/2/3 for FWD - every one of
+// the 7 formation shapes is covered) to real positional labels instead,
+// left-to-right as they'd actually line up on the pitch. MID's 3-slot case
+// (LCM/CM/RCM) is the one that also matters for Tactical board auto-
+// matchups: see tacticalAutoPresetMatchups' rolePairKinds, which mirrors
+// LCM against the opponent's RCM (and vice versa) rather than same-letter -
+// this is just where that labelling comes from on the picker itself. Falls
+// back to the old numbered label for any slot count outside those 7 shapes
+// (shouldn't happen via the normal formation selector, but keeps this safe
+// if state.teamFormations ever holds something unexpected).
+function lineupSlotLabels(pos, count) {
+  const BY_COUNT = {
+    GK: { 1: ["GK"] },
+    DEF: { 3: ["LCB", "CB", "RCB"], 4: ["LB", "CB", "CB", "RB"], 5: ["LWB", "LCB", "CB", "RCB", "RWB"] },
+    MID: { 3: ["LCM", "CM", "RCM"], 4: ["LM", "LCM", "RCM", "RM"], 5: ["LM", "LCM", "CM", "RCM", "RM"] },
+    FWD: { 1: ["ST"], 2: ["LST", "RST"], 3: ["LW", "ST", "RW"] },
+  };
+  const labels = (BY_COUNT[pos] || {})[count];
+  return labels || Array.from({ length: count }, (_, i) => `${pos} ${i + 1}`);
+}
 function likelyLineupPickerHtml(t) {
   const lineup = ensureTeamLikelyLineup(t.id);
   const squad = state.players.filter(p => p.teamId === t.id).sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
   const filled = hasLikelyLineup(t.id);
-  const posLabel = { GK: "GK", DEF: "DEF", MID: "MID", FWD: "FWD" };
   const slotRows = ["GK", "DEF", "MID", "FWD"].map(pos => {
     const arr = lineup.slots[pos] || [];
+    const labels = lineupSlotLabels(pos, arr.length);
     return arr.map((playerId, idx) => {
       const usedElsewhere = new Set(
         ["GK", "DEF", "MID", "FWD"].flatMap(p2 => (lineup.slots[p2] || [])).filter(id => id != null && id !== playerId)
@@ -14490,7 +14535,7 @@ function likelyLineupPickerHtml(t) {
       const options = squad.filter(p => !usedElsewhere.has(p.id));
       return `
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-          <span class="mono" style="width:36px;font-size:10.5px;color:var(--ink-faint)">${posLabel[pos]}${arr.length > 1 ? ` ${idx + 1}` : ""}</span>
+          <span class="mono" style="width:36px;font-size:10.5px;color:var(--ink-faint)">${labels[idx]}</span>
           <select data-lineup-slot-team="${t.id}" data-lineup-slot-pos="${pos}" data-lineup-slot-idx="${idx}" style="flex:1;font-size:12px">
             <option value="">— pick a player —</option>
             ${options.map(p => `<option value="${p.id}"${p.id === playerId ? " selected" : ""}>${p.webName}</option>`).join("")}
@@ -14499,8 +14544,18 @@ function likelyLineupPickerHtml(t) {
       `;
     }).join("");
   }).join("");
+  // Round 46 fix ("when i add the player to set starting 11 the drop down
+  // menu still disappears"): wireLikelyLineupPicker's onchange handler calls
+  // renderTeamOverrides(), which rebuilds EVERY team's row (including this
+  // <details>) from scratch via innerHTML - a freshly-created <details> has
+  // no "open" attribute, so the expander you were just using snapped shut
+  // right after you picked a player, looking like the whole picker
+  // vanished. Fixed by remembering which teams' pickers are open in
+  // state.likelyLineupOpenTeams (toggled below) and re-applying "open" here
+  // on every re-render, so picking a player no longer closes the panel.
+  const openTeams = (state.likelyLineupOpenTeams ||= new Set());
   return `
-    <details data-lineup-details="${t.id}"${_likelyLineupOpenTeams.has(t.id) ? " open" : ""}>
+    <details data-lineup-team="${t.id}"${openTeams.has(t.id) ? " open" : ""}>
       <summary class="mono" style="cursor:pointer;font-size:11px;color:${filled ? "var(--gold-bright)" : "var(--ink-faint)"};font-weight:700;user-select:none">⚽ Likely lineup${filled ? " (set - matchups use these starters)" : " (not set - matchups use whole squad)"}</summary>
       <div style="margin-top:6px;padding:8px;border-radius:8px;background:var(--panel-2)">
         <p class="field-desc" style="margin:0 0 8px;font-size:10.5px">Pick the specific players expected to start in each slot for this club's ${lineup.formation} formation. Matchup calculations (Tactical board auto-matchups, Projections/Captaincy "matchup" boost) use these likely starters - against every one of this club's upcoming fixtures - instead of the whole squad once at least one slot is set. Leave unset to keep the previous whole-squad behaviour.</p>
@@ -14511,16 +14566,12 @@ function likelyLineupPickerHtml(t) {
   `;
 }
 function wireLikelyLineupPicker(container) {
-  // Keep _likelyLineupOpenTeams in sync with the user actually toggling the
-  // expander (open OR closed) so a deliberate close sticks too, not just a
-  // deliberate open - this only tracks intent, the rebuild-survival fix
-  // itself is the `open` attribute driven by this Set in likelyLineupPickerHtml.
-  container.querySelectorAll("[data-lineup-details]").forEach(det => {
-    det.ontoggle = () => {
-      const teamId = Number(det.dataset.lineupDetails);
-      if (det.open) _likelyLineupOpenTeams.add(teamId);
-      else _likelyLineupOpenTeams.delete(teamId);
-    };
+  container.querySelectorAll("details[data-lineup-team]").forEach(d => {
+    const teamId = Number(d.dataset.lineupTeam);
+    d.addEventListener("toggle", () => {
+      const openTeams = (state.likelyLineupOpenTeams ||= new Set());
+      if (d.open) openTeams.add(teamId); else openTeams.delete(teamId);
+    });
   });
   container.querySelectorAll("[data-lineup-slot-team]").forEach(sel => {
     sel.onchange = () => {
@@ -15401,32 +15452,17 @@ function estimateScorelineRaw(teamId, oppId, isHome, kickoffTimeIso) {
     teamXg *= kickoffSlotMultiplier(kickoffSlot, isHome ? "home" : "away");
     oppXg *= kickoffSlotMultiplier(kickoffSlot, isHome ? "away" : "home");
   }
-  // Floor xG at a realistic minimum - but Round 45 (user steer) dropped
-  // the OLD flat 0.45 floor, which made a genuinely one-sided real result
-  // impossible to reach (Coventry's actual 0.2 xG away at Arsenal, with
-  // Arsenal on 1.88, could never have been modelled - 0.2 sits well under
-  // 0.45). A flat floor also treats a bottom-table defence the same as an
-  // elite one, which is backwards: an elite defence CAN genuinely hold a
-  // side to next to nothing on its day, a leaky one realistically still
-  // concedes something most weeks. So the floor now scales with the
-  // SUPPRESSING side's own defence rating (d5/od5, already computed above -
-  // itself blended from FPL's attack/defence ratings, squad value, manager
-  // tenure and last-season strength, i.e. genuine team-strength signals,
-  // not a guess) rather than being one flat number for every fixture. A
-  // weak defence (rating 1) still floors at 0.55 - even a bad side rarely
-  // concedes literally nothing over 90 minutes; an elite defence (rating 5)
-  // floors as low as 0.15, low enough for a Coventry-at-Arsenal-shaped
-  // fixture to actually land near its real result instead of being pulled
-  // back up toward a false floor. League-wide, the total-goals baseline
-  // (~2.7/game - KICKOFF_BASELINE_HOME_GOALS + _AWAY_GOALS above) still
-  // anchors the TYPICAL fixture; this floor only matters for the genuine
-  // extreme cases, which is exactly where the old flat floor broke down.
-  const realisticXgFloor = (suppressingDefenceRating5) => {
-    const t = Math.max(0, Math.min(1, (suppressingDefenceRating5 - 1) / 4)); // 0 (weak) -> 1 (elite)
-    return 0.55 - t * 0.40; // weak defence: 0.55 floor / elite defence: 0.15 floor
-  };
-  teamXg = Math.max(realisticXgFloor(d5), teamXg);
-  oppXg = Math.max(realisticXgFloor(od5), oppXg);
+  // Floor xG at a REALISTIC minimum, not just above zero. 0.15 (the
+  // previous floor) is below what any real Premier League side has
+  // conceded/scored per game over a full season - even historically
+  // dominant defences (peak Man City, etc.) still average roughly
+  // 0.6-0.7 goals conceded per game. 0.45 keeps a genuine gap between
+  // "elite defence" and "cast-iron shutout every week" without still
+  // letting the model degenerate toward literal 0 for every fixture
+  // involving a highly-rated side, especially pre-season when there's no
+  // empirical in-season data yet to temper the rating-formula estimate.
+  teamXg = Math.max(0.45, teamXg);
+  oppXg = Math.max(0.45, oppXg);
 
   const homeXg = isHome ? teamXg : oppXg;
   const awayXg = isHome ? oppXg : teamXg;
@@ -17267,11 +17303,37 @@ function ensureTeamLikelyLineup(teamId) {
   }
   return state.teamLikelyLineup[teamId];
 }
+// Maps a lineup slot's positional label (see lineupSlotLabels) to the
+// closest valid SPECIFIC_POSITIONS value - a few slot labels split a side
+// that the specific-position schema itself doesn't (LCB/RCB and LST/RST
+// both just mean "CB"/"ST" there), so those collapse to the plain value;
+// everything else (LCM/RCM included) already IS a real specific position.
+const SLOT_LABEL_TO_SPECIFIC_POSITION = {
+  GK: "GK", LB: "LB", RB: "RB", LWB: "LWB", RWB: "RWB", LCB: "CB", RCB: "CB", CB: "CB",
+  LM: "LM", RM: "RM", LCM: "LCM", RCM: "RCM", CM: "CM",
+  LST: "ST", RST: "ST", ST: "ST", LW: "LW", RW: "RW",
+};
 function setLikelyLineupSlot(teamId, pos, idx, playerId) {
   const lineup = ensureTeamLikelyLineup(teamId);
   if (!lineup.slots[pos]) return;
   lineup.slots[pos][idx] = playerId || null;
   saveTeamLikelyLineup();
+  // Round 46 (closes the loop on "lcm cm rcm should face the mirror"):
+  // auto-fill this player's specific position (General tab) from the slot
+  // label they were just placed in, so setting up a Likely lineup with
+  // LCM/RCM slots is immediately usable by the Tactical board's mirrored
+  // auto-matchup logic - no separate manual tagging step required. Only
+  // fills a genuinely BLANK tag, same "never overwrite a deliberate
+  // existing entry" rule applyBuiltinPositions() already follows elsewhere -
+  // a player already tagged (e.g. as CDM) keeps that tag even if slotted
+  // into a "CM" lineup spot, since that mismatch is exactly the real-world
+  // case ("their CM is actually a CDM/CAM") this whole feature is meant to
+  // capture, not paper over.
+  if (playerId && !getSpecificPosition(playerId)) {
+    const labels = lineupSlotLabels(pos, lineup.slots[pos].length);
+    const mapped = SLOT_LABEL_TO_SPECIFIC_POSITION[labels[idx]];
+    if (mapped) setSpecificPosition(playerId, mapped);
+  }
 }
 function clearTeamLikelyLineup(teamId) {
   if (state.teamLikelyLineup) delete state.teamLikelyLineup[teamId];
@@ -18368,7 +18430,20 @@ function tacticalAutoPresetMatchups(teamA, teamB, xiA, xiB) {
   // every CB, so this stays 1:1 to keep the board readable).
   const rolePairKinds = [
     ["LW", ["RB", "RWB"]], ["RW", ["LB", "LWB"]], ["LM", ["RB", "RWB"]], ["RM", ["LB", "LWB"]],
-    ["CDM", ["CDM", "CM"]], ["CM", ["CM", "CDM"]], ["CAM", ["CDM", "CM"]],
+    ["CDM", ["CDM", "CM"]], ["CM", ["CM", "CDM", "LCM", "RCM"]], ["CAM", ["CDM", "CM"]],
+    // Round 46 (user request: "lcm cm rcm should face the mirror so lcm vs
+    // rcm cm vs cm etc because some teams their cm is either a cam or a
+    // cdm") - LCM/RCM (new specific positions, see SPECIFIC_POSITIONS)
+    // deliberately pair MIRRORED, not same-letter: two sides face each
+    // other on the pitch, so a left-sided central mid lines up against the
+    // OPPONENT'S right-sided one (and vice versa) - matching LCM-to-LCM
+    // would pair two players who stand on the same physical side and never
+    // actually contest the same ball. Both also fall back to plain CM/CDM/
+    // CAM, since the opponent very often hasn't tagged their own LCM/RCM
+    // (or plays a shape without one) - that fallback is what covers "their
+    // nominal CM is actually more of a CDM/CAM" by role-compatibility
+    // rather than requiring an exact label match on both sides.
+    ["LCM", ["RCM", "CM", "CDM", "CAM"]], ["RCM", ["LCM", "CM", "CDM", "CAM"]],
   ];
   const pairOneToOne = (sideAttack, sideDefend, wantRole, oppRoles) => {
     const attackers = sideAttack.filter(p => roleOf(p) === wantRole);
@@ -20202,14 +20277,9 @@ const DEFAULT_SEED_DATA = {
     "squadWeight": 1,
     "strengthWeight": 1
   },
-  // Round 45: kept in sync with the live state.modelWeights default above -
-  // odds weighted heavier (0.55) than Pi-ratings (0.25), per user steer.
-  // The "Main" preset just below is left untouched - that's the user's own
-  // saved/tuned preset (note its different copulaTheta), not this app's
-  // baseline, so it isn't silently overwritten by a formula-default change.
   modelWeights: {
-    "piRatingWeight": 0.25,
-    "oddsWeight": 0.55,
+    "piRatingWeight": 0.35,
+    "oddsWeight": 0.35,
     "weibullShape": 1.15,
     "copulaTheta": -0.15,
     "piLearningRate": 0.06,

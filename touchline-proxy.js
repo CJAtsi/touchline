@@ -67,9 +67,26 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+// Round 46 note: /clubstats currently reports BOTH Understat ("playersData"/
+// "teamsData" not found, zero other JSON.parse vars on the page either - not
+// a layout tweak, more likely the fetched page itself isn't real league-page
+// content anymore) AND FBref (explicit HTTP 403 "Just a moment..." Cloudflare
+// JS-challenge page) failing. The extra headers below (Accept-Language,
+// Referer, sec-ch-ua/-platform - a fuller "real browser" fingerprint than
+// just User-Agent+Accept) are a genuine improvement and may help Understat if
+// its block is a simpler bot-signature check. They will NOT fix FBref's
+// 403 - a Cloudflare JS challenge requires actually executing JavaScript in
+// a browser to solve, which a Workers fetch() fundamentally cannot do
+// regardless of headers. That one needs an actual decision (a paid scraping/
+// challenge-solving API, a different defensive-stats source, or accepting
+// FBref-derived columns as unavailable) rather than a header tweak - see
+// this session's chat for the options laid out.
 const SCRAPE_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-  "Accept": "text/html,application/xhtml+xml",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "sec-ch-ua-platform": '"Windows"',
 };
 
 // Paths that are genuinely FPL API calls — everything else (the root "/",
