@@ -1,3 +1,11 @@
 touchline-proxy.js
 wrangler.toml
 .git
+.wrangler
+node_modules
+package.json
+package-lock.json
+*.csv
+*.csv.gz
+*.json
+*.md
