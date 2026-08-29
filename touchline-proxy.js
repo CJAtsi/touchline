@@ -23,7 +23,21 @@
  *      compact opponent" read — both built from the same real results,
  *      no API key needed, no rate limit (static file hosting). Route:
  *      /pastform
- *   6. (Round 42, NEW — not yet consumed by index.html by default, see
+ *   6. (Round 47, NEW) Serves real shot/chance-creation volume data from
+ *      the FPL-Core-Insights GitHub project (olbauday/FPL-Core-Insights) —
+ *      a free, actively-maintained (refreshed ~twice daily) public dataset
+ *      distributed as plain CSV files on raw.githubusercontent.com. Unlike
+ *      /deeperstats (Understat/FBref scraping, see that route's Round 46
+ *      note — Understat's markers moved, FBref hard-403s) this is a static
+ *      file host with no auth, no rate limit, and no bot-blocking risk —
+ *      same reliability category as /pastform's football-data.co.uk CSVs
+ *      below, which have never had scrape-breakage problems. Crucially,
+ *      its players.csv carries FPL's OWN official player `code` field
+ *      (bootstrap-static's element.code) directly, so index.html can join
+ *      on that stable numeric id instead of fuzzy name-matching two
+ *      independent naming conventions the way attachDeeperStats() has to.
+ *      Route: /coreinsights
+ *   7. (Round 42, NEW — not yet consumed by index.html by default, see
  *      that file's fetchShotMap/fetchShotData for the graceful-fallback
  *      wiring) Serves shot-level data — x/y location, distance, angle,
  *      xG per shot, situation (open play / corner / free kick / penalty),
@@ -117,6 +131,9 @@ export default {
     }
     if (url.pathname.startsWith("/pastform")) {
       return handlePastForm(url, request);
+    }
+    if (url.pathname.startsWith("/coreinsights")) {
+      return handleCoreInsights(url, request);
     }
     if (url.pathname === "/shotmap" || url.pathname === "/shotmap/") {
       return handleShotMap(url, request);
@@ -564,7 +581,181 @@ async function handlePastForm(url, request) {
   return response;
 }
 
-// ---------- 6. Shot-level data (Round 42, NEW) ----------
+// ---------- 6. Core Insights: real shot/chance-creation volume (Round 47, NEW) ----------
+// Data source: olbauday/FPL-Core-Insights on GitHub — a free, actively
+// maintained (refreshed ~twice daily per the repo's own README) fusion of
+// the official FPL API with detailed match stats, distributed as plain CSV
+// files fetched raw from GitHub (no auth, no rate limit — a static file
+// host, not a scraped page). Two files matter here:
+//   - data/<season>/players.csv — one row per player, columns
+//     player_code,player_id,first_name,second_name,web_name,team_code,position.
+//     player_code IS FPL's own official element.code — confirmed by
+//     cross-referencing a known player during this round's research. This
+//     repo's OWN player_id (different, dataset-internal) is what the
+//     per-gameweek files below key off, so players.csv is the bridge:
+//     this repo's player_id -> FPL's player_code.
+//   - data/<season>/By Gameweek/GW<N>/playermatchstats.csv — one row PER
+//     PLAYER PER MATCH for gameweek N. Columns include player_id,
+//     minutes_played, total_shots, shots_on_target, chances_created, xg,
+//     xa, big_chances_missed, plus (Round 48, NEW — read here since this
+//     round) real defensive/physical columns this project previously had
+//     no working source for at all: tackles_won, interceptions,
+//     recoveries, blocks, clearances, headed_clearances, duels_won,
+//     duels_lost, aerial_duels_won, aerial_duels_won_percent,
+//     defensive_contributions (FPL's own real DefCon metric), and for
+//     keepers: saves, goals_conceded, goals_prevented (post-shot xG minus
+//     actual goals conceded — a real shot-stopping quality read FPL's own
+//     API doesn't expose at all).
+const CORE_INSIGHTS_SEASON = "2025-2026"; // verified live during this round, August 2026 — matches this project's current season
+const CORE_INSIGHTS_BASE = `https://raw.githubusercontent.com/olbauday/FPL-Core-Insights/main/data/${CORE_INSIGHTS_SEASON}`;
+// How many trailing gameweeks of playermatchstats.csv to fetch and sum, per
+// request. This is deliberately a WINDOW, not the whole season — fetching
+// every gameweek back to GW1 every request would mean up to ~38 subrequests
+// on top of the players.csv fetch, which is wasteful (this data barely
+// shifts a per-90 rate once a player has a reasonable sample) and risks
+// Cloudflare Workers' per-request subrequest ceiling as the season goes on.
+// 8 gameweeks is enough matches for a stable shots/chances-created per-90
+// read (most outfield rotation players will have 5+ actual appearances in
+// an 8-GW window) while staying well inside the subrequest budget (8
+// gameweek files + 1 players.csv = 9 subrequests, worst case one retry
+// each).
+const CORE_INSIGHTS_WINDOW = 8;
+async function fetchCoreInsightsCsv(path) {
+  const res = await fetch(`${CORE_INSIGHTS_BASE}/${path}`, { headers: { "Accept": "text/csv,*/*" } });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} from FPL-Core-Insights (${path})`);
+  return parseCsv(text);
+}
+async function handleCoreInsights(url, request) {
+  const cache = caches.default;
+  const cacheKey = new Request(url.toString(), request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  // ?gw=<N> — the app already knows the current gameweek from its own
+  // bootstrap-static call (state.events' is_current/is_next), which is far
+  // simpler than having this Worker fetch bootstrap-static itself just to
+  // work that out. Falls back to a generously-high guess (38, i.e. "try the
+  // whole season back to GW1 within the window size") when the caller
+  // doesn't pass one, so the route still returns something useful rather
+  // than erroring — the per-gameweek 404-skip logic below makes an
+  // over-guess harmless.
+  const gwParam = parseInt(url.searchParams.get("gw"), 10);
+  const currentGw = Number.isFinite(gwParam) && gwParam > 0 ? gwParam : 38;
+  const gwList = [];
+  for (let gw = currentGw; gw > 0 && gwList.length < CORE_INSIGHTS_WINDOW; gw--) gwList.push(gw);
+
+  const warnings = [];
+  let playersCsv = [];
+  try {
+    playersCsv = await fetchCoreInsightsCsv("players.csv");
+  } catch (e) {
+    warnings.push("players.csv: " + e.message);
+  }
+  // Bridge: this repo's own player_id -> FPL's real element.code.
+  const codeByPlayerId = {};
+  for (const r of playersCsv) {
+    const pid = parseInt(r.player_id, 10);
+    const code = parseInt(r.player_code, 10);
+    if (Number.isFinite(pid) && Number.isFinite(code)) codeByPlayerId[pid] = code;
+  }
+
+  const gwResults = await Promise.all(gwList.map(async (gw) => {
+    try {
+      const rows = await fetchCoreInsightsCsv(`By%20Gameweek/GW${gw}/playermatchstats.csv`);
+      return { gw, rows };
+    } catch (e) {
+      // A missing gameweek (season hasn't reached it yet, or a numbering
+      // gap) is expected and should not fail the whole route — same
+      // resilience philosophy as handlePastForm's per-season try/catch.
+      warnings.push(`GW${gw}: ${e.message}`);
+      return { gw, rows: [] };
+    }
+  }));
+  const gameweeksCovered = gwResults.filter(r => r.rows.length).map(r => r.gw);
+
+  // Aggregate playermatchstats rows by this repo's player_id across every
+  // gameweek actually fetched.
+  const agg = {};
+  for (const { rows } of gwResults) {
+    for (const r of rows) {
+      const pid = parseInt(r.player_id, 10);
+      if (!Number.isFinite(pid)) continue;
+      if (!agg[pid]) agg[pid] = {
+        totalShots: 0, shotsOnTarget: 0, chancesCreated: 0, xg: 0, xa: 0, bigChancesMissed: 0, minutes: 0, matchesCounted: 0,
+        // Round 48: defensive actions (replaces the FBref-403 gap) + GK shot-stopping.
+        tackles: 0, interceptions: 0, recoveries: 0, blocks: 0, clearances: 0, headedClearances: 0,
+        duelsWon: 0, duelsLost: 0, aerialDuelsWon: 0, aerialDuelsWonSampleMinutes: 0, defensiveContributions: 0,
+        saves: 0, goalsConceded: 0, goalsPrevented: 0,
+      };
+      const a = agg[pid];
+      a.totalShots += num(r.total_shots);
+      a.shotsOnTarget += num(r.shots_on_target);
+      a.chancesCreated += num(r.chances_created);
+      a.xg += num(r.xg);
+      a.xa += num(r.xa);
+      a.bigChancesMissed += num(r.big_chances_missed);
+      a.minutes += num(r.minutes_played);
+      a.matchesCounted += 1;
+      a.tackles += num(r.tackles_won);
+      a.interceptions += num(r.interceptions);
+      a.recoveries += num(r.recoveries);
+      a.blocks += num(r.blocks);
+      a.clearances += num(r.clearances);
+      a.headedClearances += num(r.headed_clearances);
+      a.duelsWon += num(r.duels_won);
+      a.duelsLost += num(r.duels_lost);
+      a.aerialDuelsWon += num(r.aerial_duels_won);
+      // aerial_duels_won_percent is per-match; weight-average it by minutes
+      // played that match rather than summing a percentage across matches.
+      if (r.aerial_duels_won_percent !== "" && r.aerial_duels_won_percent != null) {
+        a.aerialDuelsWonSampleMinutes += num(r.minutes_played);
+        a._aerialPctWeighted = (a._aerialPctWeighted || 0) + num(r.aerial_duels_won_percent) * num(r.minutes_played);
+      }
+      a.defensiveContributions += num(r.defensive_contributions);
+      a.saves += num(r.saves);
+      a.goalsConceded += num(r.goals_conceded);
+      a.goalsPrevented += num(r.goals_prevented);
+    }
+  }
+
+  // Join to FPL's player_code so the response is keyed by a stable id the
+  // client can match directly against p.code — no name normalization
+  // needed on either side.
+  const players = [];
+  for (const [pidStr, a] of Object.entries(agg)) {
+    const playerCode = codeByPlayerId[Number(pidStr)];
+    if (playerCode == null) continue; // no players.csv row for this id — can't join, so can't return it usefully
+    // Collapse the internal weighted-sum accumulator into a real average
+    // percentage before shipping the row — _aerialPctWeighted is scratch
+    // state, not something the client should see.
+    const aerialDuelsWonPercent = a.aerialDuelsWonSampleMinutes > 0
+      ? (a._aerialPctWeighted || 0) / a.aerialDuelsWonSampleMinutes
+      : null;
+    const { _aerialPctWeighted, aerialDuelsWonSampleMinutes, ...rest } = a;
+    players.push({ playerCode, ...rest, aerialDuelsWonPercent });
+  }
+  if (playersCsv.length && !players.length) warnings.push("players.csv loaded but no playermatchstats rows joined to a player_code — check column names haven't changed upstream.");
+
+  const body = JSON.stringify({ players, gameweeksCovered, syncedAt: new Date().toISOString(), warnings });
+  const response = new Response(body, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "application/json",
+      // The source refreshes ~twice daily (per its own README) — much more
+      // often than /deeperstats' fully-static day-old scrapes, but it's
+      // still not live/per-minute data, so a few hours strikes a reasonable
+      // balance between freshness and not re-fetching 9 CSV files on every
+      // page load. 4 hours means a finished gameweek's stats are reflected
+      // well within the same day without needing an aggressive cache-bust.
+      "Cache-Control": players.length ? "public, max-age=14400" : "no-store",
+    },
+  });
+  if (players.length) await cache.put(cacheKey, response.clone());
+  return response;
+}
+
+// ---------- 7. Shot-level data (Round 42, NEW) ----------
 // Understat is the only one of this project's three scrape sources that
 // exposes per-shot detail (x/y location, xG, situation, shot type, result,
 // assisting player) rather than season aggregates — confirmed via the

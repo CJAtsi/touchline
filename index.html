@@ -2426,8 +2426,17 @@ const COLUMN_FORMAT = {
 // "in tandem with Tactical board") still read them directly. Only the two
 // Player Stats theme TABS that displayed them as their own columns (Round
 // 10: "Shots & creativity" / "CBIT (defensive)") were removed, since that
-// scrape consistently fails (Understat's playersData markers moved; FBref
-// 403s all requests) and no free, reliably-scrapeable alternative exists.
+// scrape consistently failed at the time (Understat's playersData markers
+// moved; FBref 403s all requests - the FBref block specifically can never
+// be fixed from a Worker, since solving a Cloudflare JS challenge requires
+// actually executing JavaScript in a browser). UPDATE (Round 48): dsTackles/
+// dsInterceptions/dsBlocks/dsClearances/dsAerialsWon/dsAerialWinPct are now
+// ALSO backfilled from the real, reliable /coreinsights source whenever the
+// scrape leaves them null - see attachCoreInsights's own comment. These
+// fields are therefore populated for virtually every player again even
+// though the underlying scrape they were originally sourced from is still
+// broken; the tabs above were never restored since the per-90 scatter
+// charts and CBIT column already surface the same numbers.
 function activeColumns() {
   const cols = STAT_THEMES[state.statsTheme].columns.slice();
   if (state.rangePoints) cols.push(["rangePts", state.rangeLabel || "Range pts"]);
@@ -5093,6 +5102,37 @@ async function fetchDeeperStats() {
   }
 }
 
+// Round 47: real shot/chance-creation VOLUME data from the Worker's
+// /coreinsights route (FPL-Core-Insights on GitHub - see touchline-proxy.js's
+// own comment for the full source explanation). Same fail-quiet pattern as
+// fetchDeeperStats - a missing Worker or a failed fetch just leaves this
+// null and shotsPer90/chancesCreatedPer90 fall back to the older ds*
+// (Understat) fields or, last resort, the synthetic ratio (see those
+// functions' own comments). `gw` is passed so the Worker knows how far back
+// to look for its trailing gameweek window - taken from bootstrap-static's
+// own current/next event, which is already loaded by the time this runs
+// (see loadData's call order), rather than having the Worker fetch
+// bootstrap-static itself just to work out the same number.
+async function fetchCoreInsights() {
+  if (!WORKER_PROXY_URL) return null;
+  try {
+    const currentEvent = (state.events || []).find(e => e.is_current) || (state.events || []).find(e => e.is_next);
+    const gwParam = currentEvent ? `?gw=${currentEvent.id}` : "";
+    const res = await fetch(WORKER_PROXY_URL + "/coreinsights" + gwParam, { mode: "cors" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.warnings && data.warnings.length && !(data.players && data.players.length)) {
+      state.diagnostics.push({ path: "/coreinsights", source: "your Worker", ok: false, error: data.warnings.join("; ") });
+    } else {
+      state.diagnostics.push({ path: "/coreinsights", source: "your Worker", ok: true, ms: 0 });
+    }
+    return data;
+  } catch (e) {
+    state.diagnostics.push({ path: "/coreinsights", source: "your Worker", ok: false, error: e.message });
+    return null;
+  }
+}
+
 // Club-level stats (shots, xG, possession, PPDA, CBIT etc.) from the
 // Worker's /clubstats route - same fail-quiet pattern as fetchDeeperStats,
 // requires touchline-proxy.js redeployed with the /clubstats route added.
@@ -5499,6 +5539,89 @@ function attachDeeperStats(data) {
   }
 }
 
+// Round 47: attaches /coreinsights data (FPL-Core-Insights - real shot/
+// chance-creation volume, see fetchCoreInsights's own comment) keyed by
+// `ci` prefix so these never silently collide with the older ds* fields
+// (which stay populated by the Understat/FBref scrape on the rare occasion
+// it works). UNLIKE attachDeeperStats, this joins on p.code === row.playerCode
+// directly - both sides now carry FPL's own real, stable element.code, so
+// no name/team fuzzy-normalization is needed at all. This is the actual
+// reliability win over the ds* approach: a code match either exists or it
+// doesn't, there's no "Bruno Fernandes" vs "Bruno G. Fernandes" style
+// near-miss to worry about.
+// p.ciMinutes is this data source's OWN minutes tally for the trailing
+// gameweek window the Worker fetched (NOT the same number as p.minutes,
+// which is FPL's season-total minutes) - always use ciMinutes as the
+// denominator for ci* per-90 rates, never p.minutes, since they cover
+// different windows.
+//
+// Round 48: touchline-proxy.js's /coreinsights route now also aggregates
+// real defensive actions (tackles_won, interceptions, recoveries, blocks,
+// clearances, headed_clearances, duels, aerial duels + win%, FPL's own
+// defensive_contributions) and GK shot-stopping (saves, goals_conceded,
+// goals_prevented) from the same playermatchstats.csv rows already being
+// fetched for shots/xG - no extra subrequests. This was the last major
+// data gap flagged since Round 10: FBref hard-403s (a Cloudflare JS
+// challenge a Worker's fetch() fundamentally cannot solve) and Understat's
+// player-page scrape has been broken since the same round, so dsTackles/
+// dsInterceptions/dsBlocks/dsClearances/dsAerialsWon/dsAerialWinPct were
+// silently null for virtually every player, and every UI surface reading
+// them (Player Stats' CBIT column, the DefCon/CBIT/Aerials scatter charts
+// on the Charts tab, Simulation's Shots/Tackles duels) degraded quietly.
+// Fix: store the new data under its own ci* names AND backfill the
+// existing ds* names wherever the FBref/Understat scrape left them null -
+// this is the same three-tier real-data-first pattern shotsPer90/
+// chancesCreatedPer90 already use, and it means every existing consumer
+// of dsTackles etc. gets real data for free with no call-site changes.
+// If the FBref/Understat scrape ever starts working again, its numbers
+// still win (checked first, only backfilled when null) since they're a
+// full-season read rather than this source's trailing-8-GW window.
+function attachCoreInsights(data) {
+  if (!data || !data.players) return;
+  const byCode = {};
+  for (const r of data.players) { if (r.playerCode != null) byCode[r.playerCode] = r; }
+  for (const p of state.players) {
+    const r = byCode[p.code];
+    if (!r) continue;
+    p.ciShots = r.totalShots;
+    p.ciShotsOnTarget = r.shotsOnTarget;
+    p.ciChancesCreated = r.chancesCreated;
+    p.ciXg = r.xg;
+    p.ciXa = r.xa;
+    p.ciBigChancesMissed = r.bigChancesMissed;
+    p.ciMinutes = r.minutes;
+    p.ciMatchesCounted = r.matchesCounted;
+    // New (Round 48) ci* defensive/GK fields - own names, always set when
+    // this source has the player, independent of the ds* backfill below.
+    p.ciTackles = r.tackles;
+    p.ciInterceptions = r.interceptions;
+    p.ciRecoveries = r.recoveries;
+    p.ciBlocks = r.blocks;
+    p.ciClearances = r.clearances;
+    p.ciHeadedClearances = r.headedClearances;
+    p.ciDuelsWon = r.duelsWon;
+    p.ciDuelsLost = r.duelsLost;
+    p.ciAerialDuelsWon = r.aerialDuelsWon;
+    p.ciAerialDuelsWonPercent = r.aerialDuelsWonPercent;
+    p.ciDefensiveContributions = r.defensiveContributions;
+    p.ciSaves = r.saves;
+    p.ciGoalsConceded = r.goalsConceded;
+    p.ciGoalsPrevented = r.goalsPrevented;
+    // Backfill: every existing consumer of dsTackles/dsInterceptions/
+    // dsBlocks/dsClearances/dsAerialsWon/dsAerialWinPct reads those exact
+    // field names (CBIT, the DefCon/Aerials scatter charts, Simulation
+    // duels) - only fill them in when the FBref/Understat scrape left them
+    // null/undefined, so a working scrape's full-season numbers are never
+    // overwritten by this source's shorter trailing window.
+    if (p.dsTackles == null) p.dsTackles = r.tackles;
+    if (p.dsInterceptions == null) p.dsInterceptions = r.interceptions;
+    if (p.dsBlocks == null) p.dsBlocks = r.blocks;
+    if (p.dsClearances == null) p.dsClearances = r.clearances;
+    if (p.dsAerialsWon == null) p.dsAerialsWon = r.aerialDuelsWon;
+    if (p.dsAerialWinPct == null) p.dsAerialWinPct = r.aerialDuelsWonPercent;
+  }
+}
+
 // Attaches /clubstats data to state.clubStatsByTeamId, keyed by FPL team
 // id (matched via normTeam, same normalizer /deeperstats/ player-matching
 // already uses) so the Table tab can look a club's numbers up directly.
@@ -5732,7 +5855,7 @@ async function loadData() {
     precomputeStrengthRanges();
     computeTeamContributionShares();
 
-    const [fixtures, deeper, clubStats, oddsData, pastFormData, shotMap] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats(), fetchOdds(), fetchPastForm(), fetchShotMap()]);
+    const [fixtures, deeper, clubStats, oddsData, pastFormData, shotMap, coreInsights] = await Promise.all([fplGet("/fixtures/"), fetchDeeperStats(), fetchClubStats(), fetchOdds(), fetchPastForm(), fetchShotMap(), fetchCoreInsights()]);
     state.allFixtures = fixtures;
     buildFixtureTicker(fixtures);
     computeTeamTiers();
@@ -5741,6 +5864,7 @@ async function loadData() {
     attachOdds(oddsData);
     attachPastForm(pastFormData);
     attachShotMap(shotMap); // Round 42 - see fetchShotMap's own comment; no-ops (empty map) until /shotmap is deployed
+    attachCoreInsights(coreInsights); // Round 47 - see fetchCoreInsights's own comment; no-ops until /coreinsights is deployed
 
     // Player Stats' "Next GW proj." previously just displayed FPL's own
     // ep_next figure verbatim. Now that fixturesByTeam is loaded, replace
@@ -10887,24 +11011,99 @@ function captaincyScoreForGw(p, gwId) {
   return result;
 }
 // ---- Shot/chance VOLUME + QUALITY, for Explosive/Safe captaincy modes ----
-// Real per-90 shots/chances-created data lives in p.dsShots/p.dsKeyPasses
-// (see SIM_MATCH_OUTPUT_STATS's "shots"/"chancesCreated" entries and the
-// note at STAT_THEMES/activeColumns above) - the Understat/FBref scrape
-// that populates them is confirmed unreliable (Understat's playersData
-// markers move, FBref 403s), so most players fall through to the same
-// fallback ratios SIM_MATCH_OUTPUT_STATS already uses: shots90 ≈ xg90*4.5,
-// chancesCreated90 ≈ xa90*3. Reusing those exact fallback constants here
-// (rather than inventing new ones) keeps this consistent with what the
-// Simulation tab already shows for the same player, and means a player
-// with zero real scrape match still gets a sane non-zero volume read
-// rather than falling out of the captaincy comparison entirely.
+// Round 47: three-tier source chain, in preference order:
+//   1. p.ciShots/p.ciChancesCreated - REAL per-match totals from the
+//      FPL-Core-Insights GitHub dataset (see fetchCoreInsights/
+//      attachCoreInsights above), joined onto this player via p.code (FPL's
+//      own stable id) - no name-matching involved, so this is expected to
+//      be populated for the large majority of current-season PL players
+//      with any minutes in the fetched gameweek window (see
+//      CHANGES_SUMMARY_ROUND2.md for the reasoning on expected coverage).
+//      Denominator is p.ciMinutes (that source's OWN minutes tally for the
+//      SAME window it fetched shots/chances from), not p.minutes (FPL
+//      season-total minutes) - those cover different windows when the
+//      Worker's CORE_INSIGHTS_WINDOW is narrower than the full season, so
+//      mixing them would produce a wrong rate.
+//   2. p.dsShots/p.dsKeyPasses - the older Understat/FBref scrape (see
+//      attachDeeperStats). Confirmed unreliable (Understat's playersData
+//      markers moved, FBref 403s) so this rarely populates in practice, but
+//      costs nothing to check as a second real-data attempt before falling
+//      to synthetic.
+//   3. Last resort: synthShotsPer90/synthChancesCreatedPer90 below - a
+//      position/attribute-aware ratio off xg90/xa90, replacing the OLD flat
+//      xg90*4.5 / xa90*3 constants (still visible in SIM_MATCH_OUTPUT_STATS,
+//      which the Simulation tab uses independently and was NOT touched this
+//      round - see that section's own comment for why match-simulation
+//      output intentionally keeps a simpler, cheaper fallback).
 function shotsPer90(p) {
-  const real = per90Rate(p.dsShots, p.minutes);
-  return real != null ? real : (p.xg90 || 0) * 4.5;
+  const real = per90Rate(p.ciShots, p.ciMinutes);
+  if (real != null) return real;
+  const legacyReal = per90Rate(p.dsShots, p.minutes);
+  if (legacyReal != null) return legacyReal;
+  return synthShotsPer90(p);
 }
 function chancesCreatedPer90(p) {
-  const real = per90Rate(p.dsKeyPasses, p.minutes);
-  return real != null ? real : (p.xa90 || 0) * 3;
+  const real = per90Rate(p.ciChancesCreated, p.ciMinutes);
+  if (real != null) return real;
+  const legacyReal = per90Rate(p.dsKeyPasses, p.minutes);
+  if (legacyReal != null) return legacyReal;
+  return synthChancesCreatedPer90(p);
+}
+// Improved last-resort fallback (Round 47) - for the rare case where BOTH
+// real sources above are unavailable for a specific player (typically a
+// brand-new signing/promoted-team player with no match history in either
+// FPL-Core-Insights or the Understat scrape yet). The OLD fallback applied
+// one flat constant (shots90 = xg90*4.5, chancesCreated90 = xa90*3) to
+// EVERY player regardless of position or profile - honest limitation this
+// round could not fully solve (this codebase has no per-player shots-per-xG
+// history to learn a real ratio from when a player has zero match data
+// anywhere), but it CAN vary the ratio by two things that are actually
+// available on the player object without a real match yet:
+//   - Position: attacking archetypes have systematically different
+//     shots-per-xG ratios in real-world data - a striker's shot diet is
+//     concentrated in the box (closer to their actual xG per shot, so a
+//     LOWER shots-per-xG multiplier), while midfielders taking more shots
+//     from distance/half-chances need MORE shots to accumulate the same
+//     xG (a HIGHER multiplier). This is the same real effect the codebase's
+//     existing SIM_MATCH_OUTPUT_STATS constant only crudely averages away.
+//   - FM attributes, but ONLY when hasRealFmAttribute confirms the user has
+//     actually set/imported a real value - getFmAttributeValue silently
+//     returns a flat neutral 10 otherwise (see that function's own
+//     comment), and nudging the ratio off an unset default would be
+//     inventing a signal that isn't really there, not using one. longShots/
+//     flair (shots) and crossing/vision (chances created) are used ONLY
+//     when real - a player who genuinely shoots from distance a lot
+//     (high longShots+flair) needs more shots per unit xG than one whose
+//     attempts are mostly clear-cut; a genuinely high-crossing wide player
+//     racks up chances-created volume beyond what xA alone implies.
+// Honesty note: for a player with NO real FM data set (the common case -
+// FM attributes are opt-in/manual per this codebase's own
+// getFmAttributeValue comment), this reduces to a purely position-based
+// ratio - four constants instead of one, not a rich per-player model. That
+// is a genuine, disclosed limitation, not overclaimed sophistication.
+const SYNTH_SHOTS_PER_XG_BY_POSITION = { FWD: 4.0, MID: 4.8, DEF: 5.3, GK: 4.8 };
+const SYNTH_CHANCES_PER_XA_BY_POSITION = { FWD: 2.6, MID: 3.0, DEF: 3.4, GK: 3.0 };
+function synthShotsPer90(p) {
+  const base = SYNTH_SHOTS_PER_XG_BY_POSITION[p.position] || 4.5;
+  let mult = 1;
+  if (hasRealFmAttribute(p.id, "longShots") || hasRealFmAttribute(p.id, "flair")) {
+    const longShots = getFmAttributeValue(p.id, "longShots");
+    const flair = getFmAttributeValue(p.id, "flair");
+    // 1-20 FM scale, 10 = neutral -> roughly 0.85x-1.15x around the position
+    // base as the shoot-on-sight profile (longShots/flair) moves off-neutral.
+    mult = 1 + (((longShots + flair) / 2 - 10) / 10) * 0.15;
+  }
+  return (p.xg90 || 0) * base * Math.max(0.7, Math.min(1.3, mult));
+}
+function synthChancesCreatedPer90(p) {
+  const base = SYNTH_CHANCES_PER_XA_BY_POSITION[p.position] || 3.0;
+  let mult = 1;
+  if (hasRealFmAttribute(p.id, "crossing") || hasRealFmAttribute(p.id, "vision")) {
+    const crossing = getFmAttributeValue(p.id, "crossing");
+    const vision = getFmAttributeValue(p.id, "vision");
+    mult = 1 + (((crossing + vision) / 2 - 10) / 10) * 0.15;
+  }
+  return (p.xa90 || 0) * base * Math.max(0.7, Math.min(1.3, mult));
 }
 // Shot QUALITY proxy: xG per shot (a genuinely real ratio when real shot
 // volume is matched - xg90 is always real FPL data regardless). Clamped to
