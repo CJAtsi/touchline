@@ -1486,13 +1486,18 @@
     <div id="teamResult"></div>
     <div id="myTeamHub" style="display:none">
       <div class="card" id="myTeamSummaryCard" style="margin:16px 0"></div>
-      <div id="myTeamFdrMini"></div>
       <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px">
         <button class="dir-btn" id="myTeamGwPrevBtn" title="Previous gameweek">‹</button>
         <span style="font-size:16px;font-weight:700" id="myTeamGwLabel"></span>
         <button class="dir-btn" id="myTeamGwNextBtn" title="Next gameweek">›</button>
       </div>
       <div id="myTeamPitchArea"></div>
+      <!-- Round 49 (user request): the team/pitch is the thing you look at
+           first when this tab loads - FDR/fixtures moved below it (was
+           above, forcing a scroll past fixtures before seeing your actual
+           squad). renderMyTeamFdrMini still targets this same #myTeamFdrMini
+           id, so no JS changes needed - this is purely a DOM position move. -->
+      <div id="myTeamFdrMini" style="margin-top:16px"></div>
       <div id="myTeamActionsArea" style="margin-top:16px"></div>
       <div id="myTeamSuggestedTransfers" style="margin-top:24px"></div>
     </div>
@@ -9065,18 +9070,57 @@ function renderProjectionsCaptaincy(pool, gwId) {
   // changes here - this is purely a new way to look at the same numbers.
   const sortKey = state.capSortKey || "score";
   const sortDir = state.capSortDir || "desc";
+  // Round 49 (user request: "captaincy route to points i dont want it to be
+  // percentages but rather values - goals should be xg, same with assists,
+  // bonus should be a decimal between 1 and 3"): every route column below
+  // used to show a 0-1 probability rescaled to a % (e.g. "62%"), which
+  // answered "how likely is this route" but not "how many points is it
+  // actually worth" - two genuinely different questions. Replaced with real
+  // point/rate values computed from the SAME underlying numbers (nothing
+  // in the scoring model itself changes, only what this table displays):
+  //   - CS: expected clean-sheet POINTS this fixture = real CS% (row.csPct,
+  //     already fixture-specific for a single-gw captaincy row) x this
+  //     position's real CS point value (CS_PTS) - a value like "1.8", not
+  //     "45%".
+  //   - DefCon: expected DefCon points = real DefCon% (row.defConPct) x 2
+  //     (the real flat DefCon point value in classic FPL scoring).
+  //   - Goal: the player's own xG90 (p.xg90) - literally "goals should be
+  //     xg" per the request - their real expected-goals-per-90 rate, the
+  //     same number that already drives goalRoute's eligibility check.
+  //   - Assist: p.xa90, same logic as Goal.
+  //   - Bonus: row.bonusExp - already a real expected-bonus-POINTS value
+  //     (not a probability) from computeProjectionRow's own bonus-points
+  //     accumulation, so this needed no new computation - it was already
+  //     sitting right there. Naturally lands in roughly the 0-3 decimal
+  //     range the request described, since real bonus points are 0-3.
+  //   - Matchup: scored.boostBonus - the actual POINTS this player's
+  //     playstyle/matchup edge is adding (or subtracting, if negative) to
+  //     their captaincy score this fixture (see captaincyScoreForGw) -
+  //     genuinely more informative as a value than matchupQuality's 0-100
+  //     scale, since a below-average matchup now visibly shows as a small
+  //     negative number instead of just a low percentage.
+  // Sort keys below now sort by these SAME displayed values (not the old
+  // probabilities) so "click to sort" always matches what's on screen.
+  const capValue = (c, key) => {
+    const bd = c.breakdown, row = c.row, p = c.p;
+    switch (key) {
+      case "cs": return bd.csEligible ? ((row.csPct || 0) / 100) * (CS_PTS[p.position] || 0) : null;
+      case "defcon": return bd.defConEligible ? ((row.defConPct || 0) / 100) * 2 : null;
+      case "goal": return p.xg90 || 0;
+      case "assist": return p.xa90 || 0;
+      case "bonus": return row.bonusExp || 0;
+      case "matchup": return c.boostBonus || 0;
+      default: return null;
+    }
+  };
   const sortVal = (c) => {
     const bd = c.breakdown;
     switch (sortKey) {
       case "score": return c[scoreKey];
       case "floor": return bd.floorPts;
       case "ceiling": return bd.ceilingPts;
-      case "cs": return bd.csEligible ? bd.csProb : null;
-      case "defcon": return bd.defConEligible ? bd.defConProb : null;
-      case "goal": return bd.goalProb;
-      case "assist": return bd.assistProb;
-      case "bonus": return bd.bonusProb;
-      case "matchup": return bd.matchupQuality;
+      case "cs": case "defcon": case "goal": case "assist": case "bonus": case "matchup":
+        return capValue(c, sortKey);
       default: return c[scoreKey];
     }
   };
@@ -9090,17 +9134,31 @@ function renderProjectionsCaptaincy(pool, gwId) {
   }
   const top = candidates.slice(0, 20);
   const colLabel = (key, label, title) => `<th data-cap-sort="${key}" style="cursor:pointer" ${title ? `title="${title}"` : ""}>${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
-  const pctCell = (live, prob, eligible, label) => {
+  // live: whether this route is a genuine live route for THIS captaincy
+  // score (feeds the route count/bonus) - still used for the same
+  // highlight-vs-dim colour cue as before, just applied to a value instead
+  // of a percentage now.
+  // extraAttrs (optional): raw HTML attribute string appended to the <td> -
+  // used by the Matchup column to attach data-matchup-a/-b + a pointer
+  // cursor so it's clickable through to openInferredMatchupModal, without
+  // every other column needing to know about that.
+  const valueCell = (live, value, eligible, label, unit, extraAttrs) => {
     if (!eligible) return `<td class="mono" style="text-align:center;color:var(--ink-faint)" title="${label}: not a scoring route for this position">N/A</td>`;
-    const pct = Math.round((prob || 0) * 100);
+    const display = value == null ? "-" : (value < 0 ? "-" : "") + Math.abs(value).toFixed(2);
     const color = live ? "var(--gold-bright,#00ff66)" : "var(--ink-faint)";
-    return `<td class="mono" style="text-align:center;color:${color};font-weight:${live ? 700 : 400}" title="${label} route - ${pct}% likelihood this fixture">${pct}%</td>`;
+    const cursorStyle = extraAttrs ? "cursor:pointer;text-decoration:underline dotted;" : "";
+    return `<td class="mono" style="text-align:center;${cursorStyle}color:${color};font-weight:${live ? 700 : 400}" title="${label}: ${display}${unit || ""} this fixture${extraAttrs ? " - click to see the players/duel breakdown" : ""}"${extraAttrs ? " " + extraAttrs : ""}>${display}${unit || ""}</td>`;
   };
   const rowsHtml = top.map((scored, idx) => {
     const p = scored.p, bd = scored.breakdown;
     const displayScore = scored[scoreKey];
     const fx = scored.fixture;
     const oppLabel = fx && fx.opp ? `${fx.opp.short_name} ${fx.isHome ? "(H)" : "(A)"}` : "No fixture";
+    // Round 49: same inferred-opponent read bestMatchup/likelyOpponentFor
+    // use elsewhere - needed here so the Matchup pts cell can be clicked
+    // through to openInferredMatchupModal (see that function's own comment).
+    const oppPlayer = fx && fx.opp ? likelyOpponentFor(p, fx.opp.id) : null;
+    const matchupAttrs = oppPlayer ? `data-matchup-a="${p.id}" data-matchup-b="${oppPlayer.id}"` : null;
     return `<tr>
       <td class="mono" style="text-align:center;color:var(--ink-faint);font-weight:700">${idx + 1}</td>
       <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div>
@@ -9111,12 +9169,12 @@ function renderProjectionsCaptaincy(pool, gwId) {
       <td class="mono" style="text-align:center;font-weight:800;color:var(--gold-bright,#00ff66)">${displayScore.toFixed(1)}</td>
       <td class="mono" style="text-align:center">${bd.floorPts.toFixed(1)}</td>
       <td class="mono" style="text-align:center">+${bd.ceilingPts.toFixed(1)}</td>
-      ${pctCell(bd.csRoute, bd.csProb, bd.csEligible, "CS")}
-      ${pctCell(bd.defConRoute, bd.defConProb, bd.defConEligible, "DefCon")}
-      ${pctCell(bd.goalRoute, bd.goalProb, true, "Goal")}
-      ${pctCell(bd.assistRoute, bd.assistProb, true, "Assist")}
-      ${pctCell(bd.bonusRoute, bd.bonusProb, true, "Bonus")}
-      ${pctCell(bd.matchupRoute, bd.matchupQuality, true, "Matchup")}
+      ${valueCell(bd.csRoute, capValue(scored, "cs"), bd.csEligible, "CS pts", "")}
+      ${valueCell(bd.defConRoute, capValue(scored, "defcon"), bd.defConEligible, "DefCon pts", "")}
+      ${valueCell(bd.goalRoute, capValue(scored, "goal"), true, "xG90", "")}
+      ${valueCell(bd.assistRoute, capValue(scored, "assist"), true, "xA90", "")}
+      ${valueCell(bd.bonusRoute, capValue(scored, "bonus"), true, "Bonus pts", "")}
+      ${valueCell(bd.matchupRoute, capValue(scored, "matchup"), true, "Matchup pts", "", matchupAttrs)}
     </tr>`;
   }).join("");
   body.innerHTML = `
@@ -9124,7 +9182,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
       <span style="font-size:12px;color:var(--ink-dim)">Score formula:</span>
       ${Object.entries(CAPTAINCY_MODE_LABELS).map(([key, label]) => `<button type="button" class="chip-btn small${mode === key ? " active" : ""}" data-cap-mode="${key}" style="cursor:pointer">${label}</button>`).join("")}
     </div>
-    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Click any column header to sort by it - route columns show that route's live probability for this exact fixture. Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every number below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
+    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Click any column header to sort by it - route columns show real point/rate VALUES for this exact fixture (not percentages): CS/DefCon/Bonus are expected POINTS, Goal/Assist are the player's own xG90/xA90 rate, Matchup is the actual points the playstyle/matchup edge is adding (can be negative). Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every number below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
     ${top.length ? `<div class="table-wrap"><table>
       <thead><tr>
         <th></th>
@@ -9132,12 +9190,12 @@ function renderProjectionsCaptaincy(pool, gwId) {
         ${colLabel("score", CAPTAINCY_MODE_LABELS[mode] + " score")}
         ${colLabel("floor", "Floor", "Guaranteed-ish points if nothing extra lands")}
         ${colLabel("ceiling", "Ceiling", "Extra points on top of floor if routes land")}
-        ${colLabel("cs", "CS%", "Clean-sheet route probability")}
-        ${colLabel("defcon", "DefCon%", "Defensive-contribution threshold probability")}
-        ${colLabel("goal", "Goal%", "Goal-threat route probability")}
-        ${colLabel("assist", "Assist%", "Assist-threat route probability")}
-        ${colLabel("bonus", "Bonus%", "Expected-bonus route probability")}
-        ${colLabel("matchup", "Matchup%", "Playstyle/matchup edge quality")}
+        ${colLabel("cs", "CS pts", "Expected clean-sheet points this fixture (real CS% x this position's CS point value)")}
+        ${colLabel("defcon", "DefCon pts", "Expected defensive-contribution points this fixture (real DefCon% x 2)")}
+        ${colLabel("goal", "xG90", "This player's own expected-goals-per-90 rate")}
+        ${colLabel("assist", "xA90", "This player's own expected-assists-per-90 rate")}
+        ${colLabel("bonus", "Bonus pts", "Expected bonus points this fixture")}
+        ${colLabel("matchup", "Matchup pts", "Points the playstyle/matchup edge adds (or subtracts) to the captaincy score this fixture")}
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table></div>` : `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
@@ -9152,6 +9210,13 @@ function renderProjectionsCaptaincy(pool, gwId) {
       else { state.capSortKey = key; state.capSortDir = key === "name" ? "asc" : "desc"; }
       renderProjectionsTab();
     };
+  });
+  // Round 49: Matchup pts column click -> inferred-matchup modal (see
+  // openInferredMatchupModal's own comment) - same feature as the Table
+  // view's Matchup column, wired the plain querySelectorAll way since this
+  // table (top 20 only) isn't batch-rendered like that one.
+  body.querySelectorAll("[data-matchup-a]").forEach(cell => {
+    cell.onclick = () => openInferredMatchupModal(Number(cell.dataset.matchupA), Number(cell.dataset.matchupB));
   });
 }
 function renderProjViewModeRow() {
@@ -9251,10 +9316,33 @@ function xiBudgetForFormation(need, excludeIds, formationKey) {
     benchMID * priceFor("MID") + benchFWD * priceFor("FWD");
   return 100 - minBenchCost;
 }
-function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey) {
+// Round 49 (user request: "the ability to also swap in fwds for mid or a
+// player that is above budget but because i click them it rearranges the
+// team" + "change the budget in increments of .1"): two new optional
+// trailing params.
+//   - customBudgetTenths: when set (not null/undefined), used AS the XI
+//     budget directly instead of the fixed per-formation figure from
+//     xiBudgetForFormation - lets the caller offer a user-editable £0.1m-
+//     increment budget input, or auto-fill it from a real squad's value
+//     (see renderProjectionsPitch's budget toolbar).
+//   - skipRepair: when true, the budget/club-limit REPAIR passes below
+//     (which downgrade OTHER, non-locked players to claw back under
+//     budget/the club limit) are skipped entirely - only the INFEASIBLE
+//     flags are still computed, so the UI can still show a warning. This
+//     is what fixes "because i click them it rearranges the team": once
+//     the user has taken manual control (any lock/exclude override is
+//     active), an expensive or club-stacking manual pick must not trigger
+//     the algorithm to silently downgrade unrelated slots to compensate -
+//     the user asked for THAT specific player, and any resulting over-
+//     budget/over-limit state should be visible, not auto-corrected out
+//     from under them. The very first auto-generated XI (no overrides yet)
+//     still gets full repair, same as before - only a genuinely manual
+//     session opts out.
+function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey, customBudgetTenths, skipRepair) {
   // Formation-aware XI budget (see xiBudgetForFormation above) rather than
-  // one flat number for every formation.
-  const BUDGET = xiBudgetForFormation(need, excludedIds, formationKey), MAX_PER_CLUB = 3;
+  // one flat number for every formation - unless the caller supplied an
+  // explicit customBudgetTenths override (Round 49).
+  const BUDGET = customBudgetTenths != null ? customBudgetTenths : xiBudgetForFormation(need, excludedIds, formationKey), MAX_PER_CLUB = 3;
   const excluded = excludedIds || new Set();
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const r of rows) { if (excluded.has(r.p.id)) continue; byPos[r.p.position].push(r); }
@@ -9318,7 +9406,7 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   // every position is already the cheapest eligible option - genuinely
   // infeasible, which we report via budgetInfeasible rather than hiding).
   let budgetInfeasible = false;
-  if (useBudget) {
+  if (useBudget && !skipRepair) {
     const lockedIdSet = new Set((lockedRows || []).map(r => r.p.id));
     let guard = 0;
     while (spent > BUDGET + 1e-9 && guard++ < 200) {
@@ -9370,9 +9458,13 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   // - e.g. filters have excluded too much of the pool - reported via
   // clubLimitInfeasible rather than silently left over the limit).
   let clubLimitInfeasible = false;
-  if (useClubLimit) {
+  const overClub = () => Object.entries(clubCount).find(([, c]) => c > MAX_PER_CLUB);
+  if (useClubLimit && skipRepair) {
+    // Manual-override session (see skipRepair's own comment above): still
+    // report the flag for the UI warning, just don't auto-swap anyone out.
+    clubLimitInfeasible = !!overClub();
+  } else if (useClubLimit) {
     let guard2 = 0;
-    const overClub = () => Object.entries(clubCount).find(([, c]) => c > MAX_PER_CLUB);
     while (guard2++ < 200) {
       const offender = overClub();
       if (!offender) break;
@@ -10222,6 +10314,16 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
   const lockedIds = state.projXiLocked || (state.projXiLocked = new Set());
   const rowsById = new Map(rows.map(r => [r.p.id, r]));
   const lockedRows = [...lockedIds].map(id => rowsById.get(id)).filter(Boolean);
+  // Round 49: once the user has taken manual control (any lock/exclude
+  // override active), skip the budget/club-limit auto-repair passes inside
+  // pickConstrainedXI - see that function's skipRepair param comment for
+  // why ("because i click them it rearranges the team"). The very first
+  // auto-generated XI (no overrides yet) still gets full repair.
+  const hasManualOverride = excludedIds.size > 0 || lockedRows.length > 0;
+  // Round 49: user-editable £0.1m-increment budget cap, overriding the
+  // fixed per-formation figure - see the budget toolbar UI below for how
+  // this gets set (typed directly, or "Use my team's value").
+  const customBudgetTenths = useBudget && state.projPitchBudgetValueTenths != null ? state.projPitchBudgetValueTenths : null;
   const selectedFormation = state.projFormation || "AUTO";
   // "Auto" mode: rather than making the user manually flip through every
   // valid FPL formation to see which scores highest, try ALL of them here
@@ -10230,7 +10332,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
   function buildForFormation(formationKey) {
     const formation = FORMATIONS_H2H[formationKey];
     const need = { GK: 1, DEF: formation.DEF, MID: formation.MID, FWD: formation.FWD };
-    const result = pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey);
+    const result = pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey, customBudgetTenths, hasManualOverride);
     const allPicked = [...result.picked.GK, ...result.picked.DEF, ...result.picked.MID, ...result.picked.FWD];
     const captain = allPicked.reduce((best, r) => (!best || r.proj > best.proj) ? r : best, null);
     const totalProj = allPicked.reduce((sum, r) => sum + r.proj, 0) + (captain ? captain.proj : 0);
@@ -10298,37 +10400,54 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
     `;
   }
   function swapPanelHtml(pos, idx) {
-    // List every eligible replacement in this position - not currently
-    // picked elsewhere in the XI, not excluded - ranked by projection,
-    // regardless of budget/club-limit toggles (a manual swap is a
-    // deliberate override, so those soft constraints don't gate it; the
-    // spend total below still updates to reflect the real cost).
+    // List every eligible replacement - not currently picked elsewhere in
+    // the XI, not excluded - ranked by projection, regardless of budget/
+    // club-limit toggles (a manual swap is a deliberate override, so those
+    // soft constraints don't gate it; the spend total below still updates
+    // to reflect the real cost, and an over-budget pick is now flagged
+    // inline rather than silently triggering other slots to be downgraded
+    // - see pickConstrainedXI's skipRepair param).
     // Item 7 ("both 11 needs ability to swap out and search for the player
     // you want to take over") - same search box added to bestFifteenPitchHtml's
     // equivalent panel; see its comment for why this reuses a plain search
     // box rather than the Planner's full filter bar, and the caret-restore
     // handling below.
+    // Round 49 (user request: "have the ability to also swap in fwds for
+    // mid"): a GK slot is still GK-only (real FPL rule - exactly one
+    // keeper on the pitch, never interchangeable with an outfielder), but
+    // a DEF/MID/FWD slot now offers candidates from ANY outfield position,
+    // each labelled with their real position - not just the slot's
+    // original one. Picking a same-position candidate works exactly as
+    // before. Picking a DIFFERENT-position candidate is a genuine shape
+    // change (e.g. "one fewer MID, one more FWD") - the click handler
+    // below checks whether the resulting XI still matches one of the 7
+    // legal formations (formationKeyForCounts) and switches the active
+    // formation to match if so, or rejects the swap with an inline error
+    // if the new shape isn't legal (e.g. would need a 4th FWD).
     const pickedIds = new Set(allPicked.map(x => x.p.id));
     const currentId = (picked[pos][idx] || {}).p?.id;
     const searchQ = foldAccents((state.projXiSwapSearch || "").trim());
-    let options = rows.filter(r => r.p.position === pos && !excludedIds.has(r.p.id) && (r.p.id === currentId || !pickedIds.has(r.p.id)));
+    const eligiblePositions = pos === "GK" ? ["GK"] : ["DEF", "MID", "FWD"];
+    let options = rows.filter(r => eligiblePositions.includes(r.p.position) && !excludedIds.has(r.p.id) && (r.p.id === currentId || !pickedIds.has(r.p.id)));
     if (searchQ) options = options.filter(r => r.p.id === currentId || foldAccents(r.p.webName).includes(searchQ));
     options = options.sort((a, b) => b.proj - a.proj).slice(0, searchQ ? 30 : 12);
+    const errorMsg = state.projXiSwapError;
     return `
       <div class="pitch-swap-panel" style="margin-top:10px;border:1px solid var(--border-strong);border-radius:12px;padding:8px;background:rgba(0,0,0,0.35)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-size:11px;font-weight:700;color:var(--gold-bright)">Swap ${pos} slot ${idx + 1} - pick a replacement</span>
+          <span style="font-size:11px;font-weight:700;color:var(--gold-bright)">Swap ${pos} slot ${idx + 1} - pick a replacement (any outfield position)</span>
           <button type="button" id="pitchSwapCancel" style="background:transparent;border:none;color:var(--ink-faint);cursor:pointer;font-size:13px">✕</button>
         </div>
+        ${errorMsg ? `<div style="font-size:11px;color:var(--warn,#e0a94f);margin-bottom:6px">⚠️ ${errorMsg}</div>` : ""}
         <input type="text" id="pitchSwapSearch" placeholder="Search by name…" value="${(state.projXiSwapSearch || "").replace(/"/g, "&quot;")}" style="width:100%;margin-bottom:6px;box-sizing:border-box" />
         <div style="display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto">
           ${options.map(o => `
             <button type="button" class="pitch-swap-option" data-swap-pick-id="${o.p.id}" data-swap-pos="${pos}" data-swap-idx="${idx}"
               style="display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;background:${o.p.id === currentId ? "var(--gold-soft)" : "transparent"};border:1px solid ${o.p.id === currentId ? "var(--border-strong)" : "var(--border)"};border-radius:8px;padding:5px 8px;cursor:pointer;color:var(--ink);font-family:inherit;font-size:11.5px">
-              <span>${nameWithPosition(o.p)} <span style="color:var(--ink-faint);font-size:10px">${state.teamsById[o.p.teamId]?.short_name || ""} · ${fmtPrice(o.p.nowCost)}</span></span>
+              <span>${nameWithPosition(o.p)}${o.p.position !== pos ? ` <span style="color:var(--gold-bright);font-size:9.5px">(${o.p.position}→${pos})</span>` : ""} <span style="color:var(--ink-faint);font-size:10px">${state.teamsById[o.p.teamId]?.short_name || ""} · ${fmtPrice(o.p.nowCost)}</span></span>
               <span class="mono" style="font-weight:700">${o.proj.toFixed(1)}</span>
             </button>
-          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible ${pos}${searchQ ? ` matching "${state.projXiSwapSearch}"` : ""} in the current filters.</span>`}
+          `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">No other eligible player${searchQ ? ` matching "${state.projXiSwapSearch}"` : ""} in the current filters.</span>`}
         </div>
       </div>
     `;
@@ -10373,9 +10492,27 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
         ${swapOpenSlot ? swapPanelHtml(swapOpenSlot.pos, swapOpenSlot.idx) : ""}
       </div>
     `;
+  // Round 49 (user request: "change the budget in increments of .1 so
+  // that i can match my squads value (you can even calculate it for a
+  // persons personal team)"): when the budget cap is on, show the actual
+  // figure as an editable £0.1m-step number input (defaulting to whatever
+  // the formation's own fixed cap currently is) instead of just a fixed,
+  // non-adjustable number behind a checkbox. "Use my team's value" fills
+  // it from myTeamBudgetCapTenths() - real squad cost + bank, which
+  // already resolves to your actually-loaded FPL team if one's loaded (My
+  // team tab auto-syncs into a draft on load - see loadTeam's own comment)
+  // or your active Squad Builder draft otherwise, so this genuinely is
+  // "calculate it for a person's personal team," not a separate figure.
+  const effectiveBudgetM = (best.budget / 10).toFixed(1);
+  const hasCustomBudget = state.projPitchBudgetValueTenths != null;
   body.innerHTML = `
-    <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center">
-      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="Fixed XI budget per formation, leaving realistic room for a 4-man bench at minimum prices: £83.0m for 4-3-3/4-4-2/4-5-1, £83.5m for 3-5-2/3-4-3, £82.5m for 5-3-2/5-4-1. Shown as 'Budget cap' rather than a specific figure since the exact number depends on formation. This is never breached when the checkbox is on - the picker downgrades players as needed to stay within it."><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 Budget cap</label>
+    <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)" title="When off, no budget constraint at all. When on, defaults to a fixed XI budget per formation (leaving realistic room for a 4-man bench at minimum prices), but you can type any figure in £0.1m steps below, or pull it straight from a real squad's value."><input type="checkbox" id="projPitchBudgetChk" ${useBudget ? "checked" : ""} /> 💰 Budget cap</label>
+      ${useBudget ? `
+        <input type="number" id="projPitchBudgetInput" value="${effectiveBudgetM}" step="0.1" min="38.0" max="100.0" style="width:64px" title="XI budget in £m, editable in £0.1m steps" />
+        <button type="button" id="projPitchBudgetMineBtn" class="chip-btn small" style="cursor:pointer" title="Fill this from your real squad's value - your loaded FPL team if one's loaded (My team tab), otherwise your active Squad Builder draft (squad cost + bank).">📥 Use my team's value</button>
+        ${hasCustomBudget ? `<button type="button" id="projPitchBudgetResetBtn" class="chip-btn small" style="cursor:pointer" title="Back to the fixed per-formation default">↺ Formation default</button>` : ""}
+      ` : ""}
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-dim)"><input type="checkbox" id="projPitchClubChk" ${useClubLimit ? "checked" : ""} /> 🚫 Max 3 per club</label>
       ${!best15Mode && hasOverrides ? `<button type="button" id="pitchResetXiBtn" class="chip-btn small" style="cursor:pointer">↺ Reset XI</button>` : ""}
       ${!best15Mode && state.projXiLastRemoved ? `<button type="button" id="pitchUndoRemoveBtn" class="chip-btn small" style="cursor:pointer" title="Restore the last removed player">↩ Undo remove</button>` : ""}
@@ -10388,8 +10525,18 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
   const budgetChk = document.getElementById("projPitchBudgetChk"), clubChk = document.getElementById("projPitchClubChk");
   if (budgetChk) budgetChk.onchange = () => { state.projPitchBudget = budgetChk.checked; renderProjectionsTab(); };
   if (clubChk) clubChk.onchange = () => { state.projPitchClubLimit = clubChk.checked; renderProjectionsTab(); };
+  const budgetInput = document.getElementById("projPitchBudgetInput");
+  if (budgetInput) budgetInput.onchange = () => {
+    const m = Math.round(Math.max(38, Math.min(100, Number(budgetInput.value) || 0)) * 10) / 10;
+    state.projPitchBudgetValueTenths = Math.round(m * 10); // store in tenths, same unit as nowCost/BUDGET everywhere else
+    renderProjectionsTab();
+  };
+  const budgetMineBtn = document.getElementById("projPitchBudgetMineBtn");
+  if (budgetMineBtn) budgetMineBtn.onclick = () => { state.projPitchBudgetValueTenths = myTeamBudgetCapTenths(); renderProjectionsTab(); };
+  const budgetResetBtn = document.getElementById("projPitchBudgetResetBtn");
+  if (budgetResetBtn) budgetResetBtn.onclick = () => { state.projPitchBudgetValueTenths = null; renderProjectionsTab(); };
   const resetBtn = document.getElementById("pitchResetXiBtn");
-  if (resetBtn) resetBtn.onclick = () => { state.projXiExcluded = new Set(); state.projXiLocked = new Set(); state.projXiSwapSlot = null; state.projXiLastRemoved = null; renderProjectionsTab(); };
+  if (resetBtn) resetBtn.onclick = () => { state.projXiExcluded = new Set(); state.projXiLocked = new Set(); state.projXiSwapSlot = null; state.projXiLastRemoved = null; state.projXiSwapError = null; renderProjectionsTab(); };
   const best15FullBtn = document.getElementById("projBest15FullBtn"), best15MineBtn = document.getElementById("projBest15MineBtn");
   if (best15FullBtn) best15FullBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "full" ? null : "full"; renderProjectionsTab(); };
   if (best15MineBtn) best15MineBtn.onclick = () => { state.projBest15Mode = state.projBest15Mode === "mine" ? null : "mine"; renderProjectionsTab(); };
@@ -10407,7 +10554,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
       };
     });
     body.querySelectorAll(".pitch-slot-swap-btn").forEach(btn => {
-      btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; state.projXiSwapSearch = ""; renderProjectionsTab(); };
+      btn.onclick = () => { state.projXiSwapSlot = { pos: btn.dataset.swapPos, idx: Number(btn.dataset.swapIdx) }; state.projXiSwapSearch = ""; state.projXiSwapError = null; renderProjectionsTab(); };
     });
     body.querySelectorAll(".pitch-slot-remove-btn").forEach(btn => {
       btn.onclick = () => {
@@ -10419,6 +10566,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
         state.projXiLastRemoved = id;
         state.projXiSwapSlot = { pos: btn.dataset.removePos, idx: Number(btn.dataset.removeIdx) };
         state.projXiSwapSearch = "";
+        state.projXiSwapError = null;
         renderProjectionsTab();
       };
     });
@@ -10431,7 +10579,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
       renderProjectionsTab();
     };
     const swapCancel = document.getElementById("pitchSwapCancel");
-    if (swapCancel) swapCancel.onclick = () => { state.projXiSwapSlot = null; state.projXiSwapSearch = ""; renderProjectionsTab(); };
+    if (swapCancel) swapCancel.onclick = () => { state.projXiSwapSlot = null; state.projXiSwapSearch = ""; state.projXiSwapError = null; renderProjectionsTab(); };
     const pitchSwapSearchInput = document.getElementById("pitchSwapSearch");
     if (pitchSwapSearchInput) pitchSwapSearchInput.oninput = () => {
       // Same caret/focus preservation as the Bench Boost 15 panel's search
@@ -10447,10 +10595,46 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
       btn.onclick = () => {
         const pickId = Number(btn.dataset.swapPickId);
         const pos = btn.dataset.swapPos, idx = Number(btn.dataset.swapIdx);
+        const candidateRow = rowsById.get(pickId);
+        const currentR = picked[pos][idx];
+        // Round 49 (user request: "have the ability to also swap in fwds
+        // for mid... but because i click them it rearranges the team"):
+        // a same-position pick works exactly as before. A DIFFERENT-
+        // position pick (candidate's real position != this slot's label)
+        // is a genuine formation-shape change - compute what the WHOLE
+        // XI's real DEF/MID/FWD counts would be after this swap, and only
+        // apply it if that shape matches one of the 7 legal formations
+        // (formationKeyForCounts). If it does, the active formation is
+        // switched to match (leaving AUTO if it was set) so `need` lines
+        // up with the new shape on the next render - without this, the
+        // swapped-in player could silently fail to be placed at all (see
+        // pickConstrainedXI's locked-player bucketing, which places by
+        // REAL position, not by slot label). If no legal shape matches
+        // (e.g. it would need a 4th forward), the swap is rejected with an
+        // inline message instead of producing an illegal or broken XI.
+        if (candidateRow && candidateRow.p.position !== pos) {
+          const finalIds = allPicked.map(x => x.p.id);
+          if (currentR) {
+            const i = finalIds.indexOf(currentR.p.id);
+            if (i !== -1) finalIds[i] = pickId; else finalIds.push(pickId);
+          } else finalIds.push(pickId);
+          const counts = { DEF: 0, MID: 0, FWD: 0 };
+          for (const id of finalIds) {
+            const r = rowsById.get(id);
+            if (r && counts[r.p.position] != null) counts[r.p.position]++;
+          }
+          const newFormationKey = formationKeyForCounts(counts.DEF, counts.MID, counts.FWD);
+          if (!newFormationKey) {
+            state.projXiSwapError = `Can't place a ${candidateRow.p.position} in a ${pos} slot here - the resulting shape (${counts.DEF}-${counts.MID}-${counts.FWD}) isn't a legal FPL formation. Try removing a different player first to free up room.`;
+            renderProjectionsTab();
+            return;
+          }
+          state.projFormation = newFormationKey;
+        }
+        state.projXiSwapError = null;
         // Whoever currently occupies that slot gets bumped out (excluded)
         // unless the user re-picks the same player, and the chosen
         // replacement gets locked in so the auto-fill can't override it.
-        const currentR = picked[pos][idx];
         if (currentR && currentR.p.id !== pickId) excludedIds.add(currentR.p.id);
         excludedIds.delete(pickId);
         lockedIds.add(pickId);
@@ -11769,7 +11953,7 @@ function renderProjectionsTab() {
         ${cols.contribution ? cell("contribution", r.contribution, r.contribution.toFixed(1) + "%") : ""}
         ${cols.defConPct ? cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%") : ""}
         ${cols.bonusExp ? cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2)) : ""}
-        ${cols.matchupScore ? `<td class="mono" style="text-align:center;${heatOn && ranges && ranges.matchupScore ? heatmapBg(r.matchupScore, ranges.matchupScore.min, ranges.matchupScore.max, false) : ""}" title="${matchupTitle}">${r.matchupScore !== null ? Math.round(r.matchupScore) : "-"}</td>` : ""}
+        ${cols.matchupScore ? `<td class="mono" style="text-align:center;${heatOn && ranges && ranges.matchupScore ? heatmapBg(r.matchupScore, ranges.matchupScore.min, ranges.matchupScore.max, false) : ""}${r.bestMatchup ? "cursor:pointer;text-decoration:underline dotted" : ""}" title="${matchupTitle}${r.bestMatchup ? " - click to see the players/duel breakdown" : ""}" ${r.bestMatchup ? `data-matchup-a="${p.id}" data-matchup-b="${r.bestMatchup.opp.id}"` : ""}>${r.matchupScore !== null ? Math.round(r.matchupScore) : "-"}</td>` : ""}
         ${cols.capScore ? cell("capScore", r.capScore, r.capScore !== null ? r.capScore.toFixed(1) : "-") : ""}
       </tr>`;
     };
@@ -11806,6 +11990,18 @@ function renderProjectionsTab() {
       renderProjectionsTab();
     };
   });
+  // Round 49: Matchup column click -> inferred-matchup modal (see
+  // openInferredMatchupModal's own comment). Delegated on `body` (rather
+  // than querySelectorAll+forEach like the sort headers above) specifically
+  // because this table's rows are inserted asynchronously in batches
+  // (renderRowsBatched, just above) - a querySelectorAll run synchronously
+  // right after that call would miss every row not yet inserted. Delegation
+  // means a click anywhere in `body` is caught regardless of when its
+  // target cell was actually added to the DOM.
+  body.onclick = (e) => {
+    const cell = e.target.closest("[data-matchup-a]");
+    if (cell && body.contains(cell)) openInferredMatchupModal(Number(cell.dataset.matchupA), Number(cell.dataset.matchupB));
+  };
 }
 // ---------- "How this is calculated" formulas panel ----------
 // Round 42: surfaces the real formulas/weights driving projected points,
@@ -17560,6 +17756,20 @@ const FORMATIONS_H2H = {
   "5-3-2": { DEF: 5, MID: 3, FWD: 2 }, "5-4-1": { DEF: 5, MID: 4, FWD: 1 },
   "4-5-1": { DEF: 4, MID: 5, FWD: 1 },
 };
+// Round 49 (user request: "have the ability to also swap in fwds for mid"):
+// looks up which of the 7 legal formation shapes above (if any) exactly
+// matches a given DEF/MID/FWD count - used by the Best XI pitch's swap
+// panel to figure out whether a CROSS-POSITION swap (e.g. picking a FWD to
+// fill what was a MID slot) still results in a real, legal FPL XI shape.
+// Returns null if no formation matches (e.g. the swap would push a count
+// outside every valid shape) - the caller rejects the swap in that case
+// rather than allowing an illegal XI to be displayed.
+function formationKeyForCounts(defCount, midCount, fwdCount) {
+  for (const [key, f] of Object.entries(FORMATIONS_H2H)) {
+    if (f.DEF === defCount && f.MID === midCount && f.FWD === fwdCount) return key;
+  }
+  return null;
+}
 // Built-in "typical system" guess per club, keyed by short_name - a
 // starting point only. Real formations vary week to week and this app has
 // no live source for a manager's actual planned lineup (same "notepad you
@@ -18715,6 +18925,69 @@ function openTacMatchupResultModal(matchupId, key) {
     btn.onclick = () => { m.winner = btn.dataset.tacResultWinner; saveH2hMatchups(); openTacMatchupResultModal(matchupId, key); activeBoardRerender(); };
   });
   document.getElementById("tacMatchupResultCloseBtn").onclick = () => { modal.style.display = "none"; };
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
+}
+// Round 49 (user request: "matchup should be clickable that i can see the
+// players going up against who players are playing") - the Matchup column
+// on Projections' Table view and the Matchup pts column on the Captaincy
+// view both used to be a bare number with just a hover title naming the
+// inferred opponent. Neither was clickable, and the hover title itself
+// only ever showed a name - not the actual duel breakdown that number is
+// built from. This reuses the EXACT SAME modal DOM (tacMatchupResultModal/
+// Card) and duel-probability engine (overallMatchupScore/SIM_DUELS/
+// simDuelBarHtml) the Tactical board's own "matchup created" popup already
+// uses (openTacMatchupResultModal, just above) - same numbers, same visual
+// language, wherever a matchup shows up in the app. Deliberately a
+// SEPARATE function rather than reusing openTacMatchupResultModal directly,
+// since this matchup is an INFERRED one (best-effort likely-opponent read,
+// same as bestMatchup/likelyOpponentFor elsewhere) rather than a matchup
+// the user has actually pinned on the Tactical board - so there's no
+// existing state.h2hMatchups record to look up or a "call the winner"
+// picker to show (that only makes sense for a matchup you're tracking
+// across a real result). Instead offers a one-click "Pin to Tactical
+// board" action that creates a real pinned entry from this inferred pair,
+// so a genuinely interesting matchup spotted here can be carried over to
+// the full board (where duels can be called, edited, etc.) without having
+// to go find/recreate the same pairing manually over there.
+function openInferredMatchupModal(playerAId, playerBId) {
+  const modal = document.getElementById("tacMatchupResultModal");
+  const card = document.getElementById("tacMatchupResultModalCard");
+  if (!modal || !card) return;
+  const pa = state.players.find(p => p.id === playerAId), pb = state.players.find(p => p.id === playerBId);
+  if (!pa || !pb) return;
+  const teamA = state.teamsById[pa.teamId], teamB = state.teamsById[pb.teamId];
+  const overall = overallMatchupScore(pa.id, pb.id);
+  const key = teamA && teamB ? h2hMatchupKey(pa.teamId, pb.teamId) : null;
+  const alreadyPinned = key ? (state.h2hMatchups[key] || []).some(m =>
+    (m.playerAId === pa.id && m.playerBId === pb.id) || (m.playerAId === pb.id && m.playerBId === pa.id)) : false;
+  card.innerHTML = `
+    <div class="detail-block-title" style="text-align:center;margin-bottom:4px">Inferred matchup</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">
+      <div style="text-align:center">${playerAvatarHtml(pa, 32)}<div style="font-size:11.5px;margin-top:2px">${pa.webName}</div><div style="font-size:9.5px;color:var(--ink-faint)">${teamA ? teamA.short_name : ""}</div></div>
+      <span style="color:var(--ink-faint);font-size:12px">vs</span>
+      <div style="text-align:center">${playerAvatarHtml(pb, 32)}<div style="font-size:11.5px;margin-top:2px">${pb.webName}</div><div style="font-size:9.5px;color:var(--ink-faint)">${teamB ? teamB.short_name : ""}</div></div>
+    </div>
+    <div class="insight-card-sub" style="text-align:center;margin-bottom:8px">Best-effort inferred pairing (same read as the Table/Captaincy views' Matchup column) - not a matchup you've pinned yourself. Pin it below to track/edit it on the Tactical board.</div>
+    <div style="text-align:center;margin-bottom:12px">
+      <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${overall.toFixed(0)}<span style="font-size:12px;color:var(--ink-faint)"> / 100</span></div>
+      <div class="insight-card-sub">Overall matchup score - 50 is even, further out favours ${overall >= 50 ? pa.webName : pb.webName}</div>
+    </div>
+    <div class="detail-block-title" style="margin-bottom:6px;font-size:12px">Duel likelihoods</div>
+    <div style="display:flex;flex-direction:column;gap:8px">${SIM_DUELS.map(d => simDuelBarHtml(d, pa, pb)).join("")}</div>
+    <button class="chip-btn small" style="margin-top:14px;width:100%;cursor:${alreadyPinned ? "default" : "pointer"}" id="inferredMatchupPinBtn" ${alreadyPinned ? "disabled" : ""}>${alreadyPinned ? "✓ Already pinned to Tactical board" : "📌 Pin to Tactical board"}</button>
+    <button class="dir-btn small" style="margin-top:8px;width:100%" id="inferredMatchupCloseBtn">Close</button>
+  `;
+  modal.style.display = "flex";
+  const pinBtn = document.getElementById("inferredMatchupPinBtn");
+  if (pinBtn && !alreadyPinned && key) {
+    pinBtn.onclick = () => {
+      const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
+      arr.push({ id: "m" + Date.now() + Math.random().toString(36).slice(2, 6), playerAId: pa.id, playerBId: pb.id, label: "", winner: null, edge: matchupAttributeEdge(pa, pb) });
+      saveH2hMatchups();
+      openInferredMatchupModal(playerAId, playerBId); // re-render to show the "already pinned" state
+    };
+  }
+  document.getElementById("inferredMatchupCloseBtn").onclick = () => { modal.style.display = "none"; };
   modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
 }
 // Auto-generates sensible role-based matchup pairs from whichever XIs are
