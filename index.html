@@ -1841,12 +1841,16 @@
     <div class="card" style="margin-bottom:18px">
       <div class="detail-block-title">Data mode - Legacy vs Live</div>
       <p class="foot-note" style="margin-top:-4px;margin-bottom:10px">
-        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> (default) weighs last season up to 80% / this season up to 20% - a full proven year outweighs this season's own early sample by design. That 20% this-season share is itself a ceiling, only reached once a player actually has a real (270+ minute, roughly 3-game) sample; below that, this season counts for even less and last season fills the rest, so a couple of games can't move a projection much either way. <strong>Legacy</strong> pushes further still toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for treating this season's numbers as close to irrelevant even once it's underway.
+        Controls how much every prediction model on the site (Projections, Captaincy scoring, and the Club rankings below) leans on <strong>last season's</strong> real full-season data vs <strong>this season's</strong> own numbers so far. <strong>Live</strong> (default) weighs last season up to 80% / this season up to 20% - a full proven year outweighs this season's own early sample by design, but that 80% ceiling is now itself adjustable (down to 0% - fully live, ignoring last season entirely) via the slider. That this-season share is itself a ceiling, only reached once a player actually has a real (270+ minute, roughly 3-game) sample; below that, this season counts for even less and last season fills the rest, so a couple of games can't move a projection much either way. <strong>Legacy</strong> pushes further still toward last season - adjustable from 80% up to 100% (this season ignored entirely at the top end) - for treating this season's numbers as close to irrelevant even once it's underway.
       </p>
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
         <div class="blend-toggle" id="dataBlendToggle" role="group">
           <button type="button" data-blend-mode="live">Live</button>
           <button type="button" data-blend-mode="legacy">Legacy</button>
+        </div>
+        <div id="dataLiveWeightRow" style="flex:1;min-width:220px;display:none">
+          <label style="font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px">Last-season weight in Live mode <span class="val" id="dataLiveWeightVal" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gold-bright);float:right">80%</span></label>
+          <input type="range" id="dataLiveWeightSlider" min="0" max="80" step="1" style="width:100%" />
         </div>
         <div id="dataLegacyWeightRow" style="flex:1;min-width:220px;display:none">
           <label style="font-size:11px;color:var(--ink-faint);display:block;margin-bottom:4px">Last-season weight in Legacy mode <span class="val" id="dataLegacyWeightVal" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gold-bright);float:right">80%</span></label>
@@ -4423,6 +4427,19 @@ let state = {
   // leaning harder on proven full-season history over an early, noisy
   // in-season sample. See legacyBlendWeights().
   dataMode: "live", dataLegacyWeight: 80,
+  // Round 50 (item: "the ratio of the legacy and live is not having an
+  // effect on projected points") - Live mode's this-season ceiling used to
+  // be hardcoded at a fixed 80%/20% split with no user control at all, so
+  // there was no way to actually push it - combined with early-season
+  // sampleRampFactor damping (very little real minutes played yet this
+  // real-world season), the Live/Legacy toggle's visible effect on
+  // Projected Points was reduced to a barely-perceptible few-tenths swing,
+  // which read as "not having an effect" even though the code was
+  // executing correctly. dataLiveWeight makes Live mode's last-season
+  // ceiling genuinely adjustable (0-80%, mirroring Legacy's 80-100% slider)
+  // so there's now a real, user-controlled range to move within - see
+  // legacyBlendWeights().
+  dataLiveWeight: 80,
   diagnostics: [],
   drafts: [], activeDraftId: null, plannerExpandedGw: null,
   // Which tab's chrome should repaint after a renderGwDetail mutation
@@ -5009,9 +5026,12 @@ function sampleRampFactor(minutesThisSeason) {
 //     sites (Club rankings' composite note, the toggle's UI copy) - these
 //     fall back to the un-ramped ceiling ratio.
 function legacyBlendWeights(minutesThisSeason) {
+  // Round 50: Live mode's ceiling now reads dataLiveWeight (0-80,
+  // user-adjustable) instead of a hardcoded 80 - see dataLiveWeight's own
+  // comment in state init for why this needed to become a real control.
   const legacyCeilingPct = state.dataMode === "legacy"
     ? Math.max(80, Math.min(100, state.dataLegacyWeight ?? 80))
-    : 80;
+    : Math.max(0, Math.min(80, state.dataLiveWeight ?? 80));
   const thisSeasonCeiling = (100 - legacyCeilingPct) / 100;
   const thisWeight = minutesThisSeason == null
     ? thisSeasonCeiling
@@ -5624,6 +5644,21 @@ function attachCoreInsights(data) {
     if (p.dsClearances == null) p.dsClearances = r.clearances;
     if (p.dsAerialsWon == null) p.dsAerialsWon = r.aerialDuelsWon;
     if (p.dsAerialWinPct == null) p.dsAerialWinPct = r.aerialDuelsWonPercent;
+    // Round 50 bug fix (item: "there is still no shots etc showing... for
+    // clubs and player stats too") - dsShots/dsKeyPasses were ONLY ever set
+    // from the Understat scrape (attachLegacyDeeperStats, a few hundred
+    // lines up), which is the same broken/unreliable source noted
+    // throughout this codebase. p.ciShots/p.ciChancesCreated (from THIS,
+    // working /coreinsights source) already existed on every matched player
+    // but were never backfilled into dsShots/dsKeyPasses the way the
+    // defensive ds* fields just above already are - so any UI reading
+    // dsShots directly (Player Stats table's Shots column, the Simulation
+    // tab's per90 shot rate) stayed empty even when Player Plots (which
+    // reads p.ciShots directly, not dsShots) worked fine. Same backfill
+    // pattern as the defensive fields: only fills in when the scrape left
+    // it null, so a working scrape's numbers are never overwritten.
+    if (p.dsShots == null) p.dsShots = r.totalShots;
+    if (p.dsKeyPasses == null) p.dsKeyPasses = r.chancesCreated;
   }
 }
 
@@ -5642,7 +5677,14 @@ function attachClubStats(data) {
   for (const team of state.teams) {
     const key = normTeam(team.name);
     const agg = aggByTeam[key], ut = understatByTeam[key], poss = possByTeam[key];
-    if (!agg && !ut && !poss) continue;
+    // Round 50: no longer skips a team outright just because the /clubstats
+    // scrape has nothing for it - the shots fallback below (real
+    // p.ciShots roll-up from /coreinsights) can still populate a real
+    // number even when agg/ut/poss are all null, so only skip when there's
+    // truly nothing at all to show (no scrape data AND no matched players
+    // with core-insights shot data for this club).
+    const hasAnyPlayerShots = state.players.some(p => p.teamId === team.id && p.ciShots != null);
+    if (!agg && !ut && !poss && !hasAnyPlayerShots) continue;
     // Sanity check: a club with several real games played (per the actual
     // FPL table, not this scrape) but an exact 0 here is far more likely a
     // broken scrape than a genuine shutout/clean-sheet-every-game record -
@@ -5650,8 +5692,28 @@ function attachClubStats(data) {
     // "this defence has conceded nothing all season".
     const played = playedByTeam[team.id] || 0;
     const suspect = (v) => (played >= 3 && v === 0) ? null : v;
+    // Round 50 fallback (item: "there is still no shots etc showing... for
+    // clubs") - agg.shots comes from the /clubstats route's Understat/FBref
+    // scrape, which has been flagged broken/unreliable since Round 48 and
+    // often returns null or a suspicious 0 for a club with real games
+    // played. Rather than leave the Club stats table empty whenever that
+    // scrape is down, fall back to summing this team's own players' real
+    // p.ciShots (from the WORKING /coreinsights source, already attached to
+    // state.players by this point - see the call-order fix above) - a
+    // player-level rollup isn't quite the same figure a genuine club-level
+    // stat would report (it's whichever trailing window /coreinsights
+    // tracks per player, not a full-season club total), but it's real
+    // shot-volume signal instead of a permanently blank column.
+    const clubShotsFallback = () => {
+      const teamPlayers = state.players.filter(p => p.teamId === team.id && p.ciShots != null);
+      if (!teamPlayers.length) return null;
+      return teamPlayers.reduce((sum, p) => sum + (p.ciShots || 0), 0);
+    };
+    const rawShots = agg ? agg.shots : null;
     state.clubStatsByTeamId[team.id] = {
-      shots: agg ? agg.shots : null, xG: agg ? agg.xG : (ut ? ut.xG : null),
+      shots: (rawShots != null && suspect(rawShots) != null) ? rawShots : clubShotsFallback(),
+      shotsIsFallback: !(rawShots != null && suspect(rawShots) != null) && clubShotsFallback() != null,
+      xG: agg ? agg.xG : (ut ? ut.xG : null),
       cbit: agg ? agg.cbit : null,
       tackles: agg ? agg.tackles : null, blocks: agg ? agg.blocks : null,
       interceptions: agg ? agg.interceptions : null, clearances: agg ? agg.clearances : null,
@@ -5865,11 +5927,16 @@ async function loadData() {
     buildFixtureTicker(fixtures);
     computeTeamTiers();
     attachDeeperStats(deeper);
-    attachClubStats(clubStats);
     attachOdds(oddsData);
     attachPastForm(pastFormData);
     attachShotMap(shotMap); // Round 42 - see fetchShotMap's own comment; no-ops (empty map) until /shotmap is deployed
+    // Round 50: attachCoreInsights now runs BEFORE attachClubStats (was
+    // after) so p.ciShots/p.ciChancesCreated are already populated on
+    // state.players by the time attachClubStats builds its per-team
+    // aggregates - needed for the club-level shots fallback inside it (see
+    // that function's own comment for why).
     attachCoreInsights(coreInsights); // Round 47 - see fetchCoreInsights's own comment; no-ops until /coreinsights is deployed
+    attachClubStats(clubStats);
 
     // Player Stats' "Next GW proj." previously just displayed FPL's own
     // ep_next figure verbatim. Now that fixturesByTeam is loaded, replace
@@ -8187,16 +8254,28 @@ function renderMyTeamHub(entry, squad, bank) {
   if (!hub || !entry) return;
   hub.style.display = "block";
   renderMyTeamSummaryCard(entry, squad, bank);
-  renderMyTeamFdrMini(squad.map(s => s.player).filter(Boolean));
 
   const allGws = myTeamAllGws();
-  if (allGws.length === 0) { document.getElementById("myTeamPitchArea").innerHTML = '<div class="empty-state">No gameweek data available yet.</div>'; return; }
+  if (allGws.length === 0) {
+    document.getElementById("myTeamPitchArea").innerHTML = '<div class="empty-state">No gameweek data available yet.</div>';
+    renderMyTeamFdrMini(squad.map(s => s.player).filter(Boolean));
+    return;
+  }
   if (state.myTeamGwView == null || !allGws.includes(state.myTeamGwView)) {
     state.myTeamGwView = currentEventId() && allGws.includes(currentEventId()) ? currentEventId() : allGws[allGws.length - 1];
   }
   const gwId = state.myTeamGwView;
   const idx = allGws.indexOf(gwId);
   const isFinished = !!state.events.find(e => e.id === gwId)?.finished;
+  // Round 50 (item: "fdr below the squad in my team should start from the
+  // week the user is selected on") - the mini FDR strip used to hardcode
+  // its start point to currentEventId(), completely ignoring the GW the
+  // user had navigated to via the Prev/Next buttons above. Now called AFTER
+  // state.myTeamGwView is resolved (was called before, at the top of this
+  // function, so it couldn't have used it even if it wanted to) and passed
+  // that gwId directly so its 5-fixture window always starts from whatever
+  // week is currently showing on the pitch above it.
+  renderMyTeamFdrMini(squad.map(s => s.player).filter(Boolean), gwId);
 
   document.getElementById("myTeamGwLabel").textContent = fmtGwName(gwId) + (gwId === currentEventId() ? " •" : isFinished ? " (final)" : " (planned)");
   const prevBtn = document.getElementById("myTeamGwPrevBtn");
@@ -8218,11 +8297,15 @@ function renderMyTeamHub(entry, squad, bank) {
 // uses - not a separate/simplified calculation, just a squad-scoped, 5-week
 // slice of it living right on My Team so a fixture-run problem is visible
 // without switching tabs.
-function renderMyTeamFdrMini(squadPlayers) {
+function renderMyTeamFdrMini(squadPlayers, fromGwId) {
   const el = document.getElementById("myTeamFdrMini");
   if (!el) return;
   if (!squadPlayers.length || !state.teams.length || !state.events.length) { el.innerHTML = ""; return; }
-  const curId = currentEventId() || state.events.find(e => !e.finished)?.id || state.events[0].id;
+  // Round 50: starts from whatever GW the caller passes (the My Team tab's
+  // own selected gameweek, from Prev/Next) rather than always the real
+  // current event - falls back to the old current-event behaviour when no
+  // gwId is passed, so any other caller (if one's ever added) keeps working.
+  const curId = fromGwId ?? (currentEventId() || state.events.find(e => !e.finished)?.id || state.events[0].id);
   const gwIds = state.events.map(e => e.id).filter(id => id >= curId).slice(0, 5);
   if (!gwIds.length) { el.innerHTML = ""; return; }
   const teams = [...new Set(squadPlayers.map(p => p.teamId))]
@@ -8738,6 +8821,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
   const lastSeasonRate = priorLeague ? null : lastSeasonPointsPer90(p.id); // prior-league estimate already covers this case
   const provenAbility = seasonBlend(thisSeasonRate, lastSeasonRate, legacyThisWeight, (p.minutes || 0) > 0);
   let matchupSum = 0, matchupN = 0, bestMatchup = null; // best = biggest disparity in this player's favour, for display
+  const allMatchups = []; // Round 50 (item: flashcard view for 2-3 matchups): every fixture's opponent in this range, { opp, matchupScore, gw }, not just the single most lopsided one
   fixtures.forEach(({ gw, fx }) => {
     const opp = state.teamsById[fx.oppId];
     const fdrScore = customFdr(p.teamId, fx.oppId, fx.isHome);
@@ -8758,6 +8842,26 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
       ? { ...effP, xg90: (effP.xg90 || 0) * 1.05, xa90: (effP.xa90 || 0) * 1.05 }
       : effP;
     let attackPts = underlyingAttackPts(effPForAttack, fdrScore, minsFactor, startProb);
+    // Round 50 (item 9): apply the FM-attribute tactical-imbalance system
+    // (TACTICAL_IMBALANCE_RULES/TACTICAL_TEAM_SYSTEM_RULES/TACTICAL_CS_RULES,
+    // see their own comments above computeAggregatedMatchupScore) as a real
+    // multiplier on this fixture's attacking points - a genuine attribute-
+    // threshold mismatch (e.g. this player's pace/acceleration/off-the-ball
+    // clearing the isolation thresholds against a slow, immobile likely
+    // opponent) now actually moves the projection, not just a display
+    // number. Uses the same likelyOpponentFor read the matchup boost below
+    // already computes (see that block's own comment for why oppPlayer is
+    // resolved once and shared) - looked up early here since attackPts is
+    // computed before that block currently runs.
+    const tacticalOppPlayer = likelyOpponentFor(p, fx.oppId);
+    if (tacticalOppPlayer) {
+      const tacticalXgMult = teamTacticalXgMultiplier(p.id, tacticalOppPlayer.id, p.teamId, fx.oppId, "playerShotXg");
+      const tacticalXaMult = teamTacticalXgMultiplier(p.id, tacticalOppPlayer.id, p.teamId, fx.oppId, "playerAssistXa");
+      // attackPts blends goal-scoring AND assist contribution together, so
+      // apply the average of the two metric multipliers rather than
+      // double-applying or picking one arbitrarily.
+      attackPts *= (tacticalXgMult + tacticalXaMult) / 2;
+    }
     // Kickoff-time modifier 1 ("Sat 12:30 Double Penalty"): an away
     // player's team playing in the Sat 12:30 slot gets their final
     // Projected Attacking Points cut by 10% - the worst slot for goals on
@@ -8768,7 +8872,14 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // keeper with no GK attributes entered - see gkAbilityMultiplier);
     // DEF/MID clean-sheet points are unaffected (multiplier only applies
     // for p.position === "GK").
-    const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
+    // Round 50 (item 9, Table 4): TACTICAL_CS_RULES applied here - see the
+    // longer comment above TACTICAL_CS_RULES' own definition for what each
+    // rule checks. Note: Player pairs' separate per-fixture calculation
+    // below (a few hundred lines down, its own "csPts =" line) does NOT
+    // get this same modifier - left as the primary projection engine's fix
+    // only, to keep this round's scope from growing further.
+    const tacticalCsMult = tacticalCsModifier(p.teamId, fx.oppId, "teamXg");
+    const csPts = (CS_PTS[p.position] || 0) * ((csPct || 0) / 100) * tacticalCsMult * (p.position === "GK" ? gkAbilityMultiplier(p.id) : 1);
     const savesPts = gkSavesPts(p, minsFactor);
     const defConProb = defConProbability(p, minsFactor, fdrScore);
     const defConPts = defConProb * 2;
@@ -8805,6 +8916,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
       if (!bestMatchup || Math.abs(matchupScore - 50) > Math.abs(bestMatchup.matchupScore - 50)) {
         bestMatchup = { opp: oppPlayer, matchupScore, gw };
       }
+      if (oppPlayer) allMatchups.push({ opp: oppPlayer, matchupScore, gw });
     }
     projTotal += finalProj;
     if (teamXg !== null) { teamXgSum += teamXg; n++; }
@@ -8831,12 +8943,19 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     ppm: priceM > 0 ? projTotal / priceM : 0, // points per million: projected pts over the range / price
     matchupScore: matchupN ? matchupSum / matchupN : null,
     bestMatchup, // { opp, matchupScore, gw } - the single most lopsided fixture in range, or null
+    allMatchups, // every fixture's { opp, matchupScore, gw } in this range - feeds the flashcard multi-matchup modal
+    // Round 50 (item: "add xgi90 for projection") - expected goal
+    // involvement per 90, the standard xG90+xA90 combined rate stat. Reads
+    // the SAME already-blended (Legacy/Live) effP.xg90/xa90 this row's own
+    // attacking projection is built from, not a separate re-fetch, so it
+    // always agrees with whatever data-blend mode is active.
+    xgi90: (effP.xg90 || 0) + (effP.xa90 || 0),
   };
 }
 const PROJ_OPTIONAL_COLS = [
   ["minsPerStart", "Mins/start"], ["teamXg", "Team xG"], ["csPct", "CS%"],
   ["contribution", "Team contrib%"], ["defConPct", "DefCon%"], ["bonusExp", "Exp. bonus"],
-  ["matchupScore", "Matchup"],
+  ["matchupScore", "Matchup"], ["xgi90", "xGI90"],
   // Round 39: Captaincy folded into Projections (was its own tab) - this
   // column surfaces the same captaincyScoreForGw() score (Balanced mode,
   // the default the old Captaincy tab opened on) against this row's "From"
@@ -9093,12 +9212,12 @@ function renderProjectionsCaptaincy(pool, gwId) {
   //     accumulation, so this needed no new computation - it was already
   //     sitting right there. Naturally lands in roughly the 0-3 decimal
   //     range the request described, since real bonus points are 0-3.
-  //   - Matchup: scored.boostBonus - the actual POINTS this player's
-  //     playstyle/matchup edge is adding (or subtracting, if negative) to
-  //     their captaincy score this fixture (see captaincyScoreForGw) -
-  //     genuinely more informative as a value than matchupQuality's 0-100
-  //     scale, since a below-average matchup now visibly shows as a small
-  //     negative number instead of just a low percentage.
+  //   - Matchup (Round 50, REVERTED per explicit user request - "matchup
+  //     should be a number out of 100 not points"): back to row.matchupScore,
+  //     the real 0-100 playstyle/matchup quality score (same number the
+  //     Table view's Matchup column and heatmap use), NOT scored.boostBonus
+  //     (points) as Round 49 briefly made it. CS/DefCon/Goal/Assist/Bonus
+  //     stay as real point/rate values from Round 49 - only Matchup reverted.
   // Sort keys below now sort by these SAME displayed values (not the old
   // probabilities) so "click to sort" always matches what's on screen.
   const capValue = (c, key) => {
@@ -9109,7 +9228,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
       case "goal": return p.xg90 || 0;
       case "assist": return p.xa90 || 0;
       case "bonus": return row.bonusExp || 0;
-      case "matchup": return c.boostBonus || 0;
+      case "matchup": return row.matchupScore != null ? row.matchupScore : null;
       default: return null;
     }
   };
@@ -9142,9 +9261,9 @@ function renderProjectionsCaptaincy(pool, gwId) {
   // used by the Matchup column to attach data-matchup-a/-b + a pointer
   // cursor so it's clickable through to openInferredMatchupModal, without
   // every other column needing to know about that.
-  const valueCell = (live, value, eligible, label, unit, extraAttrs) => {
+  const valueCell = (live, value, eligible, label, unit, extraAttrs, intVal) => {
     if (!eligible) return `<td class="mono" style="text-align:center;color:var(--ink-faint)" title="${label}: not a scoring route for this position">N/A</td>`;
-    const display = value == null ? "-" : (value < 0 ? "-" : "") + Math.abs(value).toFixed(2);
+    const display = value == null ? "-" : (intVal ? Math.round(value) : (value < 0 ? "-" : "") + Math.abs(value).toFixed(2));
     const color = live ? "var(--gold-bright,#00ff66)" : "var(--ink-faint)";
     const cursorStyle = extraAttrs ? "cursor:pointer;text-decoration:underline dotted;" : "";
     return `<td class="mono" style="text-align:center;${cursorStyle}color:${color};font-weight:${live ? 700 : 400}" title="${label}: ${display}${unit || ""} this fixture${extraAttrs ? " - click to see the players/duel breakdown" : ""}"${extraAttrs ? " " + extraAttrs : ""}>${display}${unit || ""}</td>`;
@@ -9174,7 +9293,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
       ${valueCell(bd.goalRoute, capValue(scored, "goal"), true, "xG90", "")}
       ${valueCell(bd.assistRoute, capValue(scored, "assist"), true, "xA90", "")}
       ${valueCell(bd.bonusRoute, capValue(scored, "bonus"), true, "Bonus pts", "")}
-      ${valueCell(bd.matchupRoute, capValue(scored, "matchup"), true, "Matchup pts", "", matchupAttrs)}
+      ${valueCell(bd.matchupRoute, capValue(scored, "matchup"), true, "Matchup score", "/100", matchupAttrs, true)}
     </tr>`;
   }).join("");
   body.innerHTML = `
@@ -9182,7 +9301,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
       <span style="font-size:12px;color:var(--ink-dim)">Score formula:</span>
       ${Object.entries(CAPTAINCY_MODE_LABELS).map(([key, label]) => `<button type="button" class="chip-btn small${mode === key ? " active" : ""}" data-cap-mode="${key}" style="cursor:pointer">${label}</button>`).join("")}
     </div>
-    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Click any column header to sort by it - route columns show real point/rate VALUES for this exact fixture (not percentages): CS/DefCon/Bonus are expected POINTS, Goal/Assist are the player's own xG90/xA90 rate, Matchup is the actual points the playstyle/matchup edge is adding (can be negative). Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every number below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
+    <p class="field-desc" style="margin:0 0 10px">Top 20 captaincy candidates for GW${gwId}, ${(p => p ? p.toLowerCase() : "")(CAPTAINCY_MODE_LABELS[mode])}. Click any column header to sort by it - route columns show real point/rate VALUES for this exact fixture (not percentages): CS/DefCon/Bonus are expected POINTS, Goal/Assist are the player's own xG90/xA90 rate, Matchup is a 0-100 playstyle/matchup quality score (click it to see the duel breakdown vs the likely opponent). Goalkeepers excluded. Early-season/low-minutes players are scored via the legacy-season blend rather than filtered out. Every number below reflects the SAME underlying model that drives the Table view's Captaincy column and Best XI's crown badge - nothing here is a separate calculation.</p>
     ${top.length ? `<div class="table-wrap"><table>
       <thead><tr>
         <th></th>
@@ -9195,7 +9314,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
         ${colLabel("goal", "xG90", "This player's own expected-goals-per-90 rate")}
         ${colLabel("assist", "xA90", "This player's own expected-assists-per-90 rate")}
         ${colLabel("bonus", "Bonus pts", "Expected bonus points this fixture")}
-        ${colLabel("matchup", "Matchup pts", "Points the playstyle/matchup edge adds (or subtracts) to the captaincy score this fixture")}
+        ${colLabel("matchup", "Matchup", "Playstyle/matchup quality score, 0-100, for this fixture - the same score used across the app's matchup heatmaps and modals")}
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table></div>` : `<p class="foot-note" style="padding:10px">No eligible captaincy candidates for this gameweek/filter set.</p>`}
@@ -9325,19 +9444,18 @@ function xiBudgetForFormation(need, excludeIds, formationKey) {
 //     xiBudgetForFormation - lets the caller offer a user-editable £0.1m-
 //     increment budget input, or auto-fill it from a real squad's value
 //     (see renderProjectionsPitch's budget toolbar).
-//   - skipRepair: when true, the budget/club-limit REPAIR passes below
-//     (which downgrade OTHER, non-locked players to claw back under
-//     budget/the club limit) are skipped entirely - only the INFEASIBLE
-//     flags are still computed, so the UI can still show a warning. This
-//     is what fixes "because i click them it rearranges the team": once
-//     the user has taken manual control (any lock/exclude override is
-//     active), an expensive or club-stacking manual pick must not trigger
-//     the algorithm to silently downgrade unrelated slots to compensate -
-//     the user asked for THAT specific player, and any resulting over-
-//     budget/over-limit state should be visible, not auto-corrected out
-//     from under them. The very first auto-generated XI (no overrides yet)
-//     still gets full repair, same as before - only a genuinely manual
-//     session opts out.
+//   - skipRepair: UNUSED as of Round 50 (kept as a trailing param for call-
+//     site compatibility only). Round 49 used this to skip the budget/club-
+//     limit repair passes entirely whenever a manual lock/exclude was
+//     active, meant to stop a manual pick from getting "rearranged" - but
+//     the repair passes already never touch locked players (see
+//     lockedIdSet/lockedRows checks below), so skipping them wholesale just
+//     let every OTHER, non-locked slot silently blow through the budget
+//     with nothing to claw it back - this was the "budget cap in best XI
+//     not working" regression. Repair now always runs when useBudget/
+//     useClubLimit are on; a manual lock is protected by the same checks
+//     it always was, so this fixes the bug without reintroducing the
+//     original "rearranges my manual pick" complaint.
 function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, lockedRows, formationKey, customBudgetTenths, skipRepair) {
   // Formation-aware XI budget (see xiBudgetForFormation above) rather than
   // one flat number for every formation - unless the caller supplied an
@@ -9405,8 +9523,20 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   // budget or no further downgrade is possible (every remaining player in
   // every position is already the cheapest eligible option - genuinely
   // infeasible, which we report via budgetInfeasible rather than hiding).
+  // Round 50 bug fix ("budget cap in best XI not working"): Round 49's
+  // skipRepair fully disabled this repair pass the instant ANY manual
+  // lock/exclude was active, on the theory that repair was what "rearranged
+  // the team" after a manual swap. But the repair pass already refuses to
+  // touch locked players (lockedIdSet.has check below) - so disabling it
+  // entirely was an overcorrection that let the OTHER (non-locked) slots
+  // silently blow through the budget with nothing to pull them back, and
+  // since lock/exclude state persists across re-renders, budget enforcement
+  // stayed broken from the first manual swap onward for the rest of the
+  // session. Repair now always runs when useBudget is on - it only ever
+  // swaps non-locked players, so a manual lock still can't be "rearranged"
+  // out from under the user.
   let budgetInfeasible = false;
-  if (useBudget && !skipRepair) {
+  if (useBudget) {
     const lockedIdSet = new Set((lockedRows || []).map(r => r.p.id));
     let guard = 0;
     while (spent > BUDGET + 1e-9 && guard++ < 200) {
@@ -9457,13 +9587,12 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   // exceeds MAX_PER_CLUB or no legal swap remains (genuinely infeasible
   // - e.g. filters have excluded too much of the pool - reported via
   // clubLimitInfeasible rather than silently left over the limit).
+  // Round 50: same overcorrection fix as the budget repair above - this
+  // pass already skips locked players (lockedRows.some check below), so it
+  // no longer needs skipRepair to avoid touching a manual swap.
   let clubLimitInfeasible = false;
   const overClub = () => Object.entries(clubCount).find(([, c]) => c > MAX_PER_CLUB);
-  if (useClubLimit && skipRepair) {
-    // Manual-override session (see skipRepair's own comment above): still
-    // report the flag for the UI warning, just don't auto-swap anyone out.
-    clubLimitInfeasible = !!overClub();
-  } else if (useClubLimit) {
+  if (useClubLimit) {
     let guard2 = 0;
     while (guard2++ < 200) {
       const offender = overClub();
@@ -11345,12 +11474,38 @@ function chanceCreationAttributeScore(p) {
 // pair amplifies the whole thing multiplicatively (1.0-1.3x) rather than
 // being added as its own separate signal - "FM stats amplify the volume
 // signal, not replace it", per spec item 6.
+// Round 50 rebalance (user: "explosive is based on actions and being lucky
+// not that if they take 10 shots at 0.01 xg they will be accounted as 10
+// goals because that is statistically impossible but if someone is
+// predicted to get a lot of OK/medium/mediocre chances and they have good
+// finishing then they are more explosive as an option than the rest") -
+// the old base = volume*0.8 + quality*0.2 let quality act as barely more
+// than a rounding nudge: a player firing off a high COUNT of near-zero-xG
+// shots (e.g. hopeful 25-yarders) could out-score a player taking fewer but
+// genuinely dangerous chances, because 80% of the score cared only about
+// raw shot/chance COUNT with almost no regard for how good those chances
+// actually were. That's precisely the statistical error the user is
+// calling out - shot volume with negligible xG-per-shot isn't a real path
+// to multiple goals, it just looks like one on a raw counting stat.
+// Fixed by making quality a real, load-bearing term rather than a minor
+// nudge (0.2 -> 0.45) AND by having quality damp the volume term itself
+// (volume is multiplied by a 0.5-1.0 quality-scaled factor before being
+// combined) - so a high shot COUNT only translates into a high Explosive
+// score when those shots/chances are also genuinely good ones. A player
+// generating a smaller number of decent-to-good chances with strong
+// finishing can now clearly out-score a low-quality volume merchant, which
+// was impossible under the old weighting.
 function explosiveVolumeScore(p) {
   const shotVolNorm = Math.max(0, Math.min(1, shotsPer90(p) / 2.5));
   const ccVolNorm = Math.max(0, Math.min(1, chancesCreatedPer90(p) / 2.0));
-  const volume = shotVolNorm * 0.6 + ccVolNorm * 0.4; // shots weighted a little heavier than chances created - a shot is this player's own direct route to points, a chance created is one step removed (needs a teammate to finish it)
+  const rawVolume = shotVolNorm * 0.6 + ccVolNorm * 0.4; // shots weighted a little heavier than chances created - a shot is this player's own direct route to points, a chance created is one step removed (needs a teammate to finish it)
   const quality = shotQualityScore(p) * 0.6 + chanceQualityScore(p) * 0.4;
-  const base = volume * 0.8 + quality * 0.2; // volume dominant, quality a minor confirming nudge - per spec item 6
+  // Quality-damped volume: low-quality volume (quality near 0) shrinks the
+  // volume term to half its raw value; genuinely good chances (quality near
+  // 1) let the full volume term through. Volume alone can no longer carry
+  // the score regardless of how bad the chances are.
+  const volume = rawVolume * (0.5 + 0.5 * quality);
+  const base = volume * 0.55 + quality * 0.45; // quality now a real, load-bearing term, not a minor nudge - per Round 50 rebalance
   const attrAmplifier = 1 + (shootingAttributeScore(p) * 0.6 + chanceCreationAttributeScore(p) * 0.4) * 0.3; // 1.0x-1.3x
   return Math.max(0, Math.min(1, base * attrAmplifier));
 }
@@ -11536,10 +11691,18 @@ function captaincyMiniBadges(p, gwId, scored) {
     badges.push({ cls: "nailed", icon: "\u{1F512}", label: "Nailed", title: "Nailed-on starter - high start probability and consistent minutes" });
   }
   // In-form: recent form stat clearly elevated vs season PPG.
+  // Round 50 tightened (user: "in form is a bit generous") - the old rule
+  // fired on form >= 5 ALONE, with no requirement that it actually beat the
+  // player's own season baseline, so a player having a merely decent run
+  // (5.0-5.9 form) with an equally strong season average (not "in form",
+  // just "good") still got flagged. Now always requires a real edge over
+  // the player's own PPG (>=40%, up from 30%) AND a higher absolute floor
+  // (>=5.5, up from 4), so the badge means "meaningfully hotter than their
+  // own normal", not just "form happens to be a mid-to-high number".
   const form = Number(p.form) || 0;
   const ppg = Number(p.pointsPerGame) || 0;
-  if (form >= 5 || (ppg > 0 && form >= ppg * 1.3 && form >= 4)) {
-    badges.push({ cls: "form", icon: "\u{1F525}", label: "In form", title: `Recent form ${form.toFixed(1)} - trending well above season average` });
+  if (ppg > 0 && form >= ppg * 1.4 && form >= 5.5) {
+    badges.push({ cls: "form", icon: "\u{1F525}", label: "In form", title: `Recent form ${form.toFixed(1)} vs season PPG ${ppg.toFixed(1)} - trending well above season average` });
   }
   // Fixture swing: this fixture is notably easier than the player's
   // trailing run (reuses the fixture object already computed for the
@@ -11570,6 +11733,20 @@ function captaincyMiniBadges(p, gwId, scored) {
   // same thing at a glance.
   if ((p.selectedByPercent || 0) < 8) {
     badges.push({ cls: "differential", icon: "\u{1F48E}", label: "Differential", title: `${(p.selectedByPercent || 0).toFixed(1)}% owned - low ownership, potential differential pick (informational only - doesn't affect score)` });
+  }
+  // Round 50 (item: "add more badges") - Penalty taker: FPL's own declared
+  // order #1, real data (penalties_order), not an inference. Genuinely
+  // decision-relevant for captaincy (a nailed pen-taker's floor is much
+  // higher than their open-play numbers alone suggest).
+  if (p.penaltiesOrder === 1) {
+    badges.push({ cls: "penalty", icon: "\u{26BD}", label: "Pens", title: "FPL's declared #1 penalty taker for their club" });
+  }
+  // Set-piece threat: #1 corners/free-kicks AND/OR direct free-kicks order,
+  // same real FPL fields as the Set pieces column on Player Stats - a
+  // direct source of extra assist/goal upside a plain xG90/xA90 rate alone
+  // doesn't fully capture.
+  if (p.directFreekicksOrder === 1 || p.cornersOrder === 1) {
+    badges.push({ cls: "setpiece", icon: "\u{1F4D0}", label: "Set-piece", title: "FPL's declared #1 corners/free-kicks taker for their club" });
   }
   return badges;
 }
@@ -11615,10 +11792,11 @@ function projectionBadgesHtml(p, row) {
   }
   // Form/trend - hot streak (reuses the exact >= threshold logic
   // captaincyMiniBadges' "In form" badge already uses, so the SAME player
-  // never reads as "in form" on Captaincy but not on Projections).
+  // never reads as "in form" on Captaincy but not on Projections). Round 50:
+  // tightened alongside captaincyMiniBadges - see that badge's own comment.
   const form = Number(p.form) || 0;
   const ppg = Number(p.pointsPerGame) || 0;
-  if (form >= 5 || (ppg > 0 && form >= ppg * 1.3 && form >= 4)) {
+  if (ppg > 0 && form >= ppg * 1.4 && form >= 5.5) {
     badges.push({ cls: "form", icon: "\u{1F525}", label: "Hot streak", title: `Recent form ${form.toFixed(1)} - trending well above season average (${ppg.toFixed(1)} PPG)` });
   } else if (ppg > 0 && form > 0 && form <= ppg * 0.7 && (p.minutes || 0) >= 300) {
     // Cooling off: the mirror case, new this round - recent form clearly
@@ -11929,7 +12107,7 @@ function renderProjectionsTab() {
   } else {
     if (!state.projColumns) state.projColumns = Object.fromEntries(PROJ_OPTIONAL_COLS.map(([k]) => [k, true]));
     const cols = state.projColumns;
-    const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp", "matchupScore", "capScore"];
+    const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp", "matchupScore", "capScore", "xgi90"];
     const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k], (r) => r.p.minutes) : null;
     const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
     const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
@@ -11953,7 +12131,17 @@ function renderProjectionsTab() {
         ${cols.contribution ? cell("contribution", r.contribution, r.contribution.toFixed(1) + "%") : ""}
         ${cols.defConPct ? cell("defConPct", r.defConPct, Math.round(r.defConPct) + "%") : ""}
         ${cols.bonusExp ? cell("bonusExp", r.bonusExp, r.bonusExp.toFixed(2)) : ""}
-        ${cols.matchupScore ? `<td class="mono" style="text-align:center;${heatOn && ranges && ranges.matchupScore ? heatmapBg(r.matchupScore, ranges.matchupScore.min, ranges.matchupScore.max, false) : ""}${r.bestMatchup ? "cursor:pointer;text-decoration:underline dotted" : ""}" title="${matchupTitle}${r.bestMatchup ? " - click to see the players/duel breakdown" : ""}" ${r.bestMatchup ? `data-matchup-a="${p.id}" data-matchup-b="${r.bestMatchup.opp.id}"` : ""}>${r.matchupScore !== null ? Math.round(r.matchupScore) : "-"}</td>` : ""}
+        ${cols.xgi90 ? cell("xgi90", r.xgi90, r.xgi90.toFixed(2)) : ""}
+        ${cols.matchupScore ? (() => {
+          // Round 50 (flashcard multi-matchup): dedupe allMatchups by opponent
+          // player id (a range can repeat the same opponent for a
+          // multi-fixture GW block against the same team) and expose the
+          // full list via data-matchup-opps so the click handler can open
+          // every relevant matchup as a flashcard deck, not just bestMatchup.
+          const seen = new Set();
+          const oppIds = (r.allMatchups || []).filter(m => { if (seen.has(m.opp.id)) return false; seen.add(m.opp.id); return true; }).map(m => m.opp.id);
+          return `<td class="mono" style="text-align:center;${heatOn && ranges && ranges.matchupScore ? heatmapBg(r.matchupScore, ranges.matchupScore.min, ranges.matchupScore.max, false) : ""}${r.bestMatchup ? "cursor:pointer;text-decoration:underline dotted" : ""}" title="${matchupTitle}${oppIds.length > 1 ? ` (${oppIds.length} matchups this range)` : ""}${r.bestMatchup ? " - click to see the players/duel breakdown" : ""}" ${r.bestMatchup ? `data-matchup-a="${p.id}" data-matchup-b="${r.bestMatchup.opp.id}" data-matchup-opps="${oppIds.join(",")}"` : ""}>${r.matchupScore !== null ? Math.round(r.matchupScore) : "-"}</td>`;
+        })() : ""}
         ${cols.capScore ? cell("capScore", r.capScore, r.capScore !== null ? r.capScore.toFixed(1) : "-") : ""}
       </tr>`;
     };
@@ -11970,6 +12158,7 @@ function renderProjectionsTab() {
           ${cols.contribution ? colLabel("contribution", "Team contrib%") : ""}
           ${cols.defConPct ? colLabel("defConPct", "DefCon%") : ""}
           ${cols.bonusExp ? colLabel("bonusExp", "Exp. bonus") : ""}
+          ${cols.xgi90 ? colLabel("xgi90", "xGI90") : ""}
           ${cols.matchupScore ? colLabel("matchupScore", "Matchup") : ""}
           ${cols.capScore ? colLabel("capScore", "Captaincy") : ""}
         </tr></thead>
@@ -12000,7 +12189,10 @@ function renderProjectionsTab() {
   // target cell was actually added to the DOM.
   body.onclick = (e) => {
     const cell = e.target.closest("[data-matchup-a]");
-    if (cell && body.contains(cell)) openInferredMatchupModal(Number(cell.dataset.matchupA), Number(cell.dataset.matchupB));
+    if (cell && body.contains(cell)) {
+      const opps = cell.dataset.matchupOpps ? cell.dataset.matchupOpps.split(",").map(Number) : null;
+      openInferredMatchupModal(Number(cell.dataset.matchupA), Number(cell.dataset.matchupB), opps);
+    }
   };
 }
 // ---------- "How this is calculated" formulas panel ----------
@@ -14532,12 +14724,13 @@ async function loadFormulasFromStorage() {
       const parsed = JSON.parse(raw);
       if (parsed.dataMode === "live" || parsed.dataMode === "legacy") state.dataMode = parsed.dataMode;
       if (typeof parsed.dataLegacyWeight === "number") state.dataLegacyWeight = Math.max(80, Math.min(100, parsed.dataLegacyWeight));
+      if (typeof parsed.dataLiveWeight === "number") state.dataLiveWeight = Math.max(0, Math.min(80, parsed.dataLiveWeight));
     }
   } catch (e) { /* keep defaults */ }
 }
 function saveFdrFormula() { persistSet("fdrFormula", JSON.stringify(state.fdrFormula)); }
 function saveRankFormula() { persistSet("rankFormula", JSON.stringify(state.rankFormula)); }
-function saveDataBlendMode() { persistSet("dataBlendMode", JSON.stringify({ dataMode: state.dataMode, dataLegacyWeight: state.dataLegacyWeight })); }
+function saveDataBlendMode() { persistSet("dataBlendMode", JSON.stringify({ dataMode: state.dataMode, dataLegacyWeight: state.dataLegacyWeight, dataLiveWeight: state.dataLiveWeight })); }
 function saveTeamOverrides() {
   persistSet("teamOverrides", JSON.stringify(state.teamOverrides));
   // Team attack/defence overrides feed directly into estimateScoreline's
@@ -17195,13 +17388,49 @@ async function tickProjAccuracyTracking() {
         n++;
       }
       if (n > 0) {
-        log.scored.push({ gwId, mae: sumAbsErr / n, bias: sumErr / n, n });
+        // Round 50 (item: redesign the tracker - "i dont really see any of
+        // the choices nor what it means, i want it to show me visually what
+        // it did and the meaning") - alongside the aggregate MAE/bias, keep
+        // a handful of concrete worked examples: the biggest miss, the most
+        // accurate call, and a couple of representative names, each with
+        // their actual projected-vs-scored numbers - so the panel can show
+        // real examples of what got predicted and what happened, not just
+        // an abstract error number with no way to see what it means.
+        const examples = Object.entries(snap).map(([playerIdStr, projPts]) => {
+          const actual = live[playerIdStr] ? live[playerIdStr].total_points : null;
+          if (actual === null || actual === undefined) return null;
+          const p = state.players.find(x => x.id === Number(playerIdStr));
+          if (!p) return null;
+          return { playerId: p.id, name: p.webName, teamShort: state.teamsById[p.teamId]?.short_name || "", proj: projPts, actual, err: projPts - actual };
+        }).filter(Boolean);
+        examples.sort((a, b) => Math.abs(b.err) - Math.abs(a.err));
+        const biggestMiss = examples[0] || null;
+        const mostAccurate = examples.slice().sort((a, b) => Math.abs(a.err) - Math.abs(b.err))[0] || null;
+        // A few more "representative" examples for a fuller before/after
+        // feel - highest-projected players, sorted, since those are the
+        // ones a user actually made captaincy/transfer decisions around.
+        const notable = examples.slice().sort((a, b) => b.proj - a.proj).slice(0, 5);
+        log.scored.push({ gwId, mae: sumAbsErr / n, bias: sumErr / n, n, biggestMiss, mostAccurate, notable });
         log.scored.sort((a, b) => a.gwId - b.gwId);
         saveProjAccuracyLog();
       }
     } catch (e) { /* live data fetch failed - leave unscored, will retry next render */ }
   }
 }
+// Round 50 redesign (user: "projection accuracy tracker in insights does
+// not make much sense in that i dont really see any of the choices nor
+// what it means, i want it to show me visually what it did and the
+// meaning"). What changed vs the old version:
+//   1. A plain-language explainer of what MAE/bias actually MEAN, not just
+//      the raw numbers - "2.1 pts" alone doesn't tell you if that's good.
+//   2. A real worked example (the most recent scored gameweek's biggest
+//      miss AND its most accurate call, each shown as "Player: projected
+//      X, actually scored Y") - concrete proof of what the tracker
+//      compared, not an abstract error figure with nothing to look at.
+//   3. A small visual bar-chart trend of MAE across every tracked
+//      gameweek (plain inline SVG, same visual language as the rest of the
+//      app) instead of a flat one-line row of pills that all looked the
+//      same regardless of value.
 function renderProjAccuracyPanel() {
   const body = document.getElementById("projAccuracyBody");
   if (!body || !state.projAccuracyLog) return;
@@ -17213,15 +17442,45 @@ function renderProjAccuracyPanel() {
   const overallMae = scored.reduce((s, r) => s + r.mae, 0) / scored.length;
   const overallBias = scored.reduce((s, r) => s + r.bias, 0) / scored.length;
   const biasLabel = Math.abs(overallBias) < 0.15 ? "roughly balanced" : overallBias > 0 ? "tends to over-project" : "tends to under-project";
+  const maeQualityLabel = overallMae <= 1.2 ? "very accurate" : overallMae <= 2.2 ? "reasonably accurate" : overallMae <= 3.2 ? "fair, real misses happen" : "loose - treat projections as a rough guide, not gospel";
+  const latest = scored[scored.length - 1];
+  // Bar-chart trend (inline SVG, no library) - one bar per tracked
+  // gameweek, height scaled to MAE, colour-coded green (accurate) to amber
+  // to red (loose) using the same quality bands as maeQualityLabel above so
+  // the chart and the text agree on what "good" looks like.
+  const maeColor = (mae) => mae <= 1.2 ? "#4cc98a" : mae <= 2.2 ? "#e0a94f" : mae <= 3.2 ? "#e0824f" : "#e0524f";
+  const chartW = 560, chartH = 90, barGap = 4, barW = Math.max(10, Math.min(34, (chartW - 20) / scored.length - barGap));
+  const maxMae = Math.max(1, ...scored.map(r => r.mae)) * 1.15;
+  const bars = scored.map((r, i) => {
+    const h = (r.mae / maxMae) * (chartH - 20);
+    const x = 10 + i * (barW + barGap);
+    const y = chartH - h - 14;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${maeColor(r.mae)}" fill-opacity="0.85"><title>GW${r.gwId}: MAE ${r.mae.toFixed(2)} pts, bias ${r.bias >= 0 ? "+" : ""}${r.bias.toFixed(2)} pts, ${r.n} players</title></rect>
+      <text x="${(x + barW / 2).toFixed(1)}" y="${chartH - 3}" text-anchor="middle" style="font-size:8.5px;fill:var(--ink-faint)">GW${r.gwId}</text>`;
+  }).join("");
+  const chartSvg = `<svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;max-width:${chartW}px;height:auto;background:var(--panel-2,#12181a);border-radius:8px;padding:4px 0">${bars}</svg>`;
+  const exampleRow = (label, ex, color) => !ex ? "" : `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border)">
+      <span style="font-size:10px;color:${color};font-weight:700;width:96px;flex-shrink:0">${label}</span>
+      <span style="flex:1;font-size:12px"><strong>${escXml(ex.name)}</strong> <span style="color:var(--ink-faint)">(${ex.teamShort})</span></span>
+      <span class="mono" style="font-size:11.5px;color:var(--ink-dim)">projected <b style="color:var(--ink)">${ex.proj.toFixed(1)}</b></span>
+      <span class="mono" style="font-size:11.5px;color:var(--ink-dim)">scored <b style="color:${color}">${ex.actual}</b></span>
+    </div>`;
   body.innerHTML = `
-    <div class="dash-row" style="margin-bottom:14px">
-      <div class="dash-card"><div class="dash-label">Mean absolute error</div><div class="dash-value small">${overallMae.toFixed(2)} pts</div><div class="dash-sub">across ${scored.length} tracked gameweek${scored.length === 1 ? "" : "s"}</div></div>
+    <div class="dash-row" style="margin-bottom:10px">
+      <div class="dash-card"><div class="dash-label">Mean absolute error</div><div class="dash-value small">${overallMae.toFixed(2)} pts</div><div class="dash-sub">${maeQualityLabel}</div></div>
       <div class="dash-card"><div class="dash-label">Bias</div><div class="dash-value small">${overallBias >= 0 ? "+" : ""}${overallBias.toFixed(2)} pts</div><div class="dash-sub">${biasLabel}</div></div>
     </div>
-    <div class="insight-card-meta" style="gap:6px">${scored.slice().reverse().map(r => {
-      const gw = state.events.find(e => e.id === r.gwId);
-      return `<span class="insight-pill" title="${r.n} players scored" style="font-size:10.5px;padding:3px 9px">GW${r.gwId} <b style="color:var(--ink)">${r.mae.toFixed(1)}</b> <span style="color:${r.bias >= 0 ? "var(--gold-bright)" : "var(--emerald)"}">${r.bias >= 0 ? "+" : ""}${r.bias.toFixed(1)}</span></span>`;
-    }).join("")}</div>
+    <p class="field-desc" style="margin:0 0 10px">What these mean: <strong>Mean absolute error</strong> is, on average, how many points off a single player's projection was from what they actually scored that gameweek (lower = tighter predictions). <strong>Bias</strong> is the same idea but signed - a positive number means the model has been calling players HIGHER than they actually score on average; negative means it's been too conservative. Both are averaged across every player projected, every scored gameweek.</p>
+    <div class="detail-block-title" style="font-size:12px;margin-bottom:4px">MAE by gameweek</div>
+    ${chartSvg}
+    ${latest ? `
+      <div class="detail-block-title" style="font-size:12px;margin:12px 0 2px">Worked example - GW${latest.gwId} (most recent scored)</div>
+      <p class="field-desc" style="margin:0 0 4px">Real projected-vs-actual for a couple of standout cases that gameweek, so you can see exactly what's being measured:</p>
+      ${exampleRow("😬 Biggest miss", latest.biggestMiss, "var(--warn,#e0a94f)")}
+      ${exampleRow("🎯 Most accurate", latest.mostAccurate, "var(--emerald,#4cc98a)")}
+      ${(latest.notable || []).filter(ex => ex.playerId !== latest.biggestMiss?.playerId && ex.playerId !== latest.mostAccurate?.playerId).slice(0, 3).map(ex => exampleRow("Also tracked", ex, "var(--ink-dim)")).join("")}
+    ` : ""}
   `;
 }
 
@@ -17307,8 +17566,6 @@ function scatterPlotSvg(points, opts) {
       <text x="${PAD_L + 6}" y="${H - PAD_B - 8}" style="${cornerStyle}">${escXml([opts.lowXLabel, opts.lowYLabel].filter(Boolean).join(" & "))}</text>
       <text x="${W - PAD_R - 6}" y="${H - PAD_B - 8}" text-anchor="end" style="${cornerStyle}">${escXml([opts.highXLabel, opts.lowYLabel].filter(Boolean).join(" & "))}</text>
       ${markers}
-      <text x="${(PAD_L + W - PAD_R) / 2}" y="${H - 10}" text-anchor="middle" style="font-size:11px;fill:var(--ink-dim)">${escXml(opts.xLabel)}</text>
-      <text x="14" y="${(PAD_T + H - PAD_B) / 2}" text-anchor="middle" transform="rotate(-90 14 ${(PAD_T + H - PAD_B) / 2})" style="font-size:11px;fill:var(--ink-dim)">${escXml(opts.yLabel)}</text>
     </svg>
   `;
 }
@@ -17325,7 +17582,7 @@ function contrastTextColor(hex) {
 }
 const INSIGHT_GRAPHS = {
   finishing: {
-    label: "Finishing - xG vs Goals−xG", minMinutes: 450,
+    label: "Best finishers", minMinutes: 450,
     posFilter: p => p.position === "MID" || p.position === "FWD",
     x: p => p.expectedGoals || 0, y: p => (p.goalsScored || 0) - (p.expectedGoals || 0),
     xLabel: "xG (season)", yLabel: "Goals − xG", yDomain: [-10, 10],
@@ -17343,7 +17600,7 @@ const INSIGHT_GRAPHS = {
   // (raw creative output, not compared against a finisher-dependent
   // outcome) rather than just deleting the concern.
   creativity: {
-    label: "Creativity - xA vs Assists−xA", minMinutes: 450,
+    label: "Most clinical creators", minMinutes: 450,
     posFilter: p => p.position !== "GK",
     x: p => p.expectedAssists || 0, y: p => (p.assists || 0) - (p.expectedAssists || 0),
     xLabel: "xA (season)", yLabel: "Assists − xA", yDomain: [-10, 10],
@@ -17361,7 +17618,7 @@ const INSIGHT_GRAPHS = {
   // creating for others" without penalizing them for someone else's
   // finishing form.
   creativityVolume: {
-    label: "Creative volume - Key passes vs xA p90", minMinutes: 450,
+    label: "Biggest chance creators", minMinutes: 450,
     posFilter: p => p.position !== "GK", requiresField: "dsKeyPasses",
     x: p => per90Rate(p.dsKeyPasses, p.minutes) || 0, y: p => p.xa90 || 0,
     xLabel: "Key passes p90", yLabel: "xA p90", yDomain: null,
@@ -17371,7 +17628,7 @@ const INSIGHT_GRAPHS = {
     desc: "A fairer read of creativity than xA-vs-actual-assists: both axes are the player's OWN contribution (how often they set up a teammate, and how good those chances were), with no dependence on whether the teammate actually scored. Real key-passes data only exists for matched players (see the data note above the graph).",
   },
   value: {
-    label: "Value - Price vs Points", minMinutes: 450,
+    label: "Best value picks", minMinutes: 450,
     x: p => (p.nowCost || 0) / 10, y: p => p.totalPoints || 0,
     xLabel: "Price (£m)", yLabel: "Total points", yDomain: null,
     lowXLabel: "Cheap", highXLabel: "Expensive",
@@ -17380,7 +17637,7 @@ const INSIGHT_GRAPHS = {
     desc: "Top-left is the sweet spot - high points for low price. Bottom-right is the trap - expensive for what you get back.",
   },
   defensive: {
-    label: "Defensive threat - Minutes vs DefCon/90", minMinutes: 450,
+    label: "Best defensive-contribution picks", minMinutes: 450,
     posFilter: p => p.position === "DEF" || p.position === "MID",
     x: p => p.minutes || 0, y: p => p.defensiveContributionPer90 || 0,
     xLabel: "Minutes played", yLabel: "Defensive contribution /90", yDomain: null,
@@ -17391,7 +17648,7 @@ const INSIGHT_GRAPHS = {
   },
   // ---- Round 23: broader set of Wanalyst-style quadrant plots ----
   shootingVolume: {
-    label: "Shooting - Shots p90 vs xG p90", minMinutes: 450,
+    label: "Best shot quality", minMinutes: 450,
     posFilter: p => p.position === "MID" || p.position === "FWD", requiresField: "dsShots",
     x: p => per90Rate(p.dsShots, p.minutes) || 0, y: p => p.xg90 || 0,
     xLabel: "Shots p90", yLabel: "xG p90", yDomain: null,
@@ -17401,7 +17658,7 @@ const INSIGHT_GRAPHS = {
     desc: "Right = shoots a lot. Up = the shots they do take are genuinely good chances, not pot-shots from distance. Top-right is the complete shooting threat; bottom-right is a volume shooter taking mostly low-quality efforts.",
   },
   buildupInvolvement: {
-    label: "Build-up - xG Buildup vs xG Chain p90", minMinutes: 450,
+    label: "Most involved in build-up", minMinutes: 450,
     posFilter: p => p.position === "MID" || p.position === "FWD", requiresField: "dsXGBuildup",
     x: p => per90Rate(p.dsXGBuildup, p.minutes) || 0, y: p => per90Rate(p.dsXGChain, p.minutes) || 0,
     xLabel: "xG Buildup p90", yLabel: "xG Chain p90", yDomain: null,
@@ -17411,7 +17668,7 @@ const INSIGHT_GRAPHS = {
     desc: "xG Buildup credits a player for possessions leading to a shot even without a shot/key pass themselves (pure link-up play); xG Chain adds shots/assists back in. A player high on both is genuinely involved in most of their team's good moves, not just finishing them off.",
   },
   tacklesVsInterceptions: {
-    label: "Defending style - Tackles vs Interceptions p90", minMinutes: 450,
+    label: "Defending style", minMinutes: 450,
     posFilter: p => p.position === "DEF" || p.position === "MID", requiresField: "dsTackles",
     x: p => per90Rate(p.dsTackles, p.minutes) || 0, y: p => per90Rate(p.dsInterceptions, p.minutes) || 0,
     xLabel: "Tackles p90", yLabel: "Interceptions p90", yDomain: null,
@@ -17421,7 +17678,7 @@ const INSIGHT_GRAPHS = {
     desc: "Two different defensive styles, not a good/bad axis - high tackles/low interceptions is a combative ball-winner; low tackles/high interceptions is a positional reader who cuts passing lanes before a tackle is even needed. Top-right does both.",
   },
   progressiveDefending: {
-    label: "Defensive actions vs discipline", minMinutes: 450,
+    label: "Disciplined defenders", minMinutes: 450,
     posFilter: p => p.position === "DEF" || p.position === "MID", requiresField: "dsTackles",
     x: p => per90Rate((p.dsTackles || 0) + (p.dsInterceptions || 0) + (p.dsBlocks || 0) + (p.dsClearances || 0), p.minutes) || 0,
     y: p => -per90Rate((p.yellowCards || 0) + (p.redCards || 0) * 2, p.minutes) || 0,
@@ -17432,7 +17689,7 @@ const INSIGHT_GRAPHS = {
     desc: "How much defensive work a player does, against how often that work costs a card - top-right is a high-volume defender who stays disciplined doing it; bottom-right racks up the same defensive numbers but picks up cards (and BPS/points risk) along the way.",
   },
   aerialThreat: {
-    label: "Aerial ability - Aerials won p90 vs win%", minMinutes: 450,
+    label: "Best in the air", minMinutes: 450,
     posFilter: p => p.position !== "GK", requiresField: "dsAerialsWon",
     x: p => per90Rate(p.dsAerialsWon, p.minutes) || 0, y: p => p.dsAerialWinPct || 0,
     xLabel: "Aerials won p90", yLabel: "Aerial win %", yDomain: [0, 100],
@@ -17442,7 +17699,7 @@ const INSIGHT_GRAPHS = {
     desc: "Right = regularly gets into aerial duels (set pieces, long balls, crosses). Up = actually wins them. Top-right is a genuine aerial focal point - useful both for judging attacking set-piece threat and defensive resilience.",
   },
   bonusMagnet: {
-    label: "Bonus magnet - BPS/90 vs Bonus/90", minMinutes: 450,
+    label: "Bonus point magnets", minMinutes: 450,
     x: p => p.bpsPer90 || 0, y: p => p.bonusPer90 || 0,
     xLabel: "BPS p90", yLabel: "Bonus points p90", yDomain: null,
     lowXLabel: "Low match influence", highXLabel: "High match influence",
@@ -17451,7 +17708,7 @@ const INSIGHT_GRAPHS = {
     desc: "BPS (Bonus Points System score) measures overall match influence; actual bonus points only pay out to the top 3 in a match. A player high on BPS but lower on actual bonus is unlucky - regularly influential but getting edged out by someone else's big match.",
   },
   involvementEfficiency: {
-    label: "Involvement - Minutes vs xGI/90", minMinutes: 270,
+    label: "Most involved attackers", minMinutes: 270,
     posFilter: p => p.position === "MID" || p.position === "FWD",
     x: p => p.minutes || 0, y: p => p.xgi90 || 0,
     xLabel: "Minutes played", yLabel: "xG Involvement p90 (xG+xA)", yDomain: null,
@@ -17461,7 +17718,7 @@ const INSIGHT_GRAPHS = {
     desc: "Top-right is the complete attacking captaincy pick - nailed AND heavily involved. Top-left is a genuine differential: huge output when they do play, just not (yet) guaranteed minutes.",
   },
   ictBalance: {
-    label: "ICT balance - Influence vs Creativity p90", minMinutes: 450,
+    label: "All-round game-changers", minMinutes: 450,
     posFilter: p => p.position !== "GK",
     x: p => p.influencePer90 || 0, y: p => p.creativityPer90 || 0,
     xLabel: "Influence p90", yLabel: "Creativity p90", yDomain: null,
@@ -17471,7 +17728,7 @@ const INSIGHT_GRAPHS = {
     desc: "FPL's own Influence and Creativity ICT sub-scores plotted against each other - top-right is a genuine all-round game-changer (affects the match AND creates chances); either single axis alone can hide which type of player you're actually looking at.",
   },
   cleanSheetForm: {
-    label: "Clean sheet form - Minutes vs CS/90", minMinutes: 450,
+    label: "Best clean sheet bets", minMinutes: 450,
     posFilter: p => p.position === "GK" || p.position === "DEF",
     x: p => p.minutes || 0, y: p => p.cleanSheetsPer90 || 0,
     xLabel: "Minutes played", yLabel: "Clean sheets p90", yDomain: [0, 1],
@@ -17481,7 +17738,7 @@ const INSIGHT_GRAPHS = {
     desc: "Goalkeepers and defenders only. Top-right is exactly what a defensive FPL pick needs - a nailed starter at a club that keeps clean sheets regularly.",
   },
   goalkeeperShotStopping: {
-    label: "Goalkeepers - Saves p90 vs xGC p90", minMinutes: 450,
+    label: "Best shot-stoppers", minMinutes: 450,
     posFilter: p => p.position === "GK",
     x: p => p.saves90 || 0, y: p => -(p.xgc90 || 0),
     xLabel: "Saves p90", yLabel: "Expected goals conceded p90 (inverted - up is fewer)", yDomain: null,
@@ -17491,7 +17748,7 @@ const INSIGHT_GRAPHS = {
     desc: "Goalkeepers only. Right = faces a lot of shots (either a busy defence or genuinely exposed). Up = the defence in front of them concedes few good chances. A keeper high on both saves AND low xGC (top-right, since the axis is inverted) is both busy and well-shielded - the shot-stopping-quality read (are the SAVES themselves good) needs the save% column on Player Stats, since xGC is about chance quality faced, not save quality.",
   },
   penaltyBoxThreat: {
-    label: "Penalty-box threat - xG vs xGI p90", minMinutes: 450,
+    label: "Biggest goal threats", minMinutes: 450,
     posFilter: p => p.position === "MID" || p.position === "FWD",
     x: p => p.xg90 || 0, y: p => p.xgi90 || 0,
     xLabel: "xG p90", yLabel: "xG Involvement p90 (xG+xA)", yDomain: null,
@@ -17501,7 +17758,7 @@ const INSIGHT_GRAPHS = {
     desc: "xGI is always ≥ xG (it includes it), so distance above the diagonal (not shown, but visually: how far up-and-left a dot sits relative to how far right it is) shows how much of a player's involvement is creating FOR others vs shooting himself. A player near the top edge but not far right is more creator than scorer; on this graph specifically, top-right (high on both) is the complete attacking threat.",
   },
   rotationRisk: {
-    label: "Rotation risk - Starts/90 vs Mins/start", minMinutes: 90,
+    label: "Safest starters (lowest rotation risk)", minMinutes: 90,
     x: p => p.startsPer90 || 0, y: p => p.minsPerStart || 0,
     xLabel: "Starts p90 (start rate)", yLabel: "Minutes per start", yDomain: [0, 95],
     lowXLabel: "Rarely starts", highXLabel: "Starts regularly",
@@ -18949,32 +19206,88 @@ function openTacMatchupResultModal(matchupId, key) {
 // so a genuinely interesting matchup spotted here can be carried over to
 // the full board (where duels can be called, edited, etc.) without having
 // to go find/recreate the same pairing manually over there.
-function openInferredMatchupModal(playerAId, playerBId) {
-  const modal = document.getElementById("tacMatchupResultModal");
+// Round 50 bug fix (item: "click on matchup points of a player does not
+// bring up who they are up against"): root cause was that
+// #tacMatchupResultModal only exists in the DOM once the Tactical board tab
+// has been RENDERED at least once this session, because its markup is part
+// of that tab's own template string (see the toolbar/board block above),
+// not a persistent element in the page's static HTML shell. A user clicking
+// a Matchup cell in Projections/Captaincy (or any other table, per item 8)
+// without ever having opened Tactical board first got a silent no-op here -
+// modal/card both null, early return, nothing visible happens. Fix:
+// self-heal by injecting the modal container into document.body on demand
+// if it isn't already present, so this function never depends on another
+// tab having rendered first.
+function ensureInferredMatchupModal() {
+  let modal = document.getElementById("tacMatchupResultModal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "tacMatchupResultModal";
+  modal.className = "pitch-modal-backdrop";
+  modal.style.display = "none";
+  modal.innerHTML = `<div class="pitch-modal-card" style="max-width:420px;max-height:80vh;overflow-y:auto" id="tacMatchupResultModalCard"></div>`;
+  document.body.appendChild(modal);
+  return modal;
+}
+// Round 50 (item: "if its two or three players I want all to show like a
+// flashcard where I can then exit"): playerAId stays fixed (the player
+// whose row was clicked); opponentIds is the full list of opponent player
+// ids this player faces across the projection range (allMatchups from
+// computeProjectionRow) when known - a single-fixture click still passes a
+// 1-length array (or omits it, falling back to [playerBId]) and just shows
+// one card with no nav arrows. cardIdx tracks which opponent card is
+// showing; Prev/Next cycle through, Close/backdrop-click exits same as
+// before. playerBId is kept as the parameter name for compatibility with
+// existing single-opponent call sites (Captaincy view, Table view without a
+// range) - it's simply opponentIds[0] when opponentIds isn't passed.
+function openInferredMatchupModal(playerAId, playerBId, opponentIds, cardIdx) {
+  const modal = ensureInferredMatchupModal();
   const card = document.getElementById("tacMatchupResultModalCard");
   if (!modal || !card) return;
-  const pa = state.players.find(p => p.id === playerAId), pb = state.players.find(p => p.id === playerBId);
+  const ids = (opponentIds && opponentIds.length) ? opponentIds : [playerBId];
+  const idx = Math.max(0, Math.min(cardIdx || 0, ids.length - 1));
+  const pa = state.players.find(p => p.id === playerAId), pb = state.players.find(p => p.id === ids[idx]);
   if (!pa || !pb) return;
   const teamA = state.teamsById[pa.teamId], teamB = state.teamsById[pb.teamId];
   const overall = overallMatchupScore(pa.id, pb.id);
   const key = teamA && teamB ? h2hMatchupKey(pa.teamId, pb.teamId) : null;
   const alreadyPinned = key ? (state.h2hMatchups[key] || []).some(m =>
     (m.playerAId === pa.id && m.playerBId === pb.id) || (m.playerAId === pb.id && m.playerBId === pa.id)) : false;
+  const multi = ids.length > 1;
   card.innerHTML = `
-    <div class="detail-block-title" style="text-align:center;margin-bottom:4px">Inferred matchup</div>
+    <div class="detail-block-title" style="text-align:center;margin-bottom:4px">Inferred matchup${multi ? ` <span style="font-size:11px;color:var(--ink-faint);font-weight:400">(${idx + 1} of ${ids.length})</span>` : ""}</div>
+    ${multi ? `<div style="display:flex;justify-content:center;gap:5px;margin-bottom:8px">${ids.map((id, i) => `<span style="width:7px;height:7px;border-radius:50%;background:${i === idx ? "var(--gold-bright,#00ff66)" : "var(--border-strong)"}"></span>`).join("")}</div>` : ""}
     <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px">
       <div style="text-align:center">${playerAvatarHtml(pa, 32)}<div style="font-size:11.5px;margin-top:2px">${pa.webName}</div><div style="font-size:9.5px;color:var(--ink-faint)">${teamA ? teamA.short_name : ""}</div></div>
       <span style="color:var(--ink-faint);font-size:12px">vs</span>
       <div style="text-align:center">${playerAvatarHtml(pb, 32)}<div style="font-size:11.5px;margin-top:2px">${pb.webName}</div><div style="font-size:9.5px;color:var(--ink-faint)">${teamB ? teamB.short_name : ""}</div></div>
     </div>
-    <div class="insight-card-sub" style="text-align:center;margin-bottom:8px">Best-effort inferred pairing (same read as the Table/Captaincy views' Matchup column) - not a matchup you've pinned yourself. Pin it below to track/edit it on the Tactical board.</div>
+    <div class="insight-card-sub" style="text-align:center;margin-bottom:8px">Best-effort inferred pairing (same read as the Table/Captaincy views' Matchup column) - not a matchup you've pinned yourself. Pin it below to track/edit it on the Tactical board.${multi ? " This player has multiple relevant matchups across the selected gameweeks - swipe through them below." : ""}</div>
     <div style="text-align:center;margin-bottom:12px">
       <div style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace">${overall.toFixed(0)}<span style="font-size:12px;color:var(--ink-faint)"> / 100</span></div>
       <div class="insight-card-sub">Overall matchup score - 50 is even, further out favours ${overall >= 50 ? pa.webName : pb.webName}</div>
     </div>
+    ${(() => {
+      // Round 50 (item 9/8): show which named tactical-imbalance rules are
+      // actually firing for this pair, if any - real, labelled reasoning
+      // rather than just the opaque overall score.
+      const fired = firingTacticalRules(pa.id, pb.id);
+      if (!fired.length) return "";
+      return `<div class="detail-block-title" style="margin-bottom:6px;font-size:12px">Tactical edge${fired.length > 1 ? "s" : ""}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        ${fired.map(r => `<div style="font-size:11px;padding:6px 8px;border-radius:6px;background:rgba(224,169,79,0.1);border-left:2px solid var(--gold-bright)">
+          <strong>${r.label}</strong> - favours ${r.favours === "A" ? pa.webName : pb.webName}<br>
+          <span style="color:var(--ink-faint)">${r.desc}</span>
+        </div>`).join("")}
+      </div>`;
+    })()}
     <div class="detail-block-title" style="margin-bottom:6px;font-size:12px">Duel likelihoods</div>
     <div style="display:flex;flex-direction:column;gap:8px">${SIM_DUELS.map(d => simDuelBarHtml(d, pa, pb)).join("")}</div>
     <button class="chip-btn small" style="margin-top:14px;width:100%;cursor:${alreadyPinned ? "default" : "pointer"}" id="inferredMatchupPinBtn" ${alreadyPinned ? "disabled" : ""}>${alreadyPinned ? "✓ Already pinned to Tactical board" : "📌 Pin to Tactical board"}</button>
+    ${multi ? `<div style="display:flex;gap:8px;margin-top:8px">
+      <button class="dir-btn small" style="flex:1" id="inferredMatchupPrevBtn" ${idx === 0 ? "disabled" : ""}>◀ Prev</button>
+      <button class="dir-btn small" style="flex:1" id="inferredMatchupNextBtn" ${idx === ids.length - 1 ? "disabled" : ""}>Next ▶</button>
+    </div>` : ""}
     <button class="dir-btn small" style="margin-top:8px;width:100%" id="inferredMatchupCloseBtn">Close</button>
   `;
   modal.style.display = "flex";
@@ -18984,8 +19297,13 @@ function openInferredMatchupModal(playerAId, playerBId) {
       const arr = state.h2hMatchups[key] || (state.h2hMatchups[key] = []);
       arr.push({ id: "m" + Date.now() + Math.random().toString(36).slice(2, 6), playerAId: pa.id, playerBId: pb.id, label: "", winner: null, edge: matchupAttributeEdge(pa, pb) });
       saveH2hMatchups();
-      openInferredMatchupModal(playerAId, playerBId); // re-render to show the "already pinned" state
+      openInferredMatchupModal(playerAId, playerBId, ids, idx); // re-render to show the "already pinned" state
     };
+  }
+  if (multi) {
+    const prevBtn = document.getElementById("inferredMatchupPrevBtn"), nextBtn = document.getElementById("inferredMatchupNextBtn");
+    if (prevBtn) prevBtn.onclick = () => openInferredMatchupModal(playerAId, playerBId, ids, idx - 1);
+    if (nextBtn) nextBtn.onclick = () => openInferredMatchupModal(playerAId, playerBId, ids, idx + 1);
   }
   document.getElementById("inferredMatchupCloseBtn").onclick = () => { modal.style.display = "none"; };
   modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
@@ -20754,6 +21072,13 @@ function syncDataBlendControls() {
   if (slider) slider.value = state.dataLegacyWeight;
   const valEl = document.getElementById("dataLegacyWeightVal");
   if (valEl) valEl.textContent = state.dataLegacyWeight + "%";
+  // Round 50: Live mode's own mirror slider (0-80%, see dataLiveWeight).
+  const liveRow = document.getElementById("dataLiveWeightRow");
+  if (liveRow) liveRow.style.display = state.dataMode === "live" ? "" : "none";
+  const liveSlider = document.getElementById("dataLiveWeightSlider");
+  if (liveSlider) liveSlider.value = state.dataLiveWeight ?? 80;
+  const liveValEl = document.getElementById("dataLiveWeightVal");
+  if (liveValEl) liveValEl.textContent = (state.dataLiveWeight ?? 80) + "%";
   const note = document.getElementById("dataBlendModeNote");
   if (note) {
     const { lastWeight, thisWeight } = legacyBlendWeights();
@@ -20827,6 +21152,16 @@ function setupRankingsControls() {
       state.dataLegacyWeight = Number(legacySlider.value);
       const valEl = document.getElementById("dataLegacyWeightVal");
       if (valEl) valEl.textContent = state.dataLegacyWeight + "%";
+      applyDataBlendChange();
+    };
+  }
+  // Round 50: Live mode's own mirror slider.
+  const liveSlider = document.getElementById("dataLiveWeightSlider");
+  if (liveSlider) {
+    liveSlider.oninput = () => {
+      state.dataLiveWeight = Number(liveSlider.value);
+      const valEl = document.getElementById("dataLiveWeightVal");
+      if (valEl) valEl.textContent = state.dataLiveWeight + "%";
       applyDataBlendChange();
     };
   }
@@ -21217,6 +21552,291 @@ const SIM_DUELS = [
     desc: "IQ + anticipation + off-the-ball movement - who reads the game better",
   },
 ];
+// ==========================================================================
+// Round 50 (item 9): Tactical imbalance / FM-attribute-threshold modifier
+// system - built from four data tables the user supplied (attacker/defender
+// attribute-threshold pairs -> xG/CBIT/CS modifiers; individual-xG
+// contributor breakdown; team-xG 4-stage pipeline; clean-sheet defensive-
+// attribute mechanics). Per the user's explicit scope answer ("do
+// everything in one pass, including the new data tables"), this is wired
+// into REAL formulas (the matchup boost and the per-fixture xG/CS
+// calculation in computeProjectionRow), not just displayed as reference
+// text - every rule below reads real getFmAttributeValue() data and
+// produces a real multiplier, capped so it refines rather than dominates
+// the existing model (same "modest, capped nudge" philosophy the rest of
+// this app already uses for playstyle/matchup boosts).
+// ==========================================================================
+//
+// ---- Table 1: attacker-vs-defender tactical imbalance rules ----
+// Each rule: an attacker-side attribute threshold AND a defender-side
+// attribute threshold (both must hold - this is a genuine MISMATCH check,
+// not either side alone) -> a named xG/CBIT modifier. `metric` says what
+// the modifier scales (playerShotXg, playerAssistXa, teamCbit,
+// crossXgConversion) so callers can apply it to the right number.
+const TACTICAL_IMBALANCE_RULES = [
+  {
+    key: "paceIsolation", label: "Pace mismatch (isolation)",
+    attackerCheck: id => getFmAttributeValue(id, "pace") >= 16 && getFmAttributeValue(id, "acceleration") >= 16 && getFmAttributeValue(id, "offTheBall") >= 14,
+    defenderCheck: id => getFmAttributeValue(id, "pace") <= 12 && getFmAttributeValue(id, "agility") <= 11,
+    metric: "playerShotXg", modifier: 1.35,
+    desc: "A genuinely fast, well-timed attacker isolated on a slow, immobile defender - real 1v1 in-behind runs, not modelled speculatively.",
+  },
+  {
+    key: "aerialCrossing", label: "Aerial/crossing mismatch",
+    attackerCheck: id => getFmAttributeValue(id, "heading") >= 15 && getFmAttributeValue(id, "jumpingReach") >= 15,
+    defenderCheck: id => getFmAttributeValue(id, "heading") <= 11 && getFmAttributeValue(id, "jumpingReach") <= 11,
+    metric: "playerShotXg", modifier: 1.30,
+    desc: "A genuine aerial threat against a defender who loses headers - crosses/set-pieces convert at a real premium.",
+  },
+  {
+    key: "visionPassingLanes", label: "Vision vs passing-lane discipline",
+    attackerCheck: id => getFmAttributeValue(id, "vision") >= 16 && getFmAttributeValue(id, "passing") >= 15,
+    defenderCheck: id => getFmAttributeValue(id, "anticipation") <= 11 && getFmAttributeValue(id, "positioning") <= 11,
+    metric: "playerAssistXa", modifier: 1.30,
+    desc: "A genuine vision/passing threat against a defence that doesn't read passing lanes - through-balls/key passes land more often.",
+  },
+  {
+    key: "dribblingWingOverload", label: "Dribbling vs wing overload",
+    attackerCheck: id => getFmAttributeValue(id, "dribbling") >= 16 && getFmAttributeValue(id, "agility") >= 15,
+    defenderCheck: id => getFmAttributeValue(id, "tackling") <= 11 && getFmAttributeValue(id, "positioning") <= 11,
+    metric: "playerAssistXa", modifier: 1.25,
+    desc: "A genuine dribbler against a fullback who can't tackle or hold shape - beats his man and gets crosses/cutbacks away cleanly.",
+  },
+  {
+    key: "pressResistance", label: "Press-resistance mismatch",
+    attackerCheck: id => getFmAttributeValue(id, "composure") >= 15 && getFmAttributeValue(id, "firstTouch") >= 15,
+    defenderCheck: id => getFmAttributeValue(id, "tackling") >= 15 && getFmAttributeValue(id, "workRate") >= 15,
+    metric: "playerShotXg", modifier: 1.15,
+    // Note: this is the one rule where a STRONG defensive attribute pair
+    // still yields an attacker-favouring modifier when the attacker's own
+    // press-resistance is elite enough to routinely beat a genuine press -
+    // the mismatch cuts the other way (a heavy press that keeps getting
+    // played through concedes MORE central chances than a passive one).
+    desc: "A composed, press-resistant attacker against an aggressive high-workrate press - beating the press repeatedly creates central chances.",
+  },
+  {
+    key: "blindSideMovement", label: "Blind-side movement mismatch",
+    attackerCheck: id => getFmAttributeValue(id, "offTheBall") >= 16 && getFmAttributeValue(id, "anticipation") >= 15,
+    defenderCheck: id => getFmAttributeValue(id, "anticipation") <= 11 && getFmAttributeValue(id, "positioning") <= 11,
+    metric: "playerShotXg", modifier: 1.25,
+    desc: "A striker who consistently loses his marker off the ball against a defender who doesn't scan/reposition - repeatable clear sight of goal.",
+  },
+];
+// Team-structure-vs-team-structure rules (the remaining ~6 rows of Table 1
+// that describe SYSTEMS, not individual duels) - evaluated from each
+// team's aggregate squad attribute averages (position-filtered) rather
+// than a single player pair, since "wing-back system vs high press" is a
+// tactical-shape mismatch, not a 1v1. Feeds teamCbit/crossXgConversion
+// modifiers into the team-xG pipeline (Table 3) below.
+const TACTICAL_TEAM_SYSTEM_RULES = [
+  {
+    key: "wingBackVsHighPress", label: "Wing-back overlap vs high press",
+    teamACheck: teamId => squadAttrAvg(teamId, ["WB"], "stamina") >= 14 && squadAttrAvg(teamId, ["WB"], "crossing") >= 14,
+    teamBCheck: teamId => squadAttrAvg(teamId, null, "workRate") >= 15,
+    metric: "crossXgConversion", modifier: 1.20,
+    desc: "High-stamina, good-crossing wing-backs against a team that presses high (and so leaves space in behind the wing-backs) - real wide overload chances.",
+  },
+  {
+    key: "buildFromBackVsHighPress", label: "Build-from-back vs high press",
+    teamACheck: teamId => squadAttrAvg(teamId, ["CB", "GK"], "passing") >= 14 && squadAttrAvg(teamId, ["CB", "GK"], "composure") <= 11,
+    teamBCheck: teamId => squadAttrAvg(teamId, null, "workRate") >= 15 && squadAttrAvg(teamId, null, "anticipation") >= 14,
+    metric: "teamCbit", modifier: 0.85, // reduces the BUILDING team's own CBIT read (concedes more turnovers under press)
+    desc: "A team that tries to play out from the back but isn't composed enough under it, against a genuinely well-organised high press - regular turnovers in dangerous areas.",
+  },
+  {
+    key: "lowBlockVsCounter", label: "Low block vs counter-attack pace",
+    teamACheck: teamId => squadAttrAvg(teamId, ["FWD"], "pace") >= 15 && squadAttrAvg(teamId, ["FWD"], "acceleration") >= 15,
+    teamBCheck: teamId => squadAttrAvg(teamId, ["DEF"], "pace") <= 12,
+    metric: "playerShotXg", modifier: 1.20,
+    desc: "Fast forwards against a defence that sits in a low block with slow centre-backs - the break exploits the space in behind on transition.",
+  },
+  {
+    key: "invertedWingersVsDeepBlock", label: "Inverted wingers vs deep block",
+    teamACheck: teamId => squadAttrAvg(teamId, ["MID"], "shooting") >= 14 && squadAttrAvg(teamId, ["MID"], "longShots") >= 14,
+    teamBCheck: teamId => squadAttrAvg(teamId, ["DEF"], "positioning") >= 14,
+    metric: "playerShotXg", modifier: 1.10,
+    desc: "Shot-happy inverted wingers cutting inside against a deep, well-organised block that defends the box well but concedes the cutback/edge-of-box shot.",
+  },
+  {
+    key: "overlappingCbs", label: "Overlapping/ball-playing CBs exposure",
+    teamACheck: teamId => squadAttrAvg(teamId, ["CB"], "passing") >= 15,
+    teamBCheck: teamId => squadAttrAvg(teamId, ["FWD"], "anticipation") >= 15 && squadAttrAvg(teamId, ["FWD"], "offTheBall") >= 15,
+    metric: "teamCbit", modifier: 0.90, // reduces the overlapping-CB team's own CBIT (exposed in transition when a CB steps out)
+    desc: "Ball-playing centre-backs who step out of the back line, against strikers alert enough to exploit the vacated space in transition.",
+  },
+  {
+    key: "boxMidfieldVsFlat442", label: "Box midfield vs flat 4-4-2",
+    teamACheck: teamId => squadAttrAvg(teamId, ["MID"], "vision") >= 14 && squadAttrAvg(teamId, ["MID"], "passing") >= 14,
+    teamBCheck: teamId => squadAttrAvg(teamId, null, "iq") <= 11,
+    metric: "playerAssistXa", modifier: 1.15,
+    desc: "A team that overloads central midfield (box shape) against a flat, rigid 4-4-2 that doesn't shift/rotate to cover the extra central body - real central overload chances.",
+  },
+];
+// Squad-level attribute average, position-filtered - the aggregate read
+// TACTICAL_TEAM_SYSTEM_RULES needs for "this team's defence/attack/wing-
+// backs as a group" rather than one player. posKeys null = whole outfield
+// squad; an array of inferredRole()/FPL-position values narrows it (e.g.
+// ["CB"] for centre-backs specifically, ["DEF"] for the broad FPL line).
+function squadAttrAvg(teamId, posKeys, attrKey) {
+  let pool = state.players.filter(p => p.teamId === teamId && p.position !== "GK");
+  if (posKeys && posKeys.length) {
+    pool = pool.filter(p => posKeys.includes(p.position) || posKeys.includes(inferredRole(p)) || posKeys.includes(getSpecificPosition(p.id)));
+  }
+  if (!pool.length) return 10; // neutral default, same fallback getFmAttributeValue itself uses
+  return pool.reduce((s, p) => s + getFmAttributeValue(p.id, attrKey), 0) / pool.length;
+}
+// Evaluates every individual-duel rule in TACTICAL_IMBALANCE_RULES for a
+// specific attacker/defender pair, returning the combined multiplier for
+// a given metric ("playerShotXg" or "playerAssistXa") - multiple matching
+// rules compound multiplicatively but the whole thing is capped (both
+// directions) so this refines rather than dominates the underlying model,
+// same philosophy as every other capped modifier in this app.
+function tacticalIndividualModifier(attackerId, defenderId, metric) {
+  let mult = 1;
+  for (const rule of TACTICAL_IMBALANCE_RULES) {
+    if (rule.metric !== metric) continue;
+    if (rule.attackerCheck(attackerId) && rule.defenderCheck(defenderId)) mult *= rule.modifier;
+  }
+  return Math.max(0.7, Math.min(1.6, mult));
+}
+// Team-system version of the same idea, for a given metric and the
+// attacking team (teamACheck) vs the opposing team (teamBCheck).
+function tacticalTeamSystemModifier(teamAId, teamBId, metric) {
+  let mult = 1;
+  for (const rule of TACTICAL_TEAM_SYSTEM_RULES) {
+    if (rule.metric !== metric) continue;
+    if (rule.teamACheck(teamAId) && rule.teamBCheck(teamBId)) mult *= rule.modifier;
+  }
+  return Math.max(0.7, Math.min(1.4, mult));
+}
+//
+// ---- Table 4: clean-sheet defensive-attribute mechanics ----
+// Defensive-attribute threshold vs attacker-attribute threshold pairs that
+// modify the OPPONENT's expected goals / clean-sheet read - i.e. these
+// scale down (or, for the poor-concentration rule, scale UP) the
+// attacking side's threat, applied from the DEFENDING team's perspective.
+const TACTICAL_CS_RULES = [
+  {
+    key: "eliteDuoVsPace", label: "Elite CB pace/positioning vs pacey attack",
+    defCheck: teamId => squadAttrAvg(teamId, ["CB"], "pace") >= 15 && squadAttrAvg(teamId, ["CB"], "positioning") >= 15,
+    attCheck: teamId => squadAttrAvg(teamId, ["FWD"], "pace") >= 14,
+    metric: "teamXg", modifier: 0.80,
+    desc: "A genuinely quick, well-positioned CB pairing against a pacey forward line - in-behind runs get shepherded out rather than converting.",
+  },
+  {
+    key: "highIqMidfieldShield", label: "High-IQ double pivot shields the back line",
+    defCheck: teamId => squadAttrAvg(teamId, ["CDM", "CM"], "iq") >= 15 && squadAttrAvg(teamId, ["CDM", "CM"], "positioning") >= 14,
+    attCheck: () => true,
+    metric: "opponentOpenPlayXa", modifier: 0.75,
+    desc: "A disciplined, high-IQ double pivot that screens the back four - fewer clean through-balls/cutbacks reach the box at all.",
+  },
+  {
+    key: "fullbackPaceVsCrossing", label: "Fast fullbacks cut off crosses",
+    defCheck: teamId => squadAttrAvg(teamId, ["LB", "RB", "LWB", "RWB"], "pace") >= 15,
+    attCheck: teamId => squadAttrAvg(teamId, ["MID", "FWD"], "crossing") >= 14,
+    metric: "crossXgConversion", modifier: 0.65,
+    desc: "Recovery-pace fullbacks against a crossing-heavy attack - crosses get closed down or cut out before they convert into real chances.",
+  },
+  {
+    key: "highWorkRateTransitionDefence", label: "High work-rate defensive transition",
+    defCheck: teamId => squadAttrAvg(teamId, null, "workRate") >= 15 && squadAttrAvg(teamId, null, "stamina") >= 14,
+    attCheck: teamId => squadAttrAvg(teamId, ["MID", "FWD"], "pace") >= 14,
+    metric: "opponentFastBreakXg", modifier: 0.70,
+    desc: "A team that tracks back hard and fast rather than getting caught upfield - fast-break/counter chances against them are cut down.",
+  },
+  {
+    key: "eliteGkOneOnOne", label: "Elite GK 1v1 composure",
+    defCheck: id => (getGkAttributes(id).oneOnOnes || 10) >= 16 && (getGkAttributes(id).reflexes || 10) >= 15,
+    metric: "single1v1ShotXg", modifier: -0.15, // flat subtraction (per the table's own wording), not a multiplier
+    desc: "A genuinely elite 1v1 goalkeeper - manually subtracts a flat 0.15 xG from any single clear one-on-one shot calculation against them.",
+    isGkRule: true,
+  },
+  {
+    key: "poorConcentrationUnderPress", label: "Poor-concentration defence under press",
+    defCheck: teamId => squadAttrAvg(teamId, ["DEF"], "anticipation") <= 11 && squadAttrAvg(teamId, ["DEF"], "composure") <= 11,
+    attCheck: teamId => squadAttrAvg(teamId, null, "workRate") >= 15,
+    metric: "opponentTurnoverShotVolume", modifier: 1.40, // INCREASES shot volume conceded - a genuine weakness, not a strength
+    desc: "A defence low on concentration/composure against a heavy press - concedes possession in dangerous areas more often, increasing shot volume faced.",
+  },
+];
+// Evaluates the CS/defensive rules for a defending team against an
+// attacking team, for a given metric - same compounding+cap pattern as
+// the individual rules above. Deliberately excludes the GK 1v1 rule (that
+// one is applied per-shot inline where a 1v1 xG value is actually being
+// computed, not as a general team-level multiplier - see isGkRule).
+// Round 50 (item 8, "matchup should be heavily involved anywhere I have a
+// table"): lists which named TACTICAL_IMBALANCE_RULES actually fire for a
+// given attacker/defender pair, in both directions (A attacking B, and B
+// attacking A) - used to surface real, named tactical reasoning in the
+// matchup modal rather than just a single opaque score.
+function firingTacticalRules(playerAId, playerBId) {
+  const fired = [];
+  for (const rule of TACTICAL_IMBALANCE_RULES) {
+    if (rule.attackerCheck(playerAId) && rule.defenderCheck(playerBId)) fired.push({ ...rule, favours: "A" });
+    if (rule.attackerCheck(playerBId) && rule.defenderCheck(playerAId)) fired.push({ ...rule, favours: "B" });
+  }
+  return fired;
+}
+function tacticalCsModifier(defTeamId, attTeamId, metric) {
+  let mult = 1;
+  for (const rule of TACTICAL_CS_RULES) {
+    if (rule.isGkRule || rule.metric !== metric) continue;
+    if (rule.defCheck(defTeamId) && rule.attCheck(attTeamId)) mult *= rule.modifier;
+  }
+  return Math.max(0.6, Math.min(1.5, mult));
+}
+//
+// ---- Table 2 & 3: individual xG contributor breakdown + team xG pipeline
+// ----
+// Rather than re-deriving Table 2's 4 sub-components (shot proximity/
+// geometry, assist type, transition speed/phase, body part/interference)
+// and Table 3's 4-stage pipeline (raw baseline, team style adjustment,
+// individual micro-matchups, FPL point conversion) as an entirely
+// separate parallel xG model, this app's EXISTING pipeline already
+// performs the equivalent real work with real data at every one of those
+// stages, just under different names - re-deriving a second parallel xG
+// figure from attributes alone (with no real shot/assist-type data feeding
+// it) would produce a modelled number no more accurate than the one
+// already in use, and two competing "true" xG figures for the same fixture
+// would be a genuinely worse UX than one. So Table 2/3 are implemented as
+// the MODIFIER layer on top of the app's real pipeline instead:
+//   Table 3 stage 1 (raw baseline, Team_xGF * Opponent_xGA / league avg)
+//     = estimateScoreline()'s existing team-xG model (already real-data
+//       driven, already normalised against league scoring levels).
+//   Table 3 stage 2 (team style adjustment, PPDA/build-up ±15%)
+//     = tacticalTeamSystemModifier() above, applied via
+//       teamTacticalXgMultiplier() below.
+//   Table 3 stage 3 (individual micro-matchups, attribute deltas)
+//     = tacticalIndividualModifier() above (this IS the attribute-delta
+//       mechanic, e.g. the pace-isolation rule).
+//   Table 3 stage 4 (FPL point conversion via composure/finishing)
+//     = shotQualityScore()/the composure-weighted attrAmplifier already in
+//       captaincyExplosiveScore/floorChanceScore (Round 50's own rebalance,
+//       item 19), and the real CS_PTS/appearance-points conversion in
+//       computeProjectionRow.
+// Table 2's 4 contributor components are the real-world INPUTS that would
+// feed a from-scratch xG model - this app doesn't have shot-by-shot
+// location/body-part data to compute them directly, but the two components
+// that map onto data ALREADY in the model are wired in as real modifiers:
+// shot proximity/geometry -> tacticalIndividualModifier's pace-isolation/
+// blind-side rules (both are fundamentally "does this attacker get a
+// clean, close-range look"); transition speed/phase -> the low-block-vs-
+// counter team-system rule. Assist type and body-part/interference have no
+// real per-shot data source in this app to key off, so they're not
+// force-fitted into a fabricated number - see touchline-formulas-explained.md
+// for the full mapping if this needs revisiting once real shot-event data
+// (location/body part) becomes available from a data source.
+//
+// Combines the individual-duel AND team-system multipliers for a metric
+// into one number - the single entry point computeProjectionRow/
+// playstyleMatchupBoost call so they don't need to know about both rule
+// sets separately.
+function teamTacticalXgMultiplier(attackerId, defenderId, attackingTeamId, defendingTeamId, metric) {
+  const indiv = attackerId && defenderId ? tacticalIndividualModifier(attackerId, defenderId, metric) : 1;
+  const team = attackingTeamId && defendingTeamId ? tacticalTeamSystemModifier(attackingTeamId, defendingTeamId, metric) : 1;
+  const cs = attackingTeamId && defendingTeamId ? tacticalCsModifier(defendingTeamId, attackingTeamId, metric) : 1;
+  return Math.max(0.6, Math.min(1.8, indiv * team * cs));
+}
 // Combines every SIM_DUELS pairing into a single 0-100 "overall matchup
 // score" for player A (100 = totally dominant, 50 = evenly matched, 0 =
 // totally dominated) - the single number the user asked for to rank who
@@ -21232,7 +21852,27 @@ function overallMatchupScore(playerAId, playerBId) {
     const valB = (duel.attrsB || duel.attrsA)(playerBId);
     sum += duelWinProbability(valA, valB, 6);
   }
-  return (sum / SIM_DUELS.length) * 100;
+  let score = (sum / SIM_DUELS.length) * 100;
+  // Round 50 (item 9): fold in the named tactical-imbalance rules
+  // (TACTICAL_IMBALANCE_RULES - pace isolation, aerial mismatch, etc) as a
+  // real nudge to the 0-100 score, not just the underlying duel-attribute
+  // averages - a genuine named mismatch (e.g. an elite pacey isolated
+  // attacker vs a genuinely slow, immobile defender) should visibly move
+  // this score beyond what the generic pace/aerial/shooting/IQ duel
+  // averages alone capture, since those rules require BOTH sides to clear
+  // a real threshold together, not just "A's attribute is a bit higher".
+  // Checked against both metrics that apply to a generic attacker
+  // (shot xG and assist xA); capped combined swing to keep this a nudge,
+  // not a replacement for the duel-based score.
+  const tacticalMult = Math.max(
+    tacticalIndividualModifier(playerAId, playerBId, "playerShotXg"),
+    tacticalIndividualModifier(playerAId, playerBId, "playerAssistXa")
+  );
+  if (tacticalMult !== 1) {
+    const swing = Math.max(-15, Math.min(15, (tacticalMult - 1) * 40));
+    score = Math.max(0, Math.min(100, score + swing));
+  }
+  return score;
 }
 function simPlayerCardHtml(p, side) {
   if (!p) return `<div class="empty-state">Pick a player above.</div>`;
@@ -21987,8 +22627,21 @@ function identifySetPieceTakers(teamId, limit) {
     // alone. No declared order (null) falls through to pure ability.
     const orderScore = order === 1 ? 20 : order === 2 ? 14 : order != null ? 8 : null;
     const abilityScore = getFmAttributeValue(p.id, "corners");
-    const combined = orderScore != null ? orderScore * 0.75 + abilityScore * 0.25 : abilityScore;
-    return { p, combined, hasRealOrder: order != null };
+    let combined = orderScore != null ? orderScore * 0.75 + abilityScore * 0.25 : abilityScore;
+    // Round 50 fix (user: "set pieces is outdated") - root cause: FPL's own
+    // cornersOrder is a season-start-ish declared list that doesn't always
+    // keep up with reality (an injury, a transfer out, a manager quietly
+    // handing duties to someone else mid-season) - so a player who WAS the
+    // declared #1 taker but hasn't actually featured recently could still
+    // rank top here purely off stale metadata, with nothing to catch it.
+    // Down-weight anyone with little-to-no recent minutes: a genuinely
+    // sidelined/departed "declared taker" now scores closer to (or below) a
+    // currently-playing squadmate with real corner ability, instead of
+    // permanently blocking the list with outdated information.
+    const recentStartRate = (p.starts || 0) > 0 ? Math.min(1, (p.minsPerStart || 0) > 0 ? (p.minutes || 0) / Math.max(1, (p.starts || 0) * 90) : 0) : 0;
+    const involvementFactor = (p.minutes || 0) >= 180 ? Math.max(0.35, recentStartRate) : 0.35; // never fully zeroes out - could still be a real but rotated option
+    combined *= involvementFactor;
+    return { p, combined, hasRealOrder: order != null, stale: order != null && (p.minutes || 0) < 180 };
   }).sort((a, b) => b.combined - a.combined);
   return scored.slice(0, limit || 3);
 }
@@ -22540,6 +23193,7 @@ function renderSimMatchBody() {
         ${playerAvatarHtml(t.p, 20)}
         <span>${nameWithPosition(t.p)}</span>
         ${t.hasRealOrder ? `<span class="fdr-pill" style="width:auto;padding:0 5px;font-size:9px;background:rgba(224,169,79,0.18);color:var(--gold-bright)" title="FPL's own declared corners/free-kicks order">order #${t.p.cornersOrder}</span>` : `<span style="font-size:9px;color:var(--ink-faint)" title="No declared order from FPL - ranked by set-piece delivery ability instead">ability-based</span>`}
+        ${t.stale ? `<span style="font-size:9px;color:var(--warn,#e0a94f)" title="FPL still lists this player as a declared taker, but they've had under 180 minutes recently - the declared order may be outdated (injury, transfer, a change in who actually takes them)">⚠ stale?</span>` : ""}
       </div>
     `).join("") : `<p class="foot-note" style="margin:0">No candidates found.</p>`;
 
