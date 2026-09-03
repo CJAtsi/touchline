@@ -2263,7 +2263,20 @@ function wireSearchablePlayerPicker(id, pool, onSelect) {
   const teamFilter = root.querySelector(".player-search-filter-team");
   const priceFilter = root.querySelector(".player-search-filter-price");
   const renderResults = (q) => {
-    const query = (q || "").trim().toLowerCase();
+    // Round 53 bug fix (user: "sangare is not showing up when i search
+    // him"): this was plain .toLowerCase().includes() against webName -
+    // works fine for an unaccented name, but Ibrahim SangarÉ's real FPL
+    // webName carries the accent ("Sangaré"), and lowercasing an accented
+    // character doesn't strip the accent (é.toLowerCase() is still é, not
+    // e), so typing the unaccented "sangare" (the natural way to type it
+    // on a UK keyboard) could never match. foldAccents (already used by
+    // the two OTHER in-app swap-search boxes - the Best XI pitch's swap
+    // panel and the Bench Boost 15 swap panel, see their own searchQ
+    // lines) does NFD-normalize + strip diacritics + lowercase on both
+    // sides, so "sangare" now matches "Sangaré" the same way those two
+    // other search boxes already handle it - this was the one remaining
+    // player search box that hadn't been switched over.
+    const query = foldAccents((q || "").trim());
     let filtered = pool;
     if (posFilter && posFilter.value !== "ALL") filtered = filtered.filter(p => p.position === posFilter.value);
     if (specificPosFilter && specificPosFilter.value !== "ALL") filtered = filtered.filter(p => getSpecificPosition(p.id) === specificPosFilter.value);
@@ -2273,7 +2286,7 @@ function wireSearchablePlayerPicker(id, pool, onSelect) {
       filtered = filtered.filter(p => { const price = (p.nowCost || 0) / 10; return price > lo && price <= hi; });
     }
     const matches = (query
-      ? filtered.filter(p => p.webName.toLowerCase().includes(query) || (state.teamsById[p.teamId]?.short_name || "").toLowerCase().includes(query))
+      ? filtered.filter(p => foldAccents(p.webName).includes(query) || foldAccents(state.teamsById[p.teamId]?.short_name || "").includes(query))
       : filtered
     ).slice(0, 40);
     if (!matches.length) {
@@ -2320,6 +2333,18 @@ const SORT_OPTIONS = [
   ["assistsPer90", "Assists /90"], ["gaPer90", "Goals+Assists /90"], ["bonusPer90", "Bonus /90"], ["bpsPer90", "BPS /90"], ["ictPer90", "ICT /90"],
   ["influencePer90", "Influence /90"], ["creativityPer90", "Creativity /90"], ["threatPer90", "Threat /90"],
   ["teamGoalShare", "% of team goals+assists"], ["teamXgiShare", "% of team xGI"],
+  // Round 53 (user: "add shots and that likeness of scrape to player
+  // stats" + "add a threat +creat underlying number column"): shotsPer90
+  // already existed as a real-data-backed function (ciShots/dsShots-first,
+  // synthetic fallback only as a last resort - see its own comment) used
+  // internally by Explosive captaincy/chance-magnet scoring, but was never
+  // exposed as a sortable/visible Player Stats column - same for
+  // chancesCreatedPer90 (its direct creativity-side counterpart) and
+  // threatCreativityPer90 (the sum of the two ICT sub-scores per 90,
+  // giving one combined "underlying attacking involvement" number rather
+  // than needing to eyeball Threat and Creativity separately).
+  ["shotsPer90Sort", "Shots /90 (real, scraped)"], ["chancesCreatedPer90Sort", "Chances created /90 (real, scraped)"],
+  ["threatCreativityPer90", "Threat+Creativity /90 (underlying)"],
 ];
 
 // Player, Team, Pos, star are always shown; these fixed columns stay
@@ -2342,11 +2367,17 @@ const STAT_THEMES = {
       ["Goals & assists", ["goalsScored", "assists", "gaTotal", "goalsPer90", "assistsPer90"]],
       ["Expected", ["expectedGoals", "expectedAssists", "expectedGoalInvolvements", "xg90", "xa90", "xgi90"]],
       ["Team share", ["teamGoalShare", "teamXgiShare"]],
-      ["Underlying", ["threat", "creativity", "penaltiesMissed"]],
+      // Round 53: shotsPer90Sort/chancesCreatedPer90Sort (real ciShots/
+      // dsShots-scraped shot & chance-created volume, "*" flags a synthetic
+      // fallback for players with no real source yet - see COLUMN_FORMAT's
+      // own comment) and threatCreativityPer90 (combined ICT sub-score /90)
+      // sit alongside the existing raw Threat/Creativity season totals.
+      ["Underlying", ["threat", "creativity", "threatCreativityPer90", "shotsPer90Sort", "chancesCreatedPer90Sort", "penaltiesMissed"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["goalsScored", "G"], ["assists", "A"], ["gaTotal", "G+A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
       ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
-      ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."], ["penaltiesMissed", "Pen miss"]],
+      ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."],
+      ["threatCreativityPer90", "T+C/90"], ["shotsPer90Sort", "Shots/90"], ["chancesCreatedPer90Sort", "Chances/90"], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
@@ -2363,12 +2394,13 @@ const STAT_THEMES = {
     label: "Deeper stats",
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
-      ["Underlying", ["influence", "creativity", "threat"]],
+      ["Underlying", ["influence", "creativity", "threat", "threatCreativityPer90"]],
       ["Expected /90", ["xg90", "xa90", "xgi90"]],
+      ["Shot & chance volume", ["shotsPer90Sort", "chancesCreatedPer90Sort"]],
       ["Set pieces", ["penaltiesOrder", "directFreekicksOrder", "cornersOrder"]],
     ],
-    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"],
-      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["threatCreativityPer90", "T+C/90"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["shotsPer90Sort", "Shots/90"], ["chancesCreatedPer90Sort", "Chances/90"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   per90: {
@@ -2447,6 +2479,32 @@ const COLUMN_FORMAT = {
   threatPer90: p => [p.threatPer90.toFixed(1), ""],
   ictPer90: p => [p.ictPer90.toFixed(2), ""],
   rangePts: p => [state.rangePoints && state.rangePoints[p.id] != null ? state.rangePoints[p.id] : "-", ""],
+  // Round 53 (user: "add shots and that likeness of scrape to player
+  // stats" + "add a threat +creat underlying number column"). shotsPer90/
+  // chancesCreatedPer90 are functions, not stored fields (see their own
+  // comments) - real coreinsights/Understat-FBref-scrape data first,
+  // synthetic xG/xA-derived estimate only as a last resort for players
+  // with no real source yet. That fallback tier is flagged inline (*) so
+  // a synthetic-derived number is visibly distinguishable from a real one,
+  // same spirit as this column being removed back in Round 10 when the
+  // scrape was unreliable and re-added now that ciShots/ciChancesCreated
+  // (the FPL-Core-Insights source, confirmed reliable since Round 47/48)
+  // cover the large majority of current players.
+  shotsPer90Sort: p => {
+    const real = per90Rate(p.ciShots, p.ciMinutes) ?? per90Rate(p.dsShots, p.minutes);
+    const v = shotsPer90(p);
+    return [v.toFixed(2) + (real == null ? "*" : ""), real == null ? "color:var(--ink-faint)" : ""];
+  },
+  chancesCreatedPer90Sort: p => {
+    const real = per90Rate(p.ciChancesCreated, p.ciMinutes) ?? per90Rate(p.dsKeyPasses, p.minutes);
+    const v = chancesCreatedPer90(p);
+    return [v.toFixed(2) + (real == null ? "*" : ""), real == null ? "color:var(--ink-faint)" : ""];
+  },
+  // Combined underlying attacking-involvement number - the sum of FPL's
+  // own Threat and Creativity ICT sub-scores per 90, so a single column
+  // answers "how involved is this player in chances, total" without
+  // needing to eyeball Threat/90 and Creativity/90 separately.
+  threatCreativityPer90: p => [((p.threatPer90 || 0) + (p.creativityPer90 || 0)).toFixed(1), ""],
 };
 // Note: the ds* (dsShots/dsTackles/dsInterceptions/dsBlocks/dsClearances/
 // dsAerialsWon/dsAerialWinPct/dsXGChain/dsXGBuildup) fields themselves are
@@ -2881,16 +2939,41 @@ function hasAnyGkAttributes(playerId) {
 // their already-known broad FPL position repeated back, not new
 // information - the attribute export (shot-stopping numbers) is the real
 // data a keeper needs, so a GK with no gkAttributes is flagged regardless
-// of position-tag status. Outfield players keep the "either is enough"
-// rule, since a real specific position (RW/CDM/etc, genuinely finer than
-// FPL's own broad MID/DEF/FWD) IS meaningful data on its own for them.
-// Used by the Player Stats table's 🚩 badge below.
+// of position-tag status.
+// Round 53 bug fix (user: "alot of players are not tagging for export yet
+// their stats are 10 across the board, moreover there are some players i
+// know are in the export and yet they aren't included and Saka is better
+// than 10 across the board...i think since i exported from fm and i was
+// manager of arsenal it didnt load in arsenal players") - confirmed: the
+// embedded BUILTIN_FM_ATTRIBUTES baseline (2946 players, from the
+// 2026-08-23 moneyball export - see that array's own comment) contains
+// ZERO Arsenal players (Bukayo Saka's own name only false-matches
+// "Tatsuhiro Sakamoto" of Coventry, a completely different player) - the
+// real export file itself (moneyball_export_20260823_230904.csv) confirms
+// the same: 0 Arsenal rows. This matches the user's own diagnosis exactly
+// - FM's in-game "Player Export" plugin run from Player Search while
+// managing a club appears to exclude that manager's own club's players
+// from the exported pool. The bug this function had: outfield players
+// used an "either is enough" OR between hasPosition and hasAttrs, on the
+// theory that a real specific position (RW/CDM/etc) is meaningful data on
+// its own even without attributes - true in general, but it meant a
+// player whose position DID come from a snapshot (BUILTIN_POSITIONS,
+// which - unlike BUILTIN_FM_ATTRIBUTES - happens to include Arsenal)
+// while their ATTRIBUTES never did (Saka's case exactly) read as fully
+// tagged and never showed the 🚩 warning, even though every single FM
+// attribute (pace, technique, dribbling, everything) was silently sitting
+// at the flat neutral-10 default the whole time. Same fix as the GK case
+// above: attribute data is checked on its own now for every position, not
+// OR'd away by an unrelated position tag - a player with a known specific
+// position but zero real attributes is still flagged, since "the stats
+// are all 10" is specifically an ATTRIBUTE-data complaint. hasPosition is
+// kept as an separate, softer signal (see the badge's own two-state
+// title below) rather than deleted outright, since it's still genuinely
+// useful information distinct from attribute completeness.
 function playerHasNoExportedData(p) {
   if (!p) return false;
   if (p.position === "GK") return !hasAnyGkAttributes(p.id);
-  const hasPosition = !!getSpecificPosition(p.id);
-  const hasAttrs = hasAnyRealFmAttribute(p.id);
-  return !hasPosition && !hasAttrs;
+  return !hasAnyRealFmAttribute(p.id);
 }
 // Shot-stopping ability index (1-20 scale, matches the attribute inputs) -
 // the subset of the 10 keeper attributes that most directly affect whether
@@ -6674,6 +6757,15 @@ function getFiltered() {
       const pa = state.scopedStats ? scopedPlayer(a) : a, pb = state.scopedStats ? scopedPlayer(b) : b;
       av = (pa.goalsScored || 0) + (pa.assists || 0); bv = (pb.goalsScored || 0) + (pb.assists || 0);
     }
+    // Round 53: shotsPer90/chancesCreatedPer90 are real-data-backed
+    // functions (see their own comments - ciShots/dsShots-first, synthetic
+    // only as last resort), not stored fields on the player object, so
+    // (unlike most sort keys) these need to actually be called here rather
+    // than just read off a[f.sort]/b[f.sort]. threatCreativityPer90 is the
+    // simple sum of the two existing stored per90 rate fields.
+    else if (f.sort === "shotsPer90Sort") { av = shotsPer90(a); bv = shotsPer90(b); }
+    else if (f.sort === "chancesCreatedPer90Sort") { av = chancesCreatedPer90(a); bv = chancesCreatedPer90(b); }
+    else if (f.sort === "threatCreativityPer90") { av = (a.threatPer90 || 0) + (a.creativityPer90 || 0); bv = (b.threatPer90 || 0) + (b.creativityPer90 || 0); }
     else {
       av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
       bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
@@ -7058,6 +7150,13 @@ const SCOUT_THEMES = {
     extraMetrics: [["defensiveContributionPer90", "DefCon/90", 1], ["cbit", "CBIT", 1]],
     extraMetricsPositions: ["MID", "FWD"],
     minScoreForPositions: { MID: 0.4, FWD: 0.4 }, // below this, say so rather than list weak options
+    // Round 53 bug fix (user: "b.fernandes shouldnt be top" of DefCon) -
+    // suppresses the attacking base metrics (xGI/xG/xA/Threat/Creativity)
+    // for MID/FWD down to 15% of their normal weight, so the DefCon/90
+    // (2.5) + CBIT (2) bolt-on genuinely dominates for this theme instead
+    // of just supplementing an unweighted attacking score underneath it -
+    // see scoutMetricsFor's own comment for the full before/after math.
+    baseWeightMultiplier: 0.15,
   },
   differential: {
     label: "Low-owned differential", short: "🔍 Differential", color: "#a05de0",
@@ -7159,7 +7258,35 @@ function scoutMetricsFor(pos, themeKey = "base") {
     m = [["xgi90", "xGI/90", 1], ["expectedGoals", "xG", 1], ["expectedAssists", "xA", 1], ["threat", "Threat", 1], ["creativity", "Creativity", 1]];
     if (state.players.some(p => p.dsShots != null)) m.push(["dsShots", "Shots", 1]);
   }
-  m = m.map(([key, label, dir]) => [key, label, dir, theme.weights[key] || 1]);
+  // Round 53 bug fix (user: "scout pick defcon should favour defcon
+  // b.fernandes shouldnt be top") - root cause: the "Defensive specialist"
+  // theme (SCOUT_THEMES.defcon) only ever ADDED defensiveContributionPer90/
+  // cbit as bolt-on extraMetrics for MID/FWD, weighted 2.5/2 - but the
+  // ATTACKING base-metric set above (xGI/xG/xA/Threat/Creativity, 5 metrics
+  // x weight 1 = 5 total) stayed fully in play underneath it, completely
+  // unweighted-down by this theme. An elite creator/scorer like Bruno
+  // Fernandes tops that attacking block so hard it outscored the defensive
+  // bolt-on even after the extras were added - a "Defensive specialist"
+  // pick was mostly still an attacking-output pick wearing a defensive
+  // label. Fix: theme.baseWeightMultiplier (a new, opt-in per-theme knob -
+  // every other existing theme leaves this undefined and is completely
+  // unaffected) scales down the default weight on the ATTACKING-flavoured
+  // base metrics (xgi90/expectedGoals/expectedAssists/threat/creativity)
+  // specifically for MID/FWD, so a theme that wants "defence first" for
+  // outfield attackers can genuinely have it dominate rather than merely
+  // supplement. cleanSheets/goalsConcededPer90 (DEF's own base metrics)
+  // are deliberately NOT touched by this - those are already defensive
+  // metrics, nothing to suppress. Set to 0.15 for the defcon theme below -
+  // small enough that DefCon/90 (2.5) + CBIT (2) now clearly outweigh the
+  // attacking block (5 x 0.15 = 0.75) for MID/FWD, while still leaving a
+  // non-zero tiebreaker (an all-round defensive mid with SOME attacking
+  // output still edges a pure defensive plodder with zero end product).
+  const ATTACKING_BASE_KEYS = new Set(["xgi90", "expectedGoals", "expectedAssists", "threat", "creativity"]);
+  const attackMult = (pos === "MID" || pos === "FWD") && theme.baseWeightMultiplier != null ? theme.baseWeightMultiplier : 1;
+  m = m.map(([key, label, dir]) => {
+    const mult = ATTACKING_BASE_KEYS.has(key) ? attackMult : 1;
+    return [key, label, dir, (theme.weights[key] || 1) * mult];
+  });
   const extras = (theme.extraMetrics || []).filter(([key]) => !m.some(mm => mm[0] === key));
   if (!theme.extraMetricsPositions || theme.extraMetricsPositions.includes(pos)) {
     extras.forEach(([key, label, dir]) => m.push([key, label, dir, theme.weights[key] || 1]));
@@ -7366,16 +7493,19 @@ function renderStats() {
             ? `<span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No 2025/26 season data on record for this player - likely a new signing from outside the Prem, a promoted-team player, or an FPL debut since then. There's simply no last-season number to show.">no 2025/26 data</span>`
             : `<span class="pos-pill" style="color:var(--ink-dim);border:1px dashed var(--border-strong)" title="No minutes or points recorded in the Prem this season yet - could be a new signing from outside the league, on loan, or simply unused so far. Treat any season-long stats for them with caution until they've actually played.">new / no Prem data</span>`)
         : "";
-      // Round: flags a player with NO real exported data at all - no
-      // tagged specific position AND no real FM/GK attribute import (see
-      // playerHasNoExportedData). The position/attribute datasets are
-      // point-in-time snapshots matched by name+club, so a summer transfer
-      // or a name the matcher couldn't resolve silently falls through with
-      // zero real data and no visible sign of it otherwise - several
-      // Man City players were exactly this case after this summer's
-      // business. Small 🚩 flag, title explains what's actually missing.
+      // Round: flags a player with NO real exported FM/GK attribute data
+      // (see playerHasNoExportedData). The attribute dataset is a
+      // point-in-time snapshot matched by name+club, so a summer transfer,
+      // a name the matcher couldn't resolve, or (Round 53 fix - confirmed
+      // for Arsenal specifically, see playerHasNoExportedData's own
+      // comment) a whole club missing from the export entirely, silently
+      // falls through with zero real attribute data and no visible sign of
+      // it otherwise. Round 53: no longer suppressed just because a
+      // specific position IS tagged (that used to hide exactly this case -
+      // Saka had a real position but zero real attributes and still read
+      // as "fine"). Small 🚩 flag, title explains what's actually missing.
       const noExportBadge = playerHasNoExportedData(p)
-        ? `<span class="pos-pill" style="color:var(--red);border:1px dashed var(--red)" title="No exported data on file for this player - no tagged specific position and no real FM${p.position === "GK" ? "/GK" : ""} attribute import. Running entirely on generic estimates. Fix via the General tab's position/attribute importers, or the player's own detail panel.">🚩 no export</span>`
+        ? `<span class="pos-pill" style="color:var(--red);border:1px dashed var(--red)" title="No real FM${p.position === "GK" ? "/GK" : ""} attribute data on file for this player - every attribute (pace, technique, tackling, etc) is sitting at the flat neutral default (10), not real data. Fix via the General tab's attribute importer, or enter values by hand on the player's own detail panel.">🚩 no export</span>`
         : "";
       tr.innerHTML = `
         <td class="label-col">
@@ -7961,7 +8091,15 @@ async function loadMyTeam() {
       }
     }
 
-    const squadValue = squad.reduce((sum, s) => sum + (s.player ? s.player.nowCost : 0), 0);
+    // Round 53 bug fix: real team value now comes from FPL's own
+    // last_deadline_value (sell-price-aware, see seedDraftFromSquad's
+    // comment) rather than summing nowCost across the squad, which
+    // overstates value by the full unrealized profit on every player
+    // who's risen in price since being bought (not just half of it, the
+    // real profit-rule cut) - this was the root cause of "my budget shows
+    // £106.3m, it should be £100.3m."
+    const realValue = Number.isFinite(entry.last_deadline_value) ? entry.last_deadline_value : null;
+    const squadValue = realValue != null ? realValue - (entry.last_deadline_bank ?? 0) : squad.reduce((sum, s) => sum + (s.player ? s.player.nowCost : 0), 0);
     const bank = entry.last_deadline_bank ?? null;
     state.myTeamEntry = entry;
     state.myTeamGwSnapshot = { squad, bank, gwId: squad.length ? (state.events.find(e => e.is_current)?.id ?? state.events.find(e => e.is_next)?.id) : null };
@@ -7974,8 +8112,10 @@ async function loadMyTeam() {
       // team," so the My team pitch and the Planner could silently disagree
       // about what your squad actually is. Now the draft (and therefore
       // every future-gameweek transfer/projection view here and in Planner)
-      // is always seeded straight from your real, just-fetched squad.
-      seedDraftFromSquad("myteam", entry.name || "My team", squad.map(s => s.player?.id).filter(Boolean), bank ?? 0);
+      // is always seeded straight from your real, just-fetched squad, and
+      // its totalBudget is FPL's own real sell-value figure (realValue)
+      // rather than an inflated nowCost-sum estimate.
+      seedDraftFromSquad("myteam", entry.name || "My team", squad.map(s => s.player?.id).filter(Boolean), bank ?? 0, realValue);
       state.activeDraftId = "myteam";
       renderMyTeamHub(entry, squad, bank);
     } else {
@@ -8045,7 +8185,18 @@ function myTeamChipStatusHtml(used) {
 function renderMyTeamSummaryCard(entry, squad, bank) {
   const card = document.getElementById("myTeamSummaryCard");
   if (!card) return;
-  const squadValue = squad.reduce((sum, s) => sum + (s.player ? s.player.nowCost : 0), 0);
+  // Round 53 bug fix (user: "my budget is not 106.3 it is 100.3m...it
+  // should be the value of my team...if i sell a player it gives me the
+  // cash i would get for selling them"): last_deadline_value is FPL's own
+  // real total team value (sell-price-aware squad value + bank), so
+  // "Squad value" below is now that minus bank rather than a raw nowCost
+  // sum, which overstated value by the FULL rise on every player who's
+  // gone up in price since being bought (real FPL only credits half that
+  // rise, rounded down, until an actual sale) - see seedDraftFromSquad's
+  // comment for the full explanation and why per-player sell price can't
+  // be computed directly (no auth'd /my-team/ access in this app).
+  const realValue = Number.isFinite(entry.last_deadline_value) ? entry.last_deadline_value : null;
+  const squadValue = realValue != null ? realValue - (bank || 0) : squad.reduce((sum, s) => sum + (s.player ? s.player.nowCost : 0), 0);
   const draft = getDraft("myteam");
   card.innerHTML = `
     <div class="manager-summary">
@@ -8053,7 +8204,8 @@ function renderMyTeamSummaryCard(entry, squad, bank) {
       <div class="stat-block"><div class="stat-label">Team name</div><div class="stat-value" style="font-size:16px;color:var(--ink)">${entry.name}</div></div>
       <div class="stat-block"><div class="stat-label">Overall points</div><div class="stat-value mono">${entry.summary_overall_points ?? "-"}</div></div>
       <div class="stat-block"><div class="stat-label">Overall rank</div><div class="stat-value mono">${entry.summary_overall_rank ? entry.summary_overall_rank.toLocaleString() : "-"}</div></div>
-      <div class="stat-block" title="Your real squad value and bank right now, before any transfers planned for future gameweeks"><div class="stat-label">Squad value (today)</div><div class="stat-value mono">${fmtPrice(squadValue)}</div></div>
+      ${realValue != null ? `<div class="stat-block" title="Your real total team value right now (what you'd have if you sold your whole squad, sell-price rule included) - straight from FPL, not estimated"><div class="stat-label">Team value (real)</div><div class="stat-value mono" style="color:var(--gold-bright)">${fmtPrice(realValue)}</div></div>` : ""}
+      <div class="stat-block" title="${realValue != null ? "Your real sell-price-aware squad value right now (team value minus bank)" : "Estimated from current market price - not sell-price-aware (see Team value above once available)"}"><div class="stat-label">Squad value (today)</div><div class="stat-value mono">${fmtPrice(squadValue)}</div></div>
       ${bank !== null ? `<div class="stat-block" title="Your real bank right now, before any transfers planned for future gameweeks"><div class="stat-label">In the bank (today)</div><div class="stat-value mono">${fmtPrice(bank)}</div></div>` : ""}
       <div class="stat-block">
         <div class="stat-label" title="FPL doesn't expose your live free-transfer count without logging in - set this to match your real count and it rolls forward automatically in the Planner (max 5 banked).">Free transfers (seed)</div>
@@ -8517,16 +8669,42 @@ async function saveDrafts() {
 }
 function getDraft(id) { return state.drafts.find(d => d.id === id); }
 
-function seedDraftFromSquad(id, name, playerIds, bankTenths) {
+// Round 53 (user: "my budget is not 106.3 it is 100.3m ... it should be the
+// value of my team meaning it keeps squad value for me and if i sell a
+// player it gives me the cash that i would get for selling them e.g if
+// palmer is 9.9m but i bought him at 9.5m then the increase price does not
+// [reach] my spending cash unless i was to transfer him out"): squadCost(
+// playerIds) sums each player's CURRENT market price (nowCost) - so any
+// player who has risen in price since being bought inflates this total by
+// the full rise, even though FPL's real sell-value-with-profit-rule only
+// credits HALF that rise (rounded down to the nearest £0.1m) if/until the
+// player is actually sold. That mismatch (a squad with several risers can
+// easily be £5-6m "richer" on paper than the real sell value) is exactly
+// the "£106.3m vs £100.3m" bug. The correct fix isn't to model the
+// profit-rule per player - the public (unauthenticated) FPL API this app
+// uses has no per-pick purchase-price/selling-price data at all (that only
+// exists on the authenticated /my-team/ endpoint behind the user's own
+// login, which this app deliberately never requires). FPL itself already
+// computes the real answer and exposes it on the public /entry/{id}/
+// endpoint as last_deadline_value - the manager's true total team value
+// (sell-price-aware squad value + bank) as of the last completed
+// deadline, in the same tenths unit as nowCost/bank. realValueTenths, when
+// supplied (from loadMyTeam's entry payload - see its own call site),
+// is used as-is for totalBudget instead of the nowCost-sum estimate,
+// so "my budget" now genuinely means "what I'd have if I sold my whole
+// squad right now," matching the real FPL app. Falls back to the old
+// nowCost-sum estimate only for a hand-built Squad Builder draft that was
+// never loaded from a real team (nothing else to base it on - a fresh
+// draft has no purchase history to look up in the first place, so nowCost
+// IS the correct value there: every player in a fresh draft was just
+// "bought" at today's price).
+function seedDraftFromSquad(id, name, playerIds, bankTenths, realValueTenths) {
   const existing = getDraft(id);
   const draft = existing || { id, name, squad: [], bank: 0, transfersLog: {}, chipsUsed: {}, squadConfirmed: true, builderCaptainId: null, builderViceCaptainId: null };
   draft.name = name;
   draft.squad = playerIds;
   draft.bank = bankTenths;
-  // Fix real total (squad value + bank) so future manual add/remove edits
-  // keep this draft's true budget, not an assumed £100m - an imported real
-  // team can have banked more or less than a fresh draft would.
-  draft.totalBudget = squadCost(playerIds) + (bankTenths || 0);
+  draft.totalBudget = Number.isFinite(realValueTenths) ? realValueTenths : squadCost(playerIds) + (bankTenths || 0);
   draft.transfersLog = draft.transfersLog || {};
   draft.chipsUsed = draft.chipsUsed || {};
   draft.squadConfirmed = true;
@@ -10654,6 +10832,7 @@ function bestFifteenPitchHtml(gwId, formationKey, useClubLimit, budgetCap, label
         ${deltaHtml}
         <div style="font-size:10px;color:var(--ink-faint);margin-top:4px">⇄ swap or ✕ remove any of the 15 (XI or bench) · 📌 lock a player in so they survive re-solves${(excludedIds.size || lockedIds.size) ? ` · <span id="b15ResetBtn" style="cursor:pointer;text-decoration:underline;color:var(--gold-bright)">↺ reset overrides</span>` : ""}</div>
       </div>
+      <div style="font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.06em;text-align:center;margin-bottom:4px">Starting XI (scores in any mode)</div>
       <div class="pitch">${pitchRows}</div>
       ${benchHtml}
     </div>
@@ -10818,6 +10997,49 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
     for (let i = 0; i < need[pos]; i++) slots.push(slotHtml(picked[pos][i] || null, pos, i));
     return `<div class="pitch-row">${slots.join("")}</div>`;
   }).join("");
+  // Round 53 (user: "add a bench just to help visualise as users may not
+  // know what that 83.5 means" - the plain Best XI view showed only an XI
+  // cost vs an abstract budget figure with no bench, so a real squad's
+  // full £100m picture (XI + bench + bank) was never visible outside
+  // Bench Boost mode). Auto-fills the 4 bench slots this formation implies
+  // (2 GK / 5 DEF / 5 MID / 3 FWD total squad shape minus the XI already
+  // picked) with the CHEAPEST currently-available eligible player at each
+  // position not already in the XI - cheapestAvailableByPos already reads
+  // live nowCost, so a player who has dropped below the old £4.0/4.5m
+  // floors is picked up correctly, same guarantee minReserveForRemainingSlots
+  // relies on elsewhere. Purely a visual "here's a realistic full squad and
+  // what it'd cost" aid, same spirit as the Bench Boost 15 pitch's own
+  // bench strip - not wired to swap/lock (that's what the dedicated Bench
+  // Boost buttons just below are for).
+  const xiIds = new Set(allPicked.map(r => r.p.id));
+  const benchNeed = { GK: 1, DEF: 5 - need.DEF, MID: 5 - need.MID, FWD: 3 - need.FWD };
+  const benchExcluded = new Set(xiIds);
+  const cheapBenchPicks = [];
+  for (const pos of ["GK", "DEF", "MID", "FWD"]) {
+    const pool = state.players.filter(p => p.position === pos && !benchExcluded.has(p.id) && p.status !== "u")
+      .sort((a, b) => (a.nowCost || 0) - (b.nowCost || 0));
+    for (let i = 0; i < benchNeed[pos]; i++) {
+      const pick = pool[i];
+      if (pick) { cheapBenchPicks.push(pick); benchExcluded.add(pick.id); }
+    }
+  }
+  const xiCostM = allPicked.reduce((sum, r) => sum + (r.p.nowCost || 0), 0) / 10;
+  const benchCostM = cheapBenchPicks.reduce((sum, p) => sum + (p.nowCost || 0), 0) / 10;
+  const fullSquadM = xiCostM + benchCostM;
+  const cheapBenchHtml = `
+    <div class="bench-strip" style="margin-top:8px">
+      <div class="bench-label">Bench (cheapest eligible fill - visual only)</div>
+      ${cheapBenchPicks.map(p => `
+        <div class="pitch-slot" style="position:relative;opacity:0.85">
+          ${playerAvatarHtml(p, 34)}
+          <div class="name-tag">${p.webName}</div>
+          <div class="pts-tag mono">${fmtPrice(p.nowCost)}</div>
+        </div>
+      `).join("") || `<span style="font-size:11px;color:var(--ink-faint)">Not enough eligible players left to fill a bench.</span>`}
+    </div>
+    <div style="text-align:center;margin-top:6px;font-size:11px;color:var(--ink-faint)">
+      Full 15: <span class="mono" style="color:var(--ink)">£${xiCostM.toFixed(1)}m</span> XI + <span class="mono" style="color:var(--ink)">£${benchCostM.toFixed(1)}m</span> bench = <span class="mono" style="font-weight:700;color:${fullSquadM > 100 ? "var(--warn,#e0a94f)" : "var(--ink)"}">£${fullSquadM.toFixed(1)}m / £100.0m</span>${fullSquadM > 100 ? " ⚠️ over a fresh £100m budget with this cheapest-fill bench" : ""}
+    </div>`;
   const hasOverrides = excludedIds.size > 0 || lockedIds.size > 0;
   const best15Mode = state.projBest15Mode || null; // null | "full" | "mine"
   const noMyDraft = best15Mode === "mine" && !(state.drafts.find(d => d.id === state.activeDraftId)?.squad || []).length;
@@ -10851,6 +11073,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
         </div>
         <div class="pitch">${pitchRows}</div>
         ${swapOpenSlot ? swapPanelHtml(swapOpenSlot.pos, swapOpenSlot.idx) : ""}
+        ${cheapBenchHtml}
       </div>
     `;
   // Round 49 (user request: "change the budget in increments of .1 so
