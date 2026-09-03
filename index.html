@@ -697,6 +697,16 @@
   }
   .mode-btn.active { background: var(--mode-glow, var(--gold-soft)); color: var(--gold-ink); border-color: transparent; box-shadow: 0 6px 18px -6px var(--mode-glow, rgba(255,63,164,0.6)), inset 0 0 0 1px rgba(255,255,255,0.18); }
   .mode-btn.active .mode-btn-icon { background: rgba(255,255,255,0.22); }
+  /* Round 51: Confluence view's per-cell description dropdown - collapses
+     what would otherwise be several lines of explanatory text per row into
+     a native <select>, so the table stays compact; browsing the options
+     shows each individual signal's description. */
+  select.confluence-select {
+    width: 100%; max-width: 220px; font-size: 10.5px; font-family: inherit;
+    background: rgba(255,255,255,0.06); color: var(--ink-dim); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 4px; cursor: pointer;
+  }
+  select.confluence-select:hover { color: var(--ink); border-color: var(--border-strong); }
 
   /* border-collapse:collapse + position:sticky on <th> is a known
      combination that renders badly in most browsers - the sticky header
@@ -738,11 +748,21 @@
      really are right-aligned numbers in their <td>, keep their correct
      right-aligned header. */
   #fdrGrid thead th.gw-col { text-align: center; }
-  /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at */
+  /* Anchor the player/name column on the left on every wide, horizontally-scrolling table so you always know whose row you're looking at.
+     Round 51 (user: "player column is too wide") - this column used to size
+     itself purely off content (avatar + name + team/pos/price sub-line +
+     any badges), which on tables with long club names or several badges
+     could balloon past 220-240px, eating into the horizontal space every
+     other stat column needs. Capped to a fixed, still comfortably readable
+     width; the name/sub-line text wraps/truncates within it instead of
+     stretching the column. */
   .table-wrap table th.label-col:first-child, .table-wrap table td.label-col:first-child {
     position: sticky; left: 0; z-index: 3; background: var(--panel-solid); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur));
     box-shadow: 2px 0 6px -2px rgba(0,0,0,0.4);
+    width: 168px; max-width: 168px;
   }
+  .table-wrap table td.label-col:first-child > div { min-width: 0; }
+  .table-wrap table td.label-col:first-child > div > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .table-wrap table tbody td.label-col:first-child { background: var(--panel-solid); }
   .table-wrap table tbody tr:nth-child(even) td.label-col:first-child { background: color-mix(in srgb, var(--panel-solid) 92%, var(--ink) 6%); }
   /* Bottom-of-page FDR reference block (site-wide footer, sits outside
@@ -8775,7 +8795,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     gw: g,
     fx: teamEventIndex ? teamEventIndex[g] : (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g),
   })).filter(x => x.fx);
-  let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0;
+  let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0, xgiSum = 0;
   const fixtureLabels = [];
   // No-Prem-history fallback: a player with 0 minutes/starts normally
   // floors out at minsFactor=0 (see projMinsFactor) and has no xG/xA data
@@ -8841,6 +8861,16 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     const effPForAttack = (koSlot === "sun1630" && fx.isHome)
       ? { ...effP, xg90: (effP.xg90 || 0) * 1.05, xa90: (effP.xa90 || 0) * 1.05 }
       : effP;
+    // Round 51 (user: "players should not have the same predicted xg90 for
+    // each game it needs to account for fdr") - xgi90 used to be a single
+    // flat effP.xg90+xa90 read (the player's season rate), identical for
+    // every fixture in the selected range regardless of how hard/easy each
+    // one actually is. Now accumulated per-fixture, each scaled by that
+    // fixture's own FDR multiplier (same fixtureMult driving provenProj
+    // just above), and averaged across the range below - so a run of easy
+    // fixtures shows a visibly higher xGI90 than a run of hard ones, same
+    // fixture-by-fixture logic already applied to provenProj/attackPts.
+    xgiSum += ((effPForAttack.xg90 || 0) + (effPForAttack.xa90 || 0)) * fixtureMult;
     let attackPts = underlyingAttackPts(effPForAttack, fdrScore, minsFactor, startProb);
     // Round 50 (item 9): apply the FM-attribute tactical-imbalance system
     // (TACTICAL_IMBALANCE_RULES/TACTICAL_TEAM_SYSTEM_RULES/TACTICAL_CS_RULES,
@@ -8853,7 +8883,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // already computes (see that block's own comment for why oppPlayer is
     // resolved once and shared) - looked up early here since attackPts is
     // computed before that block currently runs.
-    const tacticalOppPlayer = likelyOpponentFor(p, fx.oppId);
+    const tacticalOppPlayer = primaryAggregatedOpponent(p, fx.oppId);
     if (tacticalOppPlayer) {
       const tacticalXgMult = teamTacticalXgMultiplier(p.id, tacticalOppPlayer.id, p.teamId, fx.oppId, "playerShotXg");
       const tacticalXaMult = teamTacticalXgMultiplier(p.id, tacticalOppPlayer.id, p.teamId, fx.oppId, "playerAssistXa");
@@ -8907,7 +8937,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // (pin, or best-ability same-role pick) purely for the "biggest
     // mismatch" label/hover - the actual matchupScore used to move the
     // projection is the blended aggregate, not just this one player's duel.
-    const oppPlayer = likelyOpponentFor(p, fx.oppId);
+    const oppPlayer = primaryAggregatedOpponent(p, fx.oppId);
     const matchupScore = computeAggregatedMatchupScore(p, fx.oppId, fx.isHome);
     if (matchupScore !== null) {
       const matchupMult = 1 + Math.max(-0.12, Math.min(0.12, (matchupScore - 50) / 50 * 0.12));
@@ -8949,13 +8979,22 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // the SAME already-blended (Legacy/Live) effP.xg90/xa90 this row's own
     // attacking projection is built from, not a separate re-fetch, so it
     // always agrees with whatever data-blend mode is active.
-    xgi90: (effP.xg90 || 0) + (effP.xa90 || 0),
+    // Round 51: now the average of each fixture's OWN FDR-adjusted xGI90
+    // (xgiSum, accumulated per-fixture above) rather than one flat
+    // season-rate figure repeated for every fixture - a genuinely easy or
+    // hard run of games now visibly moves this number.
+    xgi90: fixtures.length ? xgiSum / cnt : (effP.xg90 || 0) + (effP.xa90 || 0),
+    // Round 51: raw (non-FDR-adjusted) season blended rate, kept alongside
+    // the FDR-adjusted xgi90 above - feeds the new xGIP90 confluence column
+    // and the team-xGI%-share confluence (see xgiSharePctForFixture).
+    xg90Blended: effP.xg90 || 0,
+    xa90Blended: effP.xa90 || 0,
   };
 }
 const PROJ_OPTIONAL_COLS = [
   ["minsPerStart", "Mins/start"], ["teamXg", "Team xG"], ["csPct", "CS%"],
   ["contribution", "Team contrib%"], ["defConPct", "DefCon%"], ["bonusExp", "Exp. bonus"],
-  ["matchupScore", "Matchup"], ["xgi90", "xGI90"],
+  ["matchupScore", "Matchup"], ["xgi90", "xGIP90"],
   // Round 39: Captaincy folded into Projections (was its own tab) - this
   // column surfaces the same captaincyScoreForGw() score (Balanced mode,
   // the default the old Captaincy tab opened on) against this row's "From"
@@ -9276,7 +9315,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
     // Round 49: same inferred-opponent read bestMatchup/likelyOpponentFor
     // use elsewhere - needed here so the Matchup pts cell can be clicked
     // through to openInferredMatchupModal (see that function's own comment).
-    const oppPlayer = fx && fx.opp ? likelyOpponentFor(p, fx.opp.id) : null;
+    const oppPlayer = fx && fx.opp ? primaryAggregatedOpponent(p, fx.opp.id) : null;
     const matchupAttrs = oppPlayer ? `data-matchup-a="${p.id}" data-matchup-b="${oppPlayer.id}"` : null;
     return `<tr>
       <td class="mono" style="text-align:center;color:var(--ink-faint);font-weight:700">${idx + 1}</td>
@@ -9287,7 +9326,6 @@ function renderProjectionsCaptaincy(pool, gwId) {
       </div></td>
       <td class="mono" style="text-align:center;font-weight:800;color:var(--gold-bright,#00ff66)">${displayScore.toFixed(1)}</td>
       <td class="mono" style="text-align:center">${bd.floorPts.toFixed(1)}</td>
-      <td class="mono" style="text-align:center">+${bd.ceilingPts.toFixed(1)}</td>
       ${valueCell(bd.csRoute, capValue(scored, "cs"), bd.csEligible, "CS pts", "")}
       ${valueCell(bd.defConRoute, capValue(scored, "defcon"), bd.defConEligible, "DefCon pts", "")}
       ${valueCell(bd.goalRoute, capValue(scored, "goal"), true, "xG90", "")}
@@ -9308,7 +9346,6 @@ function renderProjectionsCaptaincy(pool, gwId) {
         ${colLabel("name", "Player")}
         ${colLabel("score", CAPTAINCY_MODE_LABELS[mode] + " score")}
         ${colLabel("floor", "Floor", "Guaranteed-ish points if nothing extra lands")}
-        ${colLabel("ceiling", "Ceiling", "Extra points on top of floor if routes land")}
         ${colLabel("cs", "CS pts", "Expected clean-sheet points this fixture (real CS% x this position's CS point value)")}
         ${colLabel("defcon", "DefCon pts", "Expected defensive-contribution points this fixture (real DefCon% x 2)")}
         ${colLabel("goal", "xG90", "This player's own expected-goals-per-90 rate")}
@@ -9338,6 +9375,150 @@ function renderProjectionsCaptaincy(pool, gwId) {
     cell.onclick = () => openInferredMatchupModal(Number(cell.dataset.matchupA), Number(cell.dataset.matchupB));
   });
 }
+// ---------- Confluence view (Round 51) ----------
+// User request: "i want confluences - use the team's projected xGI and the
+// %share of the player's xGI ... as confirmation of the player's stats and
+// the FDR rating" plus "another confluence is the FM stats and the [tactical
+// imbalance] model". A "confluence" here means several INDEPENDENT signals
+// pointing the same direction at once - not a new number invented from
+// nothing, every input below is a value this app already computes
+// elsewhere (r.teamXg, r.contribution/teamContributionShare, r.avgFdr/
+// fdrToMultiplier, r.xgi90, and the existing TACTICAL_IMBALANCE_RULES via
+// firingTacticalRules) - this view just cross-checks them against each
+// other and surfaces how many actually agree.
+//
+// Confluence #1 - "xGI share" confluence: does this player's own projected
+// output (xgi90), their team's projected attacking output (teamXg), their
+// PERSONAL share of that team's real-stats xGI (contribution), and the
+// fixture's own ease (avgFdr via fdrToMultiplier) all point the same
+// favourable way? Four independent 0-1 normalized reads, averaged.
+function xgiShareConfluence(r, p) {
+  const teamXg = r.teamXg || 0;
+  const share = r.contribution || 0; // % of team's real-stats xGI this player accounts for
+  const fdrMult = r.avgFdr != null ? fdrToMultiplier(r.avgFdr) : 1;
+  const ownRate = r.xgi90 || 0; // Round 51: already FDR-adjusted per-fixture average, not a flat season rate
+  const teamXg01 = Math.max(0, Math.min(1, teamXg / 2.2));
+  const share01 = Math.max(0, Math.min(1, share / 35));
+  const fdr01 = Math.max(0, Math.min(1, (fdrMult - 0.65) / 0.7));
+  const rate01 = Math.max(0, Math.min(1, ownRate / 0.8));
+  const score = (teamXg01 + share01 + fdr01 + rate01) / 4 * 100;
+  const factors = [
+    { label: "Team xG", positive: teamXg01 >= 0.55, desc: `Team projected ${teamXg.toFixed(2)} xG this fixture - ${teamXg01 >= 0.55 ? "a strong" : "a modest"} attacking platform to draw from.` },
+    { label: "Player's xGI share", positive: share01 >= 0.55, desc: `${p.webName} accounts for ${share.toFixed(1)}% of ${state.teamsById[p.teamId]?.short_name || "the team"}'s own real-stats xGI output - ${share01 >= 0.55 ? "a genuine focal point" : "a smaller slice of the team total"}.` },
+    { label: "Fixture ease (FDR)", positive: fdr01 >= 0.55, desc: `Average FDR over this range is ${r.avgFdr != null ? r.avgFdr.toFixed(1) : "-"} - ${fdr01 >= 0.55 ? "a favourable" : "a tough"} run of fixtures.` },
+    { label: "Own xGI90 rate", positive: rate01 >= 0.55, desc: `${p.webName}'s own FDR-adjusted xGI90 across this range is ${ownRate.toFixed(2)} - ${rate01 >= 0.55 ? "an elite underlying rate" : "a moderate underlying rate"}.` },
+  ];
+  const agree = factors.filter(f => f.positive).length;
+  const verdict = agree >= 3 ? "Strong confluence" : agree === 2 ? "Partial confluence" : "Weak/conflicting signals";
+  return { score, factors, verdict, agree };
+}
+// Confluence #2 - FM attribute confluence: does the FM-attribute tactical-
+// imbalance model (TACTICAL_IMBALANCE_RULES, the exact table you supplied -
+// pace isolation, aerial/crossing mismatch, vision vs passing lanes,
+// dribbling vs wing overload, press-resistance, blind-side movement) fire
+// FOR or AGAINST this player against their primary (role-correct,
+// aggregated) opponent for the "From" gameweek's fixture(s)? Reuses
+// firingTacticalRules/primaryAggregatedOpponent exactly as the matchup
+// modal does - no separate model, just surfaced as its own confluence row.
+function fmConfluenceForRow(r, p, fromGw) {
+  const fixturesThisGw = (state.fixturesByTeam[p.teamId] || []).filter(f => f.event === fromGw);
+  if (!fixturesThisGw.length) return { score: 50, factors: [], verdict: "No fixture this GW" };
+  const factors = [];
+  fixturesThisGw.forEach(fx => {
+    const opp = primaryAggregatedOpponent(p, fx.oppId);
+    if (!opp) return;
+    firingTacticalRules(p.id, opp.id).forEach(rule => {
+      const favoursPlayer = rule.favours === "A";
+      factors.push({ label: rule.label, positive: favoursPlayer, desc: `${rule.desc} ${favoursPlayer ? `Favours ${p.webName}.` : `Favours ${opp.webName} instead.`}` });
+    });
+  });
+  if (!factors.length) return { score: 50, factors: [], verdict: "No named FM-attribute edge either way" };
+  const net = factors.reduce((s, f) => s + (f.positive ? 1 : -1), 0);
+  const score = Math.max(0, Math.min(100, 50 + net * 12));
+  const verdict = net > 0 ? "FM attributes favour this player" : net < 0 ? "FM attributes favour the opponent" : "FM attributes cancel out (even)";
+  return { score, factors, verdict };
+}
+function confluenceDropdownHtml(conf) {
+  if (!conf.factors.length) return `<span style="font-size:11px;color:var(--ink-faint)">${conf.verdict}</span>`;
+  return `<select class="confluence-select" title="Browse the individual signals behind this score">
+    <option value="">${conf.verdict}</option>
+    ${conf.factors.map(f => `<option>${f.positive ? "✓" : "✕"} ${f.label} - ${f.desc}</option>`).join("")}
+  </select>`;
+}
+function renderProjectionsConfluence(rows, fromGw, toGw) {
+  const body = document.getElementById("projectionsBody");
+  if (!body) return;
+  const sortKey = state.confluenceSortKey || "overall";
+  const sortDir = state.confluenceSortDir || "desc";
+  const scored = rows.map(r => {
+    const xgiConf = xgiShareConfluence(r, r.p);
+    const fmConf = fmConfluenceForRow(r, r.p, fromGw);
+    const overall = (xgiConf.score + fmConf.score) / 2;
+    return { r, p: r.p, xgiConf, fmConf, overall };
+  });
+  const sortVal = (s) => {
+    switch (sortKey) {
+      case "xgip90": return s.r.xgi90 || 0;
+      case "teamXg": return s.r.teamXg || 0;
+      case "share": return s.r.contribution || 0;
+      case "xgiConf": return s.xgiConf.score;
+      case "fmConf": return s.fmConf.score;
+      case "overall": return s.overall;
+      default: return s.overall;
+    }
+  };
+  if (sortKey === "name") {
+    scored.sort((a, b) => sortDir === "asc" ? a.p.webName.localeCompare(b.p.webName) : b.p.webName.localeCompare(a.p.webName));
+  } else {
+    scored.sort((a, b) => sortDir === "asc" ? sortVal(a) - sortVal(b) : sortVal(b) - sortVal(a));
+  }
+  const colLabel = (key, label, title) => `<th data-conf-sort="${key}" style="cursor:pointer" ${title ? `title="${title}"` : ""}>${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+  const rowHtml = (s) => {
+    const p = s.p, r = s.r;
+    const fixLabel = r.fixtures.length
+      ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
+      : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+    return `<tr>
+      <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
+      <td>${fixLabel}</td>
+      <td class="mono" style="text-align:center" title="xG90 + xA90, FDR-adjusted per fixture and averaged across the selected range">${(r.xgi90 || 0).toFixed(2)}</td>
+      <td class="mono" style="text-align:center">${r.teamXg !== null ? r.teamXg.toFixed(2) : "-"}</td>
+      <td class="mono" style="text-align:center">${(r.contribution || 0).toFixed(2)}%</td>
+      <td style="text-align:center;font-size:11px">
+        <div class="mono" style="font-weight:700;margin-bottom:2px">${s.xgiConf.score.toFixed(2)}</div>
+        ${confluenceDropdownHtml(s.xgiConf)}
+      </td>
+      <td style="text-align:center;font-size:11px">
+        <div class="mono" style="font-weight:700;margin-bottom:2px">${s.fmConf.score.toFixed(2)}</div>
+        ${confluenceDropdownHtml(s.fmConf)}
+      </td>
+      <td class="mono" style="text-align:center;font-weight:800;color:${s.overall >= 65 ? "var(--green,#5ec98f)" : s.overall <= 35 ? "var(--red,#e0728a)" : "var(--ink)"}">${s.overall.toFixed(2)}</td>
+    </tr>`;
+  };
+  body.innerHTML = `
+    <p class="field-desc" style="margin:0 0 10px">Confluences cross-check signals this app already computes against each other, rather than inventing a new number: <strong>xGI Share confluence</strong> checks whether the player's own FDR-adjusted xGI90, their team's projected xG, their share of the team's real xGI output, and the fixture's own ease all point the same way. <strong>FM confluence</strong> checks whether the FM-attribute tactical-imbalance model (pace isolation, aerial/crossing mismatch, vision vs passing lanes, dribbling vs wing overload, press-resistance, blind-side movement) fires for or against this player's likely opponent for GW${fromGw}. Click a score's dropdown to browse the individual signals behind it. Click any header to sort.</p>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        ${colLabel("name", "Player")}<th>Fixture(s)</th>
+        ${colLabel("xgip90", "xGIP90", "xG90 + xA90 (FDR-adjusted per fixture, averaged over the range)")}
+        ${colLabel("teamXg", "Team xG")}
+        ${colLabel("share", "xGI share%", "This player's % share of their team's real-stats xGI output")}
+        ${colLabel("xgiConf", "xGI share confluence")}
+        ${colLabel("fmConf", "FM confluence")}
+        ${colLabel("overall", "Overall confluence")}
+      </tr></thead>
+      <tbody>${scored.map(rowHtml).join("")}</tbody>
+    </table></div>
+  `;
+  body.querySelectorAll("[data-conf-sort]").forEach(th => {
+    th.onclick = () => {
+      const key = th.dataset.confSort;
+      if (state.confluenceSortKey === key) state.confluenceSortDir = state.confluenceSortDir === "desc" ? "asc" : "desc";
+      else { state.confluenceSortKey = key; state.confluenceSortDir = key === "name" ? "asc" : "desc"; }
+      renderProjectionsTab();
+    };
+  });
+}
 function renderProjViewModeRow() {
   const row = document.getElementById("projViewModeRow");
   if (!row) return;
@@ -9354,6 +9535,9 @@ function renderProjViewModeRow() {
     </button>
     <button class="mode-btn${view === "captaincy" ? " active" : ""}" data-proj-view="captaincy" style="--mode-glow:rgba(0,255,102,0.55)">
       <span class="mode-btn-icon">👑</span>Captaincy
+    </button>
+    <button class="mode-btn${view === "confluence" ? " active" : ""}" data-proj-view="confluence" style="--mode-glow:rgba(95,179,217,0.55)">
+      <span class="mode-btn-icon">🧭</span>Confluence
     </button>
   `;
   row.querySelectorAll("[data-proj-view]").forEach(btn => {
@@ -12029,6 +12213,7 @@ function renderProjectionsTab() {
   // min minutes, price, form - still apply, same pool logic otherwise).
   const pairsView = (state.projView || "table") === "pairs";
   const captaincyView = (state.projView || "table") === "captaincy";
+  const confluenceView = (state.projView || "table") === "confluence";
   let pool = state.players.filter(p => passesEstablishedThreshold(p, minMinutes) && (pitchView || posFilter === "ALL" || p.position === posFilter));
   // In Pairs view, "Max £" is the combined budget for the pair, not a
   // per-player cap - so we don't prune individual players out of the pool
@@ -12051,7 +12236,7 @@ function renderProjectionsTab() {
   // through their own dedicated code paths below, so doing it again here
   // for every pool player on every pitch/pairs/simple render would be pure
   // wasted work on the exact hot path Round 37/38 already flagged.
-  if (!pitchView && !pairsView && !simpleView && !captaincyView) {
+  if (!pitchView && !pairsView && !simpleView && !captaincyView && !confluenceView) {
     rows.forEach(r => {
       const scored = captaincyScoreForGw(r.p, fromGw);
       r.capScore = scored ? scored.captaincyScore : null;
@@ -12076,6 +12261,10 @@ function renderProjectionsTab() {
   }
   if (captaincyView) {
     renderProjectionsCaptaincy(pool, fromGw);
+    return;
+  }
+  if (confluenceView) {
+    renderProjectionsConfluence(rows, fromGw, toGw);
     return;
   }
 
@@ -12158,7 +12347,7 @@ function renderProjectionsTab() {
           ${cols.contribution ? colLabel("contribution", "Team contrib%") : ""}
           ${cols.defConPct ? colLabel("defConPct", "DefCon%") : ""}
           ${cols.bonusExp ? colLabel("bonusExp", "Exp. bonus") : ""}
-          ${cols.xgi90 ? colLabel("xgi90", "xGI90") : ""}
+          ${cols.xgi90 ? colLabel("xgi90", "xGIP90") : ""}
           ${cols.matchupScore ? colLabel("matchupScore", "Matchup") : ""}
           ${cols.capScore ? colLabel("capScore", "Captaincy") : ""}
         </tr></thead>
@@ -22495,23 +22684,137 @@ function aggCentralMidOpponents(p, oppTeamId) {
   const w = 1 / centrals.length;
   return centrals.map(opp => ({ opp, weight: w }));
 }
+// ---- Round 51 defender-side aggregation ----
+// User-reported bug: "fofana for gw3 is facing ben white who is a rb where
+// as fofana should be against havertz since thats the striker". Root cause:
+// aggregationRoleFor (below) previously returned null for CB/LB/RB/LWB/RWB
+// entirely, so every defender's displayed/scored matchup fell all the way
+// back to likelyOpponentFor's naive SAME-inferredRole lookup - which pairs
+// a CB against whichever opposing DEF also reads as "CB" by the crude
+// creativity/threat wide-leaning heuristic (inferredRole), not against the
+// strikers a real centre-back actually defends against. The user's own
+// rule of thumb fixes this properly for defenders, mirroring the
+// striker/winger aggregation already above:
+//   ST  vs CB (all CBs, equal-weight average)      -> CB's own matchup is
+//       the mirror image: average across the opponent's strikers.
+//   LW vs RB / RW vs LB / LM vs RB (winger aggregation, already handled)
+//       -> a fullback's own matchup mirrors that: primarily the opponent's
+//       winger/wide-mid on the mirrored side.
+//   RWB is against both LW/LB and LWB, whichever is applicable -> a
+//       wing-back's matchup blends BOTH the mirrored winger/wide-mid AND
+//       the mirrored fullback/wing-back, whichever the opponent actually
+//       fields (both if both exist).
+function isStrikerish(x) {
+  const tag = specificRoleOf(x);
+  if (tag) return AGG_STRIKER_TAGS.includes(tag);
+  if (x.position !== "FWD") return false;
+  return inferredRole(x) !== "WIDE"; // untagged central forward
+}
+function isWingerish(x) {
+  const tag = specificRoleOf(x);
+  if (tag) return AGG_WINGER_TAGS.includes(tag);
+  if (x.position === "FWD" || x.position === "MID") return inferredRole(x) === "WIDE";
+  return false;
+}
+// CB (or untagged inferredRole "CB" defender): mirror of aggStrikerOpponents
+// - simple equal-weight average across every opposing striker. Falls back
+// to every opposing FWD if the opponent genuinely has no striker-tagged
+// forward (e.g. an all-wide front line), same "never leave it empty"
+// precedent as aggStrikerOpponents itself.
+function aggCbOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  let strikers = pool.filter(isStrikerish);
+  if (!strikers.length) strikers = pool.filter(x => x.position === "FWD");
+  if (!strikers.length) return [];
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  if (pinned && !strikers.some(x => x.id === pinned.id)) strikers = [pinned, ...strikers.slice(1)];
+  else if (pinned) strikers = [pinned, ...strikers.filter(x => x.id !== pinned.id)];
+  const w = 1 / strikers.length;
+  return strikers.map(opp => ({ opp, weight: w }));
+}
+// Fullback (LB/RB, or an untagged inferredRole "WB" defender with no
+// resolvable side): mirror of aggWingerOpponents - primary (85%) is the
+// opponent's mirrored winger/wide-mid, secondary (10%) their nearest
+// striker, tertiary (5%) their nearest central mid. Falls back to the
+// ability-best attacking-midfield/forward option when the opponent has no
+// tagged wide player at all, so a fullback's matchup is never left empty.
+function aggFullbackOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  const side = aggPlayerSide(p);
+  const wantSide = side ? AGG_OPPOSITE_SIDE[side] : null;
+  const wingers = pool.filter(isWingerish);
+  let primary = null;
+  if (wingers.length) {
+    primary = wantSide ? wingers.find(x => specificRoleOf(x) === wantSide + "W" || specificRoleOf(x) === wantSide + "M") : null;
+    if (!primary) primary = wingers.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  } else {
+    const attackers = pool.filter(x => x.position === "MID" || x.position === "FWD");
+    primary = attackers.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  }
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  if (pinned) primary = pinned;
+  const strikers = pool.filter(isStrikerish).filter(x => x.id !== (primary && primary.id));
+  const nearStriker = strikers.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  const mids = pool.filter(x => x.position === "MID" && x.id !== (primary && primary.id));
+  const nearMid = mids.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  const weighted = [];
+  if (primary) weighted.push({ opp: primary, weight: 0.85 });
+  if (nearStriker) weighted.push({ opp: nearStriker, weight: 0.10 });
+  if (nearMid) weighted.push({ opp: nearMid, weight: 0.05 });
+  return weighted;
+}
+// Wing-back (LWB/RWB): per the user's explicit rule ("rwb is against both
+// lw lb and lwb whatever is applicable") - blends the opponent's mirrored
+// winger/wide-mid AND their mirrored fullback/wing-back, splitting weight
+// evenly across whichever of the two actually exist in the opponent's
+// squad/lineup (100% to just one if only one is found).
+function aggWingbackOpponents(p, oppTeamId) {
+  const pool = opponentPoolFor(oppTeamId);
+  const side = aggPlayerSide(p);
+  const wantSide = side ? AGG_OPPOSITE_SIDE[side] : null;
+  const wingers = pool.filter(isWingerish);
+  let winger = wantSide ? wingers.find(x => specificRoleOf(x) === wantSide + "W" || specificRoleOf(x) === wantSide + "M") : null;
+  if (!winger) winger = wingers.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  const defs = pool.filter(x => x.position === "DEF");
+  const oppFullbacks = defs.filter(x => ["LB", "RB", "LWB", "RWB"].includes(specificRoleOf(x) || ""));
+  let fb = wantSide ? oppFullbacks.find(x => specificRoleOf(x) === wantSide + "B" || specificRoleOf(x) === wantSide + "WB") : null;
+  if (!fb) fb = oppFullbacks.reduce((best, x) => (!best || matchupStrengthScore(x) > matchupStrengthScore(best)) ? x : best, null);
+  const pinned = pinnedOpponentFor(p, oppTeamId);
+  const candidates = [winger, fb].filter(Boolean).filter((x, i, arr) => arr.findIndex(y => y.id === x.id) === i);
+  const weighted = [];
+  if (pinned) {
+    const rest = candidates.filter(x => x.id !== pinned.id);
+    weighted.push({ opp: pinned, weight: rest.length ? 0.7 : 1 });
+    if (rest.length) { const w = 0.3 / rest.length; rest.forEach(o => weighted.push({ opp: o, weight: w })); }
+  } else if (candidates.length) {
+    const w = 1 / candidates.length;
+    candidates.forEach(o => weighted.push({ opp: o, weight: w }));
+  }
+  return weighted;
+}
 // Role bucket this player falls into for aggregation purposes, or null if
 // no aggregation rule applies (caller should fall back to
-// likelyOpponentFor's single-opponent read for these - GK, wide defenders,
-// and anyone genuinely ambiguous).
+// likelyOpponentFor's single-opponent read for these - GK and anyone
+// genuinely ambiguous; every outfield role now has an aggregation rule as
+// of Round 51).
 function aggregationRoleFor(p) {
   const tag = specificRoleOf(p);
   if (tag) {
     if (AGG_WINGER_TAGS.includes(tag)) return "WINGER";
     if (AGG_STRIKER_TAGS.includes(tag)) return "STRIKER";
     if (AGG_CENTRAL_MID_TAGS.includes(tag)) return "CENTRAL_MID";
-    return null; // an explicitly-tagged role this aggregation doesn't cover (GK, CB, LB/RB, LWB/RWB)
+    if (tag === "CB" || tag === "LCB" || tag === "RCB") return "CB";
+    if (tag === "LB" || tag === "RB") return "FULLBACK";
+    if (tag === "LWB" || tag === "RWB") return "WINGBACK";
+    return null; // GK or another untagged/ambiguous case
   }
+  if (p.position === "GK") return null;
   // Untagged - fall back to the coarse inferredRole read, same source
   // likelyOpponentFor already trusts when no specific tag is set.
   const role = inferredRole(p);
   if (p.position === "FWD") return role === "WIDE" ? "WINGER" : "STRIKER";
   if (p.position === "MID") return role === "WIDE" ? "WINGER" : "CENTRAL_MID";
+  if (p.position === "DEF") return role === "WB" ? "FULLBACK" : "CB"; // inferredRole's own DEF split
   return null;
 }
 // Resolves the weighted opponent set for player p against oppTeamId, per
@@ -22522,7 +22825,25 @@ function aggregatedOpponentSet(p, oppTeamId) {
   if (role === "WINGER") return aggWingerOpponents(p, oppTeamId);
   if (role === "STRIKER") return aggStrikerOpponents(p, oppTeamId);
   if (role === "CENTRAL_MID") return aggCentralMidOpponents(p, oppTeamId);
+  if (role === "CB") return aggCbOpponents(p, oppTeamId);
+  if (role === "FULLBACK") return aggFullbackOpponents(p, oppTeamId);
+  if (role === "WINGBACK") return aggWingbackOpponents(p, oppTeamId);
   return [];
+}
+// Round 51: single "primary" (highest-weight) opponent out of the
+// aggregated set above - used everywhere the UI needs to show/label ONE
+// representative opponent (matchup click-through modal, tactical-imbalance
+// multiplier lookup, hover titles) rather than the blended score. Replaces
+// direct likelyOpponentFor calls at those display sites, since
+// likelyOpponentFor's naive same-role match is exactly what produced the
+// "Fofana vs Ben White instead of Havertz" bug - this reads the SAME
+// role-correct opponent set the scoring engine already blends, just picks
+// its biggest-weighted member for display. Falls back to likelyOpponentFor
+// only for roles with no aggregation rule (GK).
+function primaryAggregatedOpponent(p, oppTeamId) {
+  const weighted = aggregatedOpponentSet(p, oppTeamId);
+  if (!weighted.length) return likelyOpponentFor(p, oppTeamId);
+  return weighted.reduce((best, w) => (!best || w.weight > best.weight) ? w : best, null).opp;
 }
 // THE drop-in replacement for "find THE opponent, score one duel" - blends
 // overallMatchupScore across the weighted opponent set above for
