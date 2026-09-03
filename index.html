@@ -4815,10 +4815,28 @@ async function runWithConcurrency(items, limit, fn, onProgress) {
   await Promise.all(workers);
   return results;
 }
+// Round 52 (user: "find a scrape for shots etc - important for explosive
+// captaincy" + "the skew of shots/assists going their way - chance
+// magnets"): this function already fetches element-summary/{id}/ for every
+// player (for history_past, last season's totals) - that same response ALSO
+// carries `history`, this SEASON's real per-gameweek log (minutes, threat,
+// expected_goal_involvements, bps, etc, one row per gameweek actually
+// played) - previously read nowhere, at zero extra network cost since the
+// request already happens. Stashed into state.thisSeasonGwHistory here so
+// chanceMagnetSkew (below) can measure real game-to-game BOOM/BUST
+// volatility - a genuinely different signal from a season-total rate, which
+// by construction averages the spiky games away.
 async function fetchLegacyStatsForAllPlayers(onProgress) {
   const agg = { __hasStartsData: true, __isLegacy: true };
+  state.thisSeasonGwHistory = state.thisSeasonGwHistory || {};
   await runWithConcurrency(state.players, LEGACY_FETCH_CONCURRENCY, async (p) => {
     const summary = await fetchElementSummary(p.id);
+    if (Array.isArray(summary.history)) {
+      state.thisSeasonGwHistory[p.id] = summary.history.map(h => ({
+        minutes: h.minutes || 0, threat: num(h.threat), expected_goal_involvements: num(h.expected_goal_involvements),
+        expected_goals: num(h.expected_goals), expected_assists: num(h.expected_assists), bps: h.bps || 0, total_points: h.total_points || 0,
+      }));
+    }
     const past = (summary.history_past || []).find(h => h.season_name === LEGACY_SEASON_NAME);
     if (past) {
       agg[p.id] = {
@@ -8795,7 +8813,7 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     gw: g,
     fx: teamEventIndex ? teamEventIndex[g] : (state.fixturesByTeam[p.teamId] || []).find(f => f.event === g),
   })).filter(x => x.fx);
-  let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0, xgiSum = 0;
+  let projTotal = 0, teamXgSum = 0, csSum = 0, defConSum = 0, bonusSum = 0, fdrSum = 0, n = 0, xgiSum = 0, xgSum = 0, xaSum = 0;
   const fixtureLabels = [];
   // No-Prem-history fallback: a player with 0 minutes/starts normally
   // floors out at minsFactor=0 (see projMinsFactor) and has no xG/xA data
@@ -8871,6 +8889,8 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // fixtures shows a visibly higher xGI90 than a run of hard ones, same
     // fixture-by-fixture logic already applied to provenProj/attackPts.
     xgiSum += ((effPForAttack.xg90 || 0) + (effPForAttack.xa90 || 0)) * fixtureMult;
+    xgSum += (effPForAttack.xg90 || 0) * fixtureMult;
+    xaSum += (effPForAttack.xa90 || 0) * fixtureMult;
     let attackPts = underlyingAttackPts(effPForAttack, fdrScore, minsFactor, startProb);
     // Round 50 (item 9): apply the FM-attribute tactical-imbalance system
     // (TACTICAL_IMBALANCE_RULES/TACTICAL_TEAM_SYSTEM_RULES/TACTICAL_CS_RULES,
@@ -8989,6 +9009,17 @@ function computeProjectionRow(p, fromGw, toGw, assume90, rotationThreshold, prov
     // and the team-xGI%-share confluence (see xgiSharePctForFixture).
     xg90Blended: effP.xg90 || 0,
     xa90Blended: effP.xa90 || 0,
+    // Round 52 (user: "xG90 and xA90 is still not fixture tailored - that
+    // number should be based on what the player [is facing]") - same
+    // per-fixture FDR-multiplier treatment as xgi90 above, but split back
+    // into the individual xG90/xA90 components (xgiSum bundles both
+    // together, which is fine for the combined stat but not for callers
+    // that want to show goal threat and assist threat as separate numbers -
+    // e.g. Captaincy's Goal/Assist columns, previously reading the flat
+    // raw p.xg90/p.xa90 season rate unconditionally, identical for every
+    // fixture regardless of opponent).
+    xg90: fixtures.length ? xgSum / cnt : (effP.xg90 || 0),
+    xa90: fixtures.length ? xaSum / cnt : (effP.xa90 || 0),
   };
 }
 const PROJ_OPTIONAL_COLS = [
@@ -9264,8 +9295,13 @@ function renderProjectionsCaptaincy(pool, gwId) {
     switch (key) {
       case "cs": return bd.csEligible ? ((row.csPct || 0) / 100) * (CS_PTS[p.position] || 0) : null;
       case "defcon": return bd.defConEligible ? ((row.defConPct || 0) / 100) * 2 : null;
-      case "goal": return p.xg90 || 0;
-      case "assist": return p.xa90 || 0;
+      // Round 52 (user: "xG90/xA90 still not fixture tailored") - row.xg90/
+      // row.xa90 are the FDR-multiplier-adjusted rates for THIS specific
+      // gameweek's fixture (see computeProjectionRow's own comment),
+      // replacing the flat raw p.xg90/p.xa90 season rate that used to show
+      // an identical number here regardless of opponent.
+      case "goal": return row.xg90 || 0;
+      case "assist": return row.xa90 || 0;
       case "bonus": return row.bonusExp || 0;
       case "matchup": return row.matchupScore != null ? row.matchupScore : null;
       default: return null;
@@ -9348,8 +9384,8 @@ function renderProjectionsCaptaincy(pool, gwId) {
         ${colLabel("floor", "Floor", "Guaranteed-ish points if nothing extra lands")}
         ${colLabel("cs", "CS pts", "Expected clean-sheet points this fixture (real CS% x this position's CS point value)")}
         ${colLabel("defcon", "DefCon pts", "Expected defensive-contribution points this fixture (real DefCon% x 2)")}
-        ${colLabel("goal", "xG90", "This player's own expected-goals-per-90 rate")}
-        ${colLabel("assist", "xA90", "This player's own expected-assists-per-90 rate")}
+        ${colLabel("goal", "xG90", "This player's expected-goals-per-90 rate, adjusted for this fixture's own difficulty")}
+        ${colLabel("assist", "xA90", "This player's expected-assists-per-90 rate, adjusted for this fixture's own difficulty")}
         ${colLabel("bonus", "Bonus pts", "Expected bonus points this fixture")}
         ${colLabel("matchup", "Matchup", "Playstyle/matchup quality score, 0-100, for this fixture - the same score used across the app's matchup heatmaps and modals")}
       </tr></thead>
@@ -9644,7 +9680,19 @@ function pickConstrainedXI(rows, need, useBudget, useClubLimit, excludedIds, loc
   // Formation-aware XI budget (see xiBudgetForFormation above) rather than
   // one flat number for every formation - unless the caller supplied an
   // explicit customBudgetTenths override (Round 49).
-  const BUDGET = customBudgetTenths != null ? customBudgetTenths : xiBudgetForFormation(need, excludedIds, formationKey), MAX_PER_CLUB = 3;
+  // Round 52 bug fix (user: "team value is broken" - XI cost showing
+  // "£88.4m / £1063.0m"): xiBudgetForFormation returns its figure in real
+  // £m (e.g. ~90), matching `spent` below (summed from nowCost/10, also
+  // £m) - but customBudgetTenths, per its own name and every caller
+  // (the £0.1m-step manual input AND myTeamBudgetCapTenths(), both of
+  // which genuinely store/return tenths - e.g. 884 for an £88.4m squad,
+  // matching nowCost's own raw units and the separate Bench Boost
+  // checker's global BUDGET=1000-tenths convention), arrives in TENTHS.
+  // Using it as-is for BUDGET made the effective cap (and everything
+  // displayed from it) 10x too large the moment a custom budget was set -
+  // dividing by 10 here brings it onto the same £m scale as the rest of
+  // this function.
+  const BUDGET = customBudgetTenths != null ? customBudgetTenths / 10 : xiBudgetForFormation(need, excludedIds, formationKey), MAX_PER_CLUB = 3;
   const excluded = excludedIds || new Set();
   const byPos = { GK: [], DEF: [], MID: [], FWD: [] };
   for (const r of rows) { if (excluded.has(r.p.id)) continue; byPos[r.p.position].push(r); }
@@ -10816,7 +10864,10 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
   // team tab auto-syncs into a draft on load - see loadTeam's own comment)
   // or your active Squad Builder draft otherwise, so this genuinely is
   // "calculate it for a person's personal team," not a separate figure.
-  const effectiveBudgetM = (best.budget / 10).toFixed(1);
+  // Round 52: best.budget (pickConstrainedXI's returned BUDGET) is now
+  // ALWAYS real £m already (see that function's own comment on the fix) -
+  // no second /10 here, that was the other half of the "£1063.0m" bug.
+  const effectiveBudgetM = best.budget.toFixed(1);
   const hasCustomBudget = state.projPitchBudgetValueTenths != null;
   body.innerHTML = `
     <div class="toolbar" style="margin-bottom:10px;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center">
@@ -11693,6 +11744,56 @@ function explosiveVolumeScore(p) {
   const attrAmplifier = 1 + (shootingAttributeScore(p) * 0.6 + chanceCreationAttributeScore(p) * 0.4) * 0.3; // 1.0x-1.3x
   return Math.max(0, Math.min(1, base * attrAmplifier));
 }
+// ---- "Chance magnet" skew (Round 52) ----
+// User request: "someone who is likely to get a lot of chances AND the skew
+// of shots/assists going their way ... chance magnets ... take fixture as
+// well as delivery of this outcome (technique of player as an example)".
+// explosiveVolumeScore above already covers real shot/chance VOLUME+QUALITY
+// as a season-long rate - this is a genuinely different signal: does this
+// player's output arrive in disproportionate, game-to-game BURSTS (a real
+// "boom or bust" chance magnet, exactly the explosive-captaincy profile) or
+// as a steady, evenly-spread drip? A season rate by construction averages
+// spiky games away, so it can't distinguish the two - only a real per-
+// gameweek log can. Uses state.thisSeasonGwHistory (real FPL per-GW data,
+// fetched at zero extra cost - see fetchLegacyStatsForAllPlayers's own
+// comment), the coefficient of variation (stdev/mean) of per-90 xGI across
+// this player's real played games this season.
+const CHANCE_MAGNET_MIN_GAMES = 4; // below this, a "skew" reading is mostly noise, not signal
+function chanceMagnetSkew(p) {
+  const hist = (state.thisSeasonGwHistory || {})[p.id];
+  if (!hist || !hist.length) return null; // no real per-GW log fetched yet/at all - caller falls back to neutral
+  const games = hist.filter(h => (h.minutes || 0) >= 30); // meaningful involvement only - a 3-minute cameo shouldn't count as "a quiet game"
+  if (games.length < CHANCE_MAGNET_MIN_GAMES) return null;
+  const rates = games.map(h => (h.expected_goal_involvements || 0) / (h.minutes / 90));
+  const mean = rates.reduce((s, v) => s + v, 0) / rates.length;
+  if (mean <= 0) return null; // no real output to have a skew of
+  const variance = rates.reduce((s, v) => s + (v - mean) ** 2, 0) / rates.length;
+  const cv = Math.sqrt(variance) / mean;
+  // Normalize: cv 0 (perfectly even every game) -> 0, cv 1.5+ (wildly
+  // spiky - most games near-zero, occasional big haul) -> 1. Real-world
+  // "explosive" attacking players typically sit in the 0.6-1.2 band.
+  return { cv: Math.max(0, Math.min(1, cv / 1.5)), mean, games: games.length };
+}
+// Combined "chance magnet" score (0-1): does this player draw a genuinely
+// high, bursty share of chances (skew), backed by real shot/chance delivery
+// ability (FM technique/finishing/composure/vision, "the technique of the
+// player" per your own example), for THIS specific fixture's ease? Skew
+// alone is agnostic to fixture/attributes - those are the two extra
+// confirmations the user explicitly asked for ("take fixture as well as
+// delivery of this outcome ... as well").
+function chanceMagnetScore(p, avgFdr) {
+  const skew = chanceMagnetSkew(p);
+  // No real per-GW sample yet (early season/low minutes) - neutral 0.5
+  // rather than penalizing a player this metric simply can't read yet.
+  const skewNorm = skew ? skew.cv : 0.5;
+  const volumeNorm = explosiveVolumeScore(p); // real shot/chance volume+quality, already 0-1
+  const delivery = shootingAttributeScore(p) * 0.6 + chanceCreationAttributeScore(p) * 0.4; // "technique of player" amplifier
+  const fixtureEase = avgFdr != null ? Math.max(0, Math.min(1, (5 - avgFdr) / 4)) : 0.5;
+  // Skew only matters if there's real volume behind it (a bursty player with
+  // almost no chances at all isn't a chance magnet, just streaky noise) -
+  // so skew is weighted heaviest but volume/delivery/fixture all contribute.
+  return Math.max(0, Math.min(1, skewNorm * 0.40 + volumeNorm * 0.30 + delivery * 0.15 + fixtureEase * 0.15));
+}
 // FLOOR/SAFE quality term (spec item 7): the opposite emphasis from
 // Explosive - balances volume WITH quality (roughly even weight, not
 // volume-dominant), and the same FM attribute pair here CONFIRMS quality
@@ -11765,22 +11866,31 @@ function captaincyExplosiveScore(p, row, breakdown, boost, fitness) {
   // created) amplify this term rather than being scored separately - see
   // explosiveVolumeScore's own comment for the exact shape.
   const volumeNorm = explosiveVolumeScore(p);
+  // Round 52: "chance magnet" term - real game-to-game boom/bust skew (does
+  // this player's output arrive in bursts, the genuinely explosive-captaincy
+  // profile, vs an even drip), backed by real shot/chance delivery ability
+  // and this fixture's own ease - see chanceMagnetScore's own comment for
+  // the full reasoning. A distinct signal from volumeNorm (season-total
+  // rate) and fixtureEase (already counted once below) - this is the ONLY
+  // term reading real per-gameweek variance rather than a season aggregate.
+  const magnetNorm = chanceMagnetScore(p, row.avgFdr);
   // Weighted sum - playstyle/matchup boost weighted heaviest per your
   // steer ("lean heavily on playstyle and matchup", then "boost the
   // matchup AGAIN" this round) - raised from 0.30 to 0.35. ceilingNorm's
-  // own weight trimmed slightly (0.22 -> 0.18) to make room rather than
-  // just piling the extra weight on top uncapped - the rest (xGI/team
-  // goals/fixture ease/defensive terms) is untouched. Doesn't strictly need
-  // to sum to 1.0 (never did - these are independent 0-1 normalized signals
-  // combined additively, not a probability split), just needs to stay a
-  // sane relative weighting, which it still is with matchup as the clear
-  // single heaviest term. Defensive-specific terms only apply to DEF/GK (0
-  // otherwise so they don't dilute an attacker's score). volumeNorm added
-  // at 0.14 - a genuine new signal, not just re-weighting xGI (xGI is a
-  // season-long OUTCOME rate; volumeNorm is this fixture-agnostic shot/
-  // chance GENERATION rate, a different real read) - taken from a small
-  // trim off ceilingNorm/xgiNorm/teamXgNorm rather than diluting matchup.
-  let score = boost * 0.35 + ceilingNorm * 0.15 + xgiNorm * 0.13 + teamXgNorm * 0.10 + volumeNorm * 0.14 + fixtureEase * 0.08 + csUpside * 0.05 + defenceUpside * 0.05;
+  // own weight trimmed slightly (0.22 -> 0.18, then -> 0.12 to make room
+  // for magnetNorm) rather than just piling extra weight on top uncapped -
+  // the rest (xGI/team goals/fixture ease/defensive terms) is untouched.
+  // Doesn't strictly need to sum to 1.0 (never did - these are independent
+  // 0-1 normalized signals combined additively, not a probability split),
+  // just needs to stay a sane relative weighting, which it still is with
+  // matchup as the clear single heaviest term. Defensive-specific terms
+  // only apply to DEF/GK (0 otherwise so they don't dilute an attacker's
+  // score). volumeNorm added at 0.14 - a genuine new signal, not just re-
+  // weighting xGI (xGI is a season-long OUTCOME rate; volumeNorm is this
+  // fixture-agnostic shot/chance GENERATION rate, a different real read) -
+  // taken from a small trim off ceilingNorm/xgiNorm/teamXgNorm rather than
+  // diluting matchup.
+  let score = boost * 0.35 + ceilingNorm * 0.12 + xgiNorm * 0.11 + teamXgNorm * 0.10 + volumeNorm * 0.14 + magnetNorm * 0.12 + fixtureEase * 0.08 + csUpside * 0.05 + defenceUpside * 0.05;
   // Round: hidden-gem/low-ownership score bump REMOVED per user decision
   // ("pure badge, no score effect") - it used to multiply the score up to
   // +25% for a sub-8%-owned player, which meant two players with an
@@ -11931,6 +12041,16 @@ function captaincyMiniBadges(p, gwId, scored) {
   // doesn't fully capture.
   if (p.directFreekicksOrder === 1 || p.cornersOrder === 1) {
     badges.push({ cls: "setpiece", icon: "\u{1F4D0}", label: "Set-piece", title: "FPL's declared #1 corners/free-kicks taker for their club" });
+  }
+  // Round 52 (user: "chance magnets" for explosive captaincy) - real
+  // game-to-game boom/bust skew in this player's own per-gameweek xGI (see
+  // chanceMagnetSkew), gated on genuine volume so a low-output player with
+  // one fluky big game doesn't get flagged as a "magnet". Informational,
+  // same as Differential/Template - the actual score effect lives in
+  // captaincyExplosiveScore's magnetNorm term, not here.
+  const magnetSkew = chanceMagnetSkew(p);
+  if (magnetSkew && magnetSkew.cv >= 0.6 && magnetSkew.mean >= 0.35) {
+    badges.push({ cls: "magnet", icon: "\u{1F9F2}", label: "Chance magnet", title: `Boom/bust chance profile - real per-gameweek xGI varies sharply game to game (avg ${magnetSkew.mean.toFixed(2)} xGI/90 across ${magnetSkew.games} played games), not an even drip. High ceiling, lower floor.` });
   }
   return badges;
 }
