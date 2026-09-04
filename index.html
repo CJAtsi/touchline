@@ -2440,6 +2440,14 @@ const SORT_OPTIONS = [
   // than needing to eyeball Threat and Creativity separately).
   ["shotsPer90Sort", "Shots /90 (real, scraped)"], ["chancesCreatedPer90Sort", "Chances created /90 (real, scraped)"],
   ["threatCreativityPer90", "Threat+Creativity /90 (underlying)"],
+  // Round 55 (user: "have shots and chances as whole numbers rather than
+  // per 90 put the p90 in the per 90 filter" + "threat and create should
+  // have a whole number before the per 90 again put the p90 in the per
+  // 90"): whole-number season-total siblings, sortable in their own right -
+  // see COLUMN_FORMAT's shotsTotal/chancesCreatedTotal/threatCreativityTotal
+  // for how each is computed.
+  ["shotsTotal", "Shots (season)"], ["chancesCreatedTotal", "Chances created (season)"],
+  ["threatCreativityTotal", "Threat+Creativity (season)"],
 ];
 
 // Player, Team, Pos, star are always shown; these fixed columns stay
@@ -2462,17 +2470,23 @@ const STAT_THEMES = {
       ["Goals & assists", ["goalsScored", "assists", "gaTotal", "goalsPer90", "assistsPer90"]],
       ["Expected", ["expectedGoals", "expectedAssists", "expectedGoalInvolvements", "xg90", "xa90", "xgi90"]],
       ["Team share", ["teamGoalShare", "teamXgiShare"]],
-      // Round 53: shotsPer90Sort/chancesCreatedPer90Sort (real ciShots/
-      // dsShots-scraped shot & chance-created volume, "*" flags a synthetic
+      // Round 53: shotsTotal/chancesCreatedTotal (real ciShots/dsShots-
+      // scraped shot & chance-created volume, "*" flags a synthetic
       // fallback for players with no real source yet - see COLUMN_FORMAT's
-      // own comment) and threatCreativityPer90 (combined ICT sub-score /90)
-      // sit alongside the existing raw Threat/Creativity season totals.
-      ["Underlying", ["threat", "creativity", "threatCreativityPer90", "shotsPer90Sort", "chancesCreatedPer90Sort", "penaltiesMissed"]],
+      // own comment) and threatCreativityTotal (combined ICT sub-score,
+      // season total) sit alongside the existing raw Threat/Creativity
+      // season totals. Round 55 (user: "have shots and chances as whole
+      // numbers rather than per 90 put the p90 in the per 90 filter" +
+      // "threat and create should have a whole number before the per 90
+      // again put the p90 in the per 90"): swapped in the whole-number
+      // Total variants here in place of the /90 versions - the /90 versions
+      // now live only in the "Per 90" theme below.
+      ["Underlying", ["threat", "creativity", "threatCreativityTotal", "shotsTotal", "chancesCreatedTotal", "penaltiesMissed"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["goalsScored", "G"], ["assists", "A"], ["gaTotal", "G+A"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"],
       ["expectedGoals", "xG"], ["expectedAssists", "xA"], ["expectedGoalInvolvements", "xGI"], ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"],
       ["teamGoalShare", "% of team G+A"], ["teamXgiShare", "% of team xGI"], ["threat", "Threat"], ["creativity", "Creat."],
-      ["threatCreativityPer90", "T+C/90"], ["shotsPer90Sort", "Shots/90"], ["chancesCreatedPer90Sort", "Chances/90"], ["penaltiesMissed", "Pen miss"]],
+      ["threatCreativityTotal", "T+C"], ["shotsTotal", "Shots"], ["chancesCreatedTotal", "Chances"], ["penaltiesMissed", "Pen miss"]],
   },
   defending: {
     label: "Defending",
@@ -2489,13 +2503,16 @@ const STAT_THEMES = {
     label: "Deeper stats",
     groups: [
       ["Playing time", ["minutes", "minsPerStart"]],
-      ["Underlying", ["influence", "creativity", "threat", "threatCreativityPer90"]],
+      // Round 55: whole-number Total variants swapped in here too - see the
+      // "Attacking" theme's own comment above for the reasoning. The /90
+      // versions of all three now live only in "Per 90" below.
+      ["Underlying", ["influence", "creativity", "threat", "threatCreativityTotal"]],
       ["Expected /90", ["xg90", "xa90", "xgi90"]],
-      ["Shot & chance volume", ["shotsPer90Sort", "chancesCreatedPer90Sort"]],
+      ["Shot & chance volume", ["shotsTotal", "chancesCreatedTotal"]],
       ["Set pieces", ["penaltiesOrder", "directFreekicksOrder", "cornersOrder"]],
     ],
-    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["threatCreativityPer90", "T+C/90"],
-      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["shotsPer90Sort", "Shots/90"], ["chancesCreatedPer90Sort", "Chances/90"],
+    columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["influence", "Inf"], ["creativity", "Cre"], ["threat", "Thr"], ["threatCreativityTotal", "T+C"],
+      ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["shotsTotal", "Shots"], ["chancesCreatedTotal", "Chances"],
       ["penaltiesOrder", "Pen"], ["directFreekicksOrder", "FK"], ["cornersOrder", "Corners"]],
   },
   per90: {
@@ -2505,11 +2522,17 @@ const STAT_THEMES = {
       ["Points & output /90", ["pointsPer90", "goalsPer90", "assistsPer90", "ppm90"]],
       ["Expected /90", ["xg90", "xa90", "xgi90"]],
       ["Defensive /90", ["goalsConcededPer90", "bpsPer90"]],
-      ["ICT /90", ["ictPer90", "influencePer90", "creativityPer90", "threatPer90"]],
+      ["ICT /90", ["ictPer90", "influencePer90", "creativityPer90", "threatPer90", "threatCreativityPer90"]],
+      // Round 55 (user: "put the p90 in the per 90 filter"): the /90
+      // versions of shots & chances created that used to sit in Attacking/
+      // Deeper stats now live only here, alongside their whole-number Total
+      // siblings' new home in those other two themes.
+      ["Shot & chance volume /90", ["shotsPer90Sort", "chancesCreatedPer90Sort"]],
     ],
     columns: [["minutes", "Mins"], ["minsPerStart", "Mins/start"], ["pointsPer90", "Pts/90"], ["goalsPer90", "G/90"], ["assistsPer90", "A/90"], ["ppm90", "Pts/£m/90"],
       ["xg90", "xG/90"], ["xa90", "xA/90"], ["xgi90", "xGI/90"], ["goalsConcededPer90", "GA/90"], ["bpsPer90", "BPS/90"],
-      ["ictPer90", "ICT/90"], ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"]],
+      ["ictPer90", "ICT/90"], ["influencePer90", "Inf/90"], ["creativityPer90", "Cre/90"], ["threatPer90", "Thr/90"], ["threatCreativityPer90", "T+C/90"],
+      ["shotsPer90Sort", "Shots/90"], ["chancesCreatedPer90Sort", "Chances/90"]],
   },
 };
 
@@ -2600,6 +2623,40 @@ const COLUMN_FORMAT = {
   // answers "how involved is this player in chances, total" without
   // needing to eyeball Threat/90 and Creativity/90 separately.
   threatCreativityPer90: p => [((p.threatPer90 || 0) + (p.creativityPer90 || 0)).toFixed(1), ""],
+  // Round 54 (user: "have shots and chances as whole numbers rather than
+  // per 90, put the p90 in the per 90 filter" + "threat and create should
+  // have a whole number before the per 90, again put the p90 in the per
+  // 90") - whole-number season-total siblings of the three /90 columns
+  // above, which now live ONLY in the "Per 90" theme (see STAT_THEMES) -
+  // Attacking/Advanced show these instead.
+  //
+  // shotsTotal/chancesCreatedTotal: shotsPer90/chancesCreatedPer90 are
+  // real-data-first RATES (ciShots/ciMinutes - a trailing-window count
+  // divided by that SAME window's minutes, see those functions' own
+  // comment), not a stored season-total field - so a literal whole number
+  // is built by scaling that real per-90 rate across this player's ACTUAL
+  // season minutes (same "rate x minutes-played" scaling h2hBlendedPoints/
+  // computeProjectionRow already use elsewhere for projecting a rate into
+  // a total), not multiplying the trailing-window figures directly, which
+  // are actually a different window from a player's full-season minutes
+  // and would double-count or under-count vs the player's real season
+  // parameter. Same real/synthetic "*" flag as the per-90 versions -
+  // determined the same way (does ciShots/ciChancesCreated exist).
+  shotsTotal: p => {
+    const real = per90Rate(p.ciShots, p.ciMinutes) ?? per90Rate(p.dsShots, p.minutes);
+    const v = Math.round(shotsPer90(p) * ((p.minutes || 0) / 90));
+    return [v + (real == null ? "*" : ""), real == null ? "color:var(--ink-faint)" : ""];
+  },
+  chancesCreatedTotal: p => {
+    const real = per90Rate(p.ciChancesCreated, p.ciMinutes) ?? per90Rate(p.dsKeyPasses, p.minutes);
+    const v = Math.round(chancesCreatedPer90(p) * ((p.minutes || 0) / 90));
+    return [v + (real == null ? "*" : ""), real == null ? "color:var(--ink-faint)" : ""];
+  },
+  // threatCreativityTotal: unlike shots/chances above, Threat and
+  // Creativity are already real, cumulative, whole-season FPL fields
+  // (not a derived rate) - so their combined whole number is a direct sum,
+  // no scaling or synthetic fallback needed at all.
+  threatCreativityTotal: p => [Math.round((p.threat || 0) + (p.creativity || 0)), ""],
 };
 // Note: the ds* (dsShots/dsTackles/dsInterceptions/dsBlocks/dsClearances/
 // dsAerialsWon/dsAerialWinPct/dsXGChain/dsXGBuildup) fields themselves are
@@ -6887,6 +6944,15 @@ function getFiltered() {
     else if (f.sort === "shotsPer90Sort") { av = shotsPer90(a); bv = shotsPer90(b); }
     else if (f.sort === "chancesCreatedPer90Sort") { av = chancesCreatedPer90(a); bv = chancesCreatedPer90(b); }
     else if (f.sort === "threatCreativityPer90") { av = (a.threatPer90 || 0) + (a.creativityPer90 || 0); bv = (b.threatPer90 || 0) + (b.creativityPer90 || 0); }
+    // Round 55: whole-number season-total siblings of the three /90 sorts
+    // above - same "call the real per-90 function, scale by this player's
+    // actual minutes" derivation COLUMN_FORMAT's shotsTotal/
+    // chancesCreatedTotal use (see that comment for why scaling beats
+    // reading the raw trailing-window count directly), and the same direct
+    // sum threatCreativityTotal uses.
+    else if (f.sort === "shotsTotal") { av = shotsPer90(a) * ((a.minutes || 0) / 90); bv = shotsPer90(b) * ((b.minutes || 0) / 90); }
+    else if (f.sort === "chancesCreatedTotal") { av = chancesCreatedPer90(a) * ((a.minutes || 0) / 90); bv = chancesCreatedPer90(b) * ((b.minutes || 0) / 90); }
+    else if (f.sort === "threatCreativityTotal") { av = (a.threat || 0) + (a.creativity || 0); bv = (b.threat || 0) + (b.creativity || 0); }
     else {
       av = state.scopedStats ? scopedPlayer(a)[f.sort] : a[f.sort];
       bv = state.scopedStats ? scopedPlayer(b)[f.sort] : b[f.sort];
@@ -9843,6 +9909,14 @@ const POSITION_MIN_PRICE = { GK: 4.0, DEF: 4.0, MID: 4.5, FWD: 4.5 };
 const XI_BUDGET_BY_FORMATION = {
   "4-3-3": 83, "4-4-2": 83, "3-5-2": 83.5, "3-4-3": 83.5,
   "5-3-2": 82.5, "5-4-1": 82.5, "4-5-1": 83,
+  // Round 55: "4-2-3-1"/"4-1-4-1" are the same 4-DEF/5-MID/1-FWD count as
+  // "4-5-1" above (see FORMATIONS_H2H's comment), so they share its
+  // budget figure exactly - not a new number, just carried over to the
+  // new alias keys so xiBudgetForFormation's formationKey lookup hits
+  // instead of silently falling through to the live bench-floor fallback.
+  // "5-2-3" is new (see same comment) - budgeted the same as the other
+  // two 5-DEF shapes (5-3-2/5-4-1) since it shares their back-line size.
+  "4-2-3-1": 83, "4-1-4-1": 83, "5-2-3": 82.5,
 };
 function xiBudgetForFormation(need, excludeIds, formationKey) {
   if (formationKey && XI_BUDGET_BY_FORMATION[formationKey] != null) {
@@ -10987,7 +11061,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
     // original one. Picking a same-position candidate works exactly as
     // before. Picking a DIFFERENT-position candidate is a genuine shape
     // change (e.g. "one fewer MID, one more FWD") - the click handler
-    // below checks whether the resulting XI still matches one of the 7
+    // below checks whether the resulting XI still matches one of the
     // legal formations (formationKeyForCounts) and switches the active
     // formation to match if so, or rejects the swap with an inline error
     // if the new shape isn't legal (e.g. would need a 4th FWD).
@@ -11217,7 +11291,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
         // position pick (candidate's real position != this slot's label)
         // is a genuine formation-shape change - compute what the WHOLE
         // XI's real DEF/MID/FWD counts would be after this swap, and only
-        // apply it if that shape matches one of the 7 legal formations
+        // apply it if that shape matches one of the legal formations
         // (formationKeyForCounts). If it does, the active formation is
         // switched to match (leaving AUTO if it was set) so `need` lines
         // up with the new shape on the next render - without this, the
@@ -11237,7 +11311,7 @@ function renderProjectionsPitch(rows, gwId, toGwId) {
             const r = rowsById.get(id);
             if (r && counts[r.p.position] != null) counts[r.p.position]++;
           }
-          const newFormationKey = formationKeyForCounts(counts.DEF, counts.MID, counts.FWD);
+          const newFormationKey = formationKeyForCounts(counts.DEF, counts.MID, counts.FWD, formationKey);
           if (!newFormationKey) {
             state.projXiSwapError = `Can't place a ${candidateRow.p.position} in a ${pos} slot here - the resulting shape (${counts.DEF}-${counts.MID}-${counts.FWD}) isn't a legal FPL formation. Try removing a different player first to free up room.`;
             renderProjectionsTab();
@@ -12609,6 +12683,26 @@ function renderRowsBatched(tbody, items, rowHtmlFn, batchSize) {
   };
   (window.requestAnimationFrame || ((fn) => setTimeout(fn, 0)))(runBatch);
 }
+
+// Round 55 (user: "for projections don't show all the fixtures maybe max 3
+// and then '..x more' or something of the sort") - Projections' fixture
+// column used to render every fixture in the selected GW range as its own
+// pill with no cap, which for a wide range (e.g. a full-season "From GW1 to
+// GW38" run) could mean dozens of pills stretching the row far past the
+// rest of the table. Caps display to the first `max` fixtures and folds
+// anything beyond that into a single "+N more" pill, hoverable (title=)
+// with the folded fixtures' opponent labels so the info isn't lost, just
+// deferred. Shared by both the simple view and the full-columns view below
+// (previously each had its own near-identical inline .map(...).join("")).
+function fixturePillsCappedHtml(fixtures, max = 3) {
+  if (!fixtures || !fixtures.length) return `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+  const pill = f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`;
+  const shown = fixtures.slice(0, max).map(pill).join("");
+  const rest = fixtures.slice(max);
+  if (!rest.length) return shown;
+  const restLabel = rest.map(f => `${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}`).join(", ");
+  return shown + `<span style="font-size:9px;color:var(--ink-faint);margin-left:2px;cursor:default" title="${escXml(restLabel)}">+${rest.length} more</span>`;
+}
 function renderProjectionsTab() {
   const body = document.getElementById("projectionsBody");
   if (!body) return;
@@ -12733,9 +12827,7 @@ function renderProjectionsTab() {
         </tr></thead>
         <tbody>${rows.map(r => {
           const p = r.p;
-          const fixLabel = r.fixtures.length
-            ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
-            : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+          const fixLabel = fixturePillsCappedHtml(r.fixtures);
           return `<tr>
             <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
             <td>${fixLabel}</td>
@@ -12753,9 +12845,7 @@ function renderProjectionsTab() {
     const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
     const rowHtml = (r) => {
       const p = r.p;
-      const fixLabel = r.fixtures.length
-        ? r.fixtures.map(f => `<span class="fdr-pill" style="width:auto;padding:2px 6px;margin:1px;font-size:9px;background:${fdrGradientColor(f.fdrScore)};color:#0b1310">${f.opp ? f.opp.short_name : "?"} ${f.isHome ? "(H)" : "(A)"}</span>`).join("")
-        : `<span style="font-size:11px;color:var(--ink-faint)">No fixture</span>`;
+      const fixLabel = fixturePillsCappedHtml(r.fixtures);
       const matchupTitle = r.bestMatchup
         ? "vs " + r.bestMatchup.opp.webName + " (" + (state.teamsById[r.bestMatchup.opp.teamId]?.short_name || "") + ") - best-effort inferred matchup, see Simulation tab"
         : "No fixture in range";
@@ -15859,21 +15949,23 @@ function renderTeamOverrides() {
 // Likely lineup picker used to label every slot just "DEF 1"/"DEF 2"/
 // "MID 1" etc - a bare index, not which actual role that slot represents.
 // Maps a position + this club's CURRENT slot count for it (from
-// FORMATIONS_H2H, always 3/4/5 for DEF+MID, 1/2/3 for FWD - every one of
-// the 7 formation shapes is covered) to real positional labels instead,
+// FORMATIONS_H2H, 3/4/5 for DEF, 2-5 for MID, 1-3 for FWD - every legal
+// formation shape is covered) to real positional labels instead,
 // left-to-right as they'd actually line up on the pitch. MID's 3-slot case
 // (LCM/CM/RCM) is the one that also matters for Tactical board auto-
 // matchups: see tacticalAutoPresetMatchups' rolePairKinds, which mirrors
 // LCM against the opponent's RCM (and vice versa) rather than same-letter -
 // this is just where that labelling comes from on the picker itself. Falls
-// back to the old numbered label for any slot count outside those 7 shapes
+// back to the old numbered label for any slot count outside those shapes
 // (shouldn't happen via the normal formation selector, but keeps this safe
 // if state.teamFormations ever holds something unexpected).
+// Round 55: added MID's 2-slot case (the "5-2-3" formation added alongside
+// this round's other new formation options - see FORMATIONS_H2H's comment).
 function lineupSlotLabels(pos, count) {
   const BY_COUNT = {
     GK: { 1: ["GK"] },
     DEF: { 3: ["LCB", "CB", "RCB"], 4: ["LB", "CB", "CB", "RB"], 5: ["LWB", "LCB", "CB", "RCB", "RWB"] },
-    MID: { 3: ["LCM", "CM", "RCM"], 4: ["LM", "LCM", "RCM", "RM"], 5: ["LM", "LCM", "CM", "RCM", "RM"] },
+    MID: { 2: ["LCM", "RCM"], 3: ["LCM", "CM", "RCM"], 4: ["LM", "LCM", "RCM", "RM"], 5: ["LM", "LCM", "CM", "RCM", "RM"] },
     FWD: { 1: ["ST"], 2: ["LST", "RST"], 3: ["LW", "ST", "RW"] },
   };
   const labels = (BY_COUNT[pos] || {})[count];
@@ -18744,21 +18836,61 @@ async function loadH2hFlashcard() {
 }
 function saveH2hFlashcard() { persistSet("h2hFlashcard", JSON.stringify(state.h2hFlashcard)); }
 
+// Round 55 (user: "add more formations, its all too simple for example
+// 4231 im forced to use 433 and then 343 has variations of cams rather
+// than wingers etc add the main popular usable ones"): FPL's real position
+// data only ever tags a player GK/DEF/MID/FWD - there's no CDM/CM/CAM/
+// winger sub-tag anywhere in the source data, so a "formation" here can
+// only ever be a DEF/MID/FWD count split (which is also exactly how the
+// real FPL "Pick Team" screen itself works - it's a squad-selection
+// constraint, not a tactical/heatmap system). Under FPL's own published
+// squad rules (3-5 DEF, 2-5 MID, 1-3 FWD, 10 outfield players) there are
+// only 8 possible count splits that sum to 10 - this used to cover 7 of
+// them under the classic shorthand names; "5-2-3" was the one genuinely
+// missing numeric shape, added below. The rest of this round's additions
+// ("4-2-3-1", "4-1-4-1") are deliberately ALIASES of the existing 4-5-1
+// count split (4 DEF, 5 MID, 1 FWD) under the real, recognizable names
+// players actually call that shape - previously the only way to get a
+// 4-2-3-1's count split was to pick the unfamiliar "4-5-1" label. A real
+// 3-4-2-1 (3 DEF, 6 MID-categorized, 1 FWD by real football's own
+// definition) is NOT included because it needs 6 midfielders, which
+// exceeds FPL's hard 5-MID cap - genuinely impossible to build as a legal
+// FPL XI, not just an app limitation. Every alias renders identically to
+// its base shape on the pitch view (same flat MID row, same player
+// count) since there's no real per-player CDM/CAM/winger data to visually
+// split that row by - the value of an alias is purely a name the user
+// recognizes in the formation dropdown, not a different visual layout.
 const FORMATIONS_H2H = {
   "4-3-3": { DEF: 4, MID: 3, FWD: 3 }, "4-4-2": { DEF: 4, MID: 4, FWD: 2 },
   "3-5-2": { DEF: 3, MID: 5, FWD: 2 }, "3-4-3": { DEF: 3, MID: 4, FWD: 3 },
   "5-3-2": { DEF: 5, MID: 3, FWD: 2 }, "5-4-1": { DEF: 5, MID: 4, FWD: 1 },
   "4-5-1": { DEF: 4, MID: 5, FWD: 1 },
+  "4-2-3-1": { DEF: 4, MID: 5, FWD: 1 }, "4-1-4-1": { DEF: 4, MID: 5, FWD: 1 },
+  "5-2-3": { DEF: 5, MID: 2, FWD: 3 },
 };
 // Round 49 (user request: "have the ability to also swap in fwds for mid"):
-// looks up which of the 7 legal formation shapes above (if any) exactly
+// looks up which of the legal formation shapes above (if any) exactly
 // matches a given DEF/MID/FWD count - used by the Best XI pitch's swap
 // panel to figure out whether a CROSS-POSITION swap (e.g. picking a FWD to
 // fill what was a MID slot) still results in a real, legal FPL XI shape.
 // Returns null if no formation matches (e.g. the swap would push a count
 // outside every valid shape) - the caller rejects the swap in that case
 // rather than allowing an illegal XI to be displayed.
-function formationKeyForCounts(defCount, midCount, fwdCount) {
+//
+// Round 55: since "4-2-3-1"/"4-1-4-1" now alias the same 4-DEF/5-MID/1-FWD
+// count as "4-5-1" (see FORMATIONS_H2H's own comment - real formation
+// names given to a shape FPL's data can't otherwise distinguish), more
+// than one key can match the same count triple. Without `preferKey`, this
+// always returned whichever alias happens to be declared first in
+// FORMATIONS_H2H - meaning a user who deliberately picked "4-2-3-1" and
+// then made a same-shape cross-position swap would silently see the label
+// flip back to "4-5-1". Passing the formation that was active BEFORE the
+// swap as `preferKey` keeps that exact label whenever it still legally
+// matches the new counts, and only falls through to the plain first-match
+// search otherwise (a real shape change, or no prior key to prefer).
+function formationKeyForCounts(defCount, midCount, fwdCount, preferKey) {
+  const prefer = preferKey && FORMATIONS_H2H[preferKey];
+  if (prefer && prefer.DEF === defCount && prefer.MID === midCount && prefer.FWD === fwdCount) return preferKey;
   for (const [key, f] of Object.entries(FORMATIONS_H2H)) {
     if (f.DEF === defCount && f.MID === midCount && f.FWD === fwdCount) return key;
   }
@@ -18770,10 +18902,13 @@ function formationKeyForCounts(defCount, midCount, fwdCount) {
 // fill in yourself" limitation noted on the H2H tab), so this is deliberately
 // editable per club on the Rankings tab ("Club formations") and every entry
 // here is just what gets baked in for a visitor who's never touched it.
-// Mapped to the closest of the 7 shapes above by DEF/MID/FWD count - e.g. a
-// real 4-2-3-1 maps to "4-5-1" (5 outfield players ahead of the back four,
-// 1 out-and-out striker), since only the position-count split, not the
-// exact system name, drives which real players get slotted into the XI.
+// Mapped to the closest shape above by DEF/MID/FWD count, since only the
+// position-count split (not the exact system name) drives which real
+// players get slotted into the XI - a real 4-2-3-1 side could equally be
+// entered here as "4-5-1", "4-2-3-1" or "4-1-4-1" (all the same 4/5/1
+// count, see FORMATIONS_H2H's own comment for why those exist as separate
+// names) with no difference in which players get picked, only in which
+// label the picker shows.
 const CLUB_FORMATIONS = {
   ARS: "4-3-3", MCI: "4-3-3", LIV: "4-3-3", CHE: "4-3-3", TOT: "4-3-3",
   AVL: "4-5-1", NEW: "4-3-3", BOU: "4-5-1", BHA: "4-5-1", FUL: "4-5-1",
