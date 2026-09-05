@@ -851,12 +851,23 @@
      cram every column into a shrunk font. */
   @media (min-width: 641px) and (max-width: 900px) {
     table { font-size: 11px; }
-    thead th { font-size: 9px; padding: 7px 5px; }
+    thead th { font-size: 9px; padding: 7px 5px; white-space: nowrap; word-break: normal; }
     tbody td { padding: 7px 5px; font-size: 10.5px; }
   }
   @media (max-width: 640px) {
     table { font-size: 13px; }
-    thead th { font-size: 11px; padding: 11px 9px; }
+    /* Round 56 (user: "headers incomplete... fixtures not showing
+       properly" on mobile) - the base thead th rule sets
+       word-break:break-word so a wide table doesn't force horizontal
+       scroll on desktop, but on a narrow phone column that same rule
+       breaks short header labels like "TEAM CONTRIB%"/"MINS/START"
+       letter-by-letter/mid-word, which reads as a truncated/incomplete
+       header rather than a real word wrap. The table already scrolls
+       horizontally on phone (.table-wrap's overflow-x:auto + the floating
+       scroll arrows below), so there's no need to break header text at
+       all here - nowrap keeps every header label intact on one line, same
+       fix philosophy as the fixture-col rule right below. */
+    thead th { font-size: 11px; padding: 11px 9px; white-space: nowrap; word-break: normal; }
     tbody td { padding: 13px 9px; font-size: 13px; }
     /* Sticky name column needs to stay wide enough to read a full surname
        at this font size, and the star/compare controls need real tap
@@ -873,6 +884,22 @@
     .table-scroll-arrow.left { left: 2px; }
     .table-scroll-arrow.right { right: 2px; }
   }
+  /* Fixture pills (Projections/Captaincy "Fixture(s)" column) are plain
+     inline <span> elements with no wrapping container, sized purely by
+     content - on a squeezed phone-width column that column can compress
+     enough that the pills wrap onto 2-3 lines inside one table cell
+     (reported as "fixtures not showing properly"), which also breaks the
+     row height/alignment against every other column in that row. Force
+     the whole cell onto one line and let the table's existing horizontal
+     scroll (.table-wrap overflow-x:auto) handle any overflow instead -
+     same fix direction as the header nowrap rule above, and consistent
+     with how every other stat column in this table already behaves
+     (single-line cells, table-layout:auto letting columns size to content
+     rather than being crushed to the viewport width). Not scoped to a
+     media query - the same wrapping bug can happen on any narrow window,
+     not just <=640px, so this applies at every width. */
+  .table-wrap table td.fixture-col { white-space: nowrap; }
+  .table-wrap table td.fixture-col .fdr-pill { white-space: nowrap; }
   .name-cell { font-weight: 600; }
   .status-tag { font-size: 10.5px; margin-top: 1px; }
   .pos-pill {
@@ -9416,6 +9443,19 @@ const PROJ_OPTIONAL_COLS = [
   // needing a whole separate page.
   ["capScore", "Captaincy"],
 ];
+// Group labels for the Projections full-columns table's coloured
+// sub-header band (same visual pattern as Player Stats' STAT_THEMES
+// groups - see buildStatsHeader/SHORTLIST_GROUP_COLORS). Keyed by the same
+// PROJ_OPTIONAL_COLS keys; a key with no group here just renders under no
+// band. Added per user request for a distinct "xGIP90" section so the
+// expected-goal-involvement rate reads as its own labelled cluster rather
+// than blending into the generic stat columns either side of it.
+const PROJ_COL_GROUPS = [
+  ["Fixture outlook", ["minsPerStart", "teamXg", "csPct"]],
+  ["Scoring routes", ["contribution", "defConPct", "bonusExp"]],
+  ["xGIP90", ["xgi90"]],
+  ["Matchup & captaincy", ["matchupScore", "capScore"]],
+];
 // Per-gameweek projected points for one player, reusing the exact same
 // scoring formula as computeProjectionRow but keyed by gw instead of
 // summed across the whole range - needed for the Player pairs table,
@@ -9728,7 +9768,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
     });
   }
   const top = candidates.slice(0, 20);
-  const colLabel = (key, label, title) => `<th data-cap-sort="${key}" style="cursor:pointer" ${title ? `title="${title}"` : ""}>${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+  const colLabel = (key, label, title, cls) => `<th${cls ? ` class="${cls}"` : ""} data-cap-sort="${key}" style="cursor:pointer" ${title ? `title="${title}"` : ""}>${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
   // live: whether this route is a genuine live route for THIS captaincy
   // score (feeds the route count/bonus) - still used for the same
   // highlight-vs-dim colour cue as before, just applied to a value instead
@@ -9795,7 +9835,7 @@ function renderProjectionsCaptaincy(pool, gwId) {
     ${top.length ? `<div class="table-wrap"><table>
       <thead><tr>
         <th></th>
-        ${colLabel("name", "Player")}
+        ${colLabel("name", "Player", null, "label-col")}
         ${colLabel("score", CAPTAINCY_MODE_LABELS[mode] + " score")}
         ${colLabel("floor", "Floor", "Guaranteed-ish points if nothing extra lands")}
         ${colLabel("cs", "CS pts", "Expected clean-sheet points this fixture (real CS% x this position's CS point value)")}
@@ -12818,11 +12858,11 @@ function renderProjectionsTab() {
   if (simpleView) {
     const heatKeys = ["projPerGame"];
     const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k], (r) => r.p.minutes) : null;
-    const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+    const colLabel = (key, label, cls) => `<th${cls ? ` class="${cls}"` : ""} data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
     body.innerHTML = `
       <div class="table-wrap"><table>
         <thead><tr>
-          ${colLabel("name", "Player")}<th>Fixture(s)</th>
+          ${colLabel("name", "Player", "label-col")}<th class="fixture-col">Fixture(s)</th>
           ${colLabel("projPerGame", "Proj pts / game")}
         </tr></thead>
         <tbody>${rows.map(r => {
@@ -12830,7 +12870,7 @@ function renderProjectionsTab() {
           const fixLabel = fixturePillsCappedHtml(r.fixtures);
           return `<tr>
             <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div></div></td>
-            <td>${fixLabel}</td>
+            <td class="fixture-col">${fixLabel}</td>
             <td class="mono" style="text-align:center;font-weight:700;${heatOn && ranges ? heatmapBg(r.projPerGame, ranges.projPerGame.min, ranges.projPerGame.max, false) : ""}">${r.projPerGame.toFixed(1)}</td>
           </tr>`;
         }).join("")}</tbody>
@@ -12841,7 +12881,7 @@ function renderProjectionsTab() {
     const cols = state.projColumns;
     const heatKeys = ["proj", "startProb", "teamXg", "csPct", "contribution", "defConPct", "bonusExp", "matchupScore", "capScore", "xgi90"];
     const ranges = heatOn ? computeHeatmapRanges(rows, heatKeys, (r, k) => r[k], (r) => r.p.minutes) : null;
-    const colLabel = (key, label) => `<th data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
+    const colLabel = (key, label, cls) => `<th${cls ? ` class="${cls}"` : ""} data-proj-sort="${key}" style="cursor:pointer">${label}${sortKey === key ? (sortDir === "desc" ? " ▼" : " ▲") : ""}</th>`;
     const cell = (key, val, fmt) => `<td class="mono" style="text-align:center;${heatOn && ranges && ranges[key] ? heatmapBg(val, ranges[key].min, ranges[key].max, false) : ""}">${fmt}</td>`;
     const rowHtml = (r) => {
       const p = r.p;
@@ -12851,7 +12891,7 @@ function renderProjectionsTab() {
         : "No fixture in range";
       return `<tr>
         <td class="label-col" style="display:flex;align-items:center;gap:8px">${playerAvatarHtml(p, 22)}<div><div style="font-weight:600">${nameWithPosition(p)}</div><div style="font-size:11px;color:var(--ink-faint)">${state.teamsById[p.teamId]?.short_name || ""} · ${p.position} · ${fmtPrice(p.nowCost)}</div>${projectionBadgesHtml(p, r)}</div></td>
-        <td>${fixLabel}</td>
+        <td class="fixture-col">${fixLabel}</td>
         ${cell("proj", r.proj, r.proj.toFixed(1))}
         ${cell("startProb", r.startProb, Math.round(r.startProb) + "%")}
         ${cols.minsPerStart ? cell("minsPerStart", r.minsPerStart || 0, r.minsPerStart ? Math.round(r.minsPerStart) : "-") : ""}
@@ -12874,10 +12914,25 @@ function renderProjectionsTab() {
         ${cols.capScore ? cell("capScore", r.capScore, r.capScore !== null ? r.capScore.toFixed(1) : "-") : ""}
       </tr>`;
     };
+    // Coloured group super-header band, same pattern as Player Stats'
+    // buildStatsHeader group row - one <th colspan> per PROJ_COL_GROUPS
+    // entry that has at least one currently-toggled-on column, sized to
+    // match however many of its columns are actually visible right now
+    // (toggling a column off/on changes real colspans, not just labels).
+    const fixedLeadCount = 4; // Player, Fixture(s), Proj pts, Start% - always shown, never grouped
+    let groupCells = `<th colspan="${fixedLeadCount}" style="background:transparent;border-bottom:none"></th>`;
+    PROJ_COL_GROUPS.forEach(([label, keys], gi) => {
+      const presentCount = keys.filter(k => cols[k]).length;
+      if (!presentCount) return;
+      const color = SHORTLIST_GROUP_COLORS[gi % SHORTLIST_GROUP_COLORS.length];
+      groupCells += `<th colspan="${presentCount}" style="background:${color}22;color:${color};font-size:10px;text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:3px 4px;border-bottom:1px solid ${color}55">${label}</th>`;
+    });
     body.innerHTML = `
       <div class="table-wrap"><table>
-        <thead><tr>
-          ${colLabel("name", "Player")}<th>Fixture(s)</th>
+        <thead>
+        <tr>${groupCells}</tr>
+        <tr>
+          ${colLabel("name", "Player", "label-col")}<th class="fixture-col">Fixture(s)</th>
           ${colLabel("proj", "Proj pts")}
           ${colLabel("startProb", "Start%")}
           ${cols.minsPerStart ? colLabel("minsPerStart", "Mins/start") : ""}
@@ -12889,7 +12944,8 @@ function renderProjectionsTab() {
           ${cols.xgi90 ? colLabel("xgi90", "xGIP90") : ""}
           ${cols.matchupScore ? colLabel("matchupScore", "Matchup") : ""}
           ${cols.capScore ? colLabel("capScore", "Captaincy") : ""}
-        </tr></thead>
+        </tr>
+        </thead>
         <tbody id="projTableBody"></tbody>
       </table></div>
     `;
